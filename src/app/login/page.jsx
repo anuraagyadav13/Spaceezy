@@ -13,21 +13,24 @@ export default function LoginPage() {
     const [mode, setMode] = useState(null); // "owner" | "employee"
 
     useEffect(() => {
-        const emps = getEmployees();
-        setEmployees(emps);
-        if (emps.length) setSelectedEmployee(emps[0].id);
+        const timer = setTimeout(() => {
+            const emps = getEmployees();
+            setEmployees(emps);
+            if (emps.length) setSelectedEmployee(emps[0].id);
+        }, 0);
+        return () => clearTimeout(timer);
     }, []);
 
     const handleOwnerLogin = () => {
         loginAsOwner();
-        router.push("/owner");
+        router.push("/dashboard");
     };
 
     const handleEmployeeLogin = (e) => {
         e.preventDefault();
         if (!selectedEmployee) return;
         loginAsEmployee(selectedEmployee);
-        router.push("/employee");
+        router.push("/dashboard");
     };
 
     return (
