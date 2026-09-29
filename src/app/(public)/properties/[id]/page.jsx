@@ -1,44 +1,24 @@
 "use client";
-import { useState, useEffect } from "react";
 import { useParams, notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { getPropertyById } from "../../../../lib/mock/properties";
-import { getProjectBySlug, getProjects } from "../../../../lib/mock/projects";
+import { getProjects } from "../../../../lib/mock/projects";
+import { formatPrice } from "../../../../utils/format";
 import { MapPin, Maximize, Compass, ArrowLeft, Building2 } from "lucide-react";
 
 export default function PropertyDetailPage() {
     const params = useParams();
-    const [property, setProperty] = useState(null);
-    const [project, setProject] = useState(null);
-    const [loading, setLoading] = useState(true);
+    
+    const property = getPropertyById(params.id);
+    if (!property) {
+        notFound();
+    }
+    
+    const prjs = getProjects();
+    const project = prjs.find(p => p.id === property.projectId);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            const propData = getPropertyById(params.id);
-            if (!propData) {
-                notFound();
-                return;
-            }
-            setProperty(propData);
-            
-            const prjs = getProjects();
-            const prjData = prjs.find(p => p.id === propData.projectId);
-            setProject(prjData);
-            
-            setLoading(false);
-        }, 0);
-        return () => clearTimeout(timer);
-    }, [params.id]);
-
-    if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-32 pb-24"><div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div></div>;
-    if (!property || !project) return null;
-
-    const formatPrice = (price) => {
-        if (price >= 10000000) return `₹ ${(price / 10000000).toFixed(2)} Cr`;
-        if (price >= 100000) return `₹ ${(price / 100000).toFixed(2)} L`;
-        return `₹ ${price.toLocaleString()}`;
-    };
+    if (!project) return null;
 
     return (
         <div className="bg-gray-50 min-h-screen pt-32 pb-32">

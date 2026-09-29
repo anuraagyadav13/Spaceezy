@@ -7,6 +7,7 @@ const apiClient = axios.create({
     headers: {
         "Content-Type": "application/json",
     },
+    withCredentials: true,
 });
 
 apiClient.interceptors.request.use(
@@ -25,7 +26,7 @@ apiClient.interceptors.response.use(
         if (error.response?.status === 401) {
             logout();
             if (typeof window !== "undefined") {
-                window.location.href = "/login";
+                window.location.href = window.location.origin + "/login";
             }
         }
         return Promise.reject(

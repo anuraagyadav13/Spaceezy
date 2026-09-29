@@ -1,5 +1,4 @@
 "use client";
-import { useState, useEffect } from "react";
 import { useParams, notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -8,21 +7,12 @@ import { MapPin, Building, CheckCircle2, FileText, Calendar } from "lucide-react
 
 export default function ProjectDetailPage() {
     const params = useParams();
-    const [project, setProject] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const data = getProjectBySlug(params.slug);
-        if (!data) {
-            notFound();
-        } else {
-            setProject(data);
-        }
-        setLoading(false);
-    }, [params.slug]);
-
-    if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-32 pb-24"><div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div></div>;
-    if (!project) return null;
+    
+    const project = getProjectBySlug(params.slug);
+    
+    if (!project) {
+        notFound();
+    }
 
     return (
         <div className="bg-white min-h-screen pb-32">

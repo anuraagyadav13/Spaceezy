@@ -1,27 +1,27 @@
-import { getLeads, addLead, updateLeadStage, getLeadsByEmployee } from "../store";
+import apiClient from "./client";
 
-// Temporary implementation using local storage store
-// Once backend is ready, this will use apiClient
-
-export const fetchLeads = async () => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return getLeads();
+export const fetchLeads = async (params = {}) => {
+    const response = await apiClient.get('/leads', { params });
+    return response.data.leads || response.data;
 };
 
-export const fetchEmployeeLeads = async (employeeId) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return getLeadsByEmployee(employeeId);
+// No need for separate employee leads endpoint since the backend scopes based on the role
+export const fetchEmployeeLeads = async () => {
+    const response = await apiClient.get('/leads');
+    return response.data.leads || response.data;
 };
 
 export const createLead = async (data) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    addLead(data);
-    return data;
+    const response = await apiClient.post('/leads', data);
+    return response.data;
 };
 
-export const updateLeadStatus = async ({ id, status }) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    updateLeadStage(id, status);
-    return { id, status };
+export const updateLeadStatus = async ({ id, status, ...data }) => {
+    const response = await apiClient.patch(`/leads/${id}`, { status, ...data });
+    return response.data;
+};
+
+export const deleteLead = async (id) => {
+    const response = await apiClient.delete(`/leads/${id}`);
+    return response.data;
 };

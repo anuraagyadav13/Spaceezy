@@ -1,21 +1,22 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { searchProperties } from "../../../lib/mock/properties";
 import { getProjects } from "../../../lib/mock/projects";
+import { formatPrice } from "../../../utils/format";
 import { getLocations } from "../../../lib/mock/locations";
-import { MapPin, Maximize, Compass, Filter, ArrowRight } from "lucide-react";
+import { MapPin, Filter } from "lucide-react";
 
 function SearchContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     
-    const [properties, setProperties] = useState([]);
-    const [projects, setProjects] = useState({});
-    const [locations, setLocations] = useState([]);
-    const [allProjects, setAllProjects] = useState([]);
+    const allProjects = getProjects();
+    const projects = {};
+    allProjects.forEach(p => projects[p.id] = p);
+    const locations = getLocations();
     
     // Filters state
     const [filters, setFilters] = useState({
@@ -26,32 +27,19 @@ function SearchContent() {
         location: searchParams.get("location") || ""
     });
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            const prjs = getProjects();
-            setAllProjects(prjs);
-            const prjMap = {};
-            prjs.forEach(p => prjMap[p.id] = p);
-            setProjects(prjMap);
-            setLocations(getLocations());
-            
-            // Execute search
-            const currentFilters = {
-                bhk: searchParams.get("bhk"),
-                maxPrice: searchParams.get("maxPrice"),
-                minPrice: searchParams.get("minPrice"),
-                projectId: searchParams.get("projectId")
-            };
-            const locationFilter = searchParams.get("location");
-            
-            let results = searchProperties(currentFilters);
-            if (locationFilter) {
-                results = results.filter(p => prjMap[p.projectId]?.location === locationFilter || prjMap[p.projectId]?.city === locationFilter);
-            }
-            setProperties(results);
-        }, 0);
-        return () => clearTimeout(timer);
-    }, [searchParams]);
+    // Execute search synchronously during render
+    const currentFilters = {
+        bhk: searchParams.get("bhk"),
+        maxPrice: searchParams.get("maxPrice"),
+        minPrice: searchParams.get("minPrice"),
+        projectId: searchParams.get("projectId")
+    };
+    const locationFilter = searchParams.get("location");
+    
+    let properties = searchProperties(currentFilters);
+    if (locationFilter) {
+        properties = properties.filter(p => projects[p.projectId]?.location === locationFilter || projects[p.projectId]?.city === locationFilter);
+    }
 
     const handleFilterChange = (e) => {
         setFilters({ ...filters, [e.target.name]: e.target.value });
@@ -66,11 +54,7 @@ function SearchContent() {
         router.push(`/search?${params.toString()}`);
     };
 
-    const formatPrice = (price) => {
-        if (price >= 10000000) return `₹ ${(price / 10000000).toFixed(2)} Cr`;
-        if (price >= 100000) return `₹ ${(price / 100000).toFixed(2)} L`;
-        return `₹ ${price.toLocaleString()}`;
-    };
+
 
     return (
         <div className="flex flex-col lg:flex-row gap-8">

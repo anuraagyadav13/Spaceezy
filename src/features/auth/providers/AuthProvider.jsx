@@ -16,22 +16,23 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const loadSession = async () => {
             try {
-                // PENDING BACKEND: When real auth is ready, this will fetch the current user
-                // For the prototype, we fall back to localStorage just to keep the UI working
-                // DO NOT USE LOCALSTORAGE FOR PRODUCTION AUTH.
-                const storedRole = window.localStorage.getItem("se_role");
-                if (storedRole) {
-                    setUser({
-                        id: "mock-id",
-                        name: storedRole === "owner" ? "Owner User" : "Employee User",
-                        role: storedRole === "owner" ? "SUPER_ADMIN" : "SALES_EXECUTIVE"
-                    });
+                const sessionUser = await fetchSessionAPI();
+                setUser(sessionUser);
+            } catch {
+                // Temporary mock fallback until PostgreSQL is connected tomorrow
+                if (typeof window !== "undefined") {
+                    const localRole = window.localStorage.getItem("se_role");
+                    if (localRole === "owner") {
+                        setUser({ id: "admin-1", name: "Mock Owner", role: "SUPER_ADMIN", email: "admin@spaceezy.com" });
+                    } else if (localRole === "employee") {
+                        const empId = window.localStorage.getItem("se_employee_id") || "emp-1";
+                        setUser({ id: empId, name: "Mock Employee", role: "SALES_EXECUTIVE", email: "emp@spaceezy.com" });
+                    } else {
+                        setUser(null);
+                    }
                 } else {
-                    const sessionUser = await fetchSessionAPI();
-                    setUser(sessionUser);
+                    setUser(null);
                 }
-            } catch (error) {
-                setUser(null);
             } finally {
                 setIsLoading(false);
             }
@@ -42,11 +43,9 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         setIsLoading(true);
         try {
-            const data = await loginAPI(email, password);
-            setUser(data.user);
-            // Temporary backward compatibility for existing pages:
-            window.localStorage.setItem("se_role", data.user.role === "SUPER_ADMIN" ? "owner" : "employee");
-            return data.user;
+            const user = await loginAPI(email, password);
+            setUser(user);
+            return user;
         } finally {
             setIsLoading(false);
         }
@@ -57,10 +56,10 @@ export const AuthProvider = ({ children }) => {
         try {
             await logoutAPI();
             setUser(null);
-            // Temporary backward compatibility
-            window.localStorage.removeItem("se_role");
-            window.localStorage.removeItem("se_employee_id");
-            window.location.href = "/login";
+            // We use standard navigation, but here since it's a context method:
+            if (typeof window !== "undefined") {
+                window.location.href = window.location.origin + "/login";
+            }
         } finally {
             setIsLoading(false);
         }

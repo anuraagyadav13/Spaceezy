@@ -1,11 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { ArrowRight, MapPin, Building2, Search, CheckCircle2 } from "lucide-react";
+import { ArrowRight, MapPin, Search, CheckCircle2 } from "lucide-react";
 import { getProjects } from "../../lib/mock/projects";
-import { getProperties } from "../../lib/mock/properties";
 import { getLocations } from "../../lib/mock/locations";
 
 export default function PublicHomepage() {
@@ -13,15 +11,9 @@ export default function PublicHomepage() {
     const heroY = useTransform(scrollYProgress, [0, 0.5], [0, 200]);
     const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
 
-    const [projects, setProjects] = useState([]);
-    const [properties, setProperties] = useState([]);
-    const [locations, setLocations] = useState([]);
-
-    useEffect(() => {
-        setProjects(getProjects().filter(p => p.featured));
-        setProperties(getProperties().filter(p => p.featured).slice(0, 3));
-        setLocations(getLocations().filter(l => l.featured));
-    }, []);
+    // Derived data during render
+    const projects = getProjects().filter(p => p.featured);
+    const locations = getLocations().filter(l => l.featured);
 
     const fadeInUp = {
         hidden: { opacity: 0, y: 40 },

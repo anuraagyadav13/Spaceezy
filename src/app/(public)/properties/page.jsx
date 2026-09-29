@@ -4,31 +4,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { getProperties } from "../../../lib/mock/properties";
 import { getProjects } from "../../../lib/mock/projects";
+import { formatPrice } from "../../../utils/format";
 import { MapPin, ArrowRight, Maximize, Compass } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function PropertiesPage() {
-    const [properties, setProperties] = useState([]);
-    const [projects, setProjects] = useState({});
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            const props = getProperties();
-            setProperties(props);
-            
-            const prjs = getProjects();
-            const prjMap = {};
-            prjs.forEach(p => prjMap[p.id] = p);
-            setProjects(prjMap);
-        }, 0);
-        return () => clearTimeout(timer);
-    }, []);
-
-    const formatPrice = (price) => {
-        if (price >= 10000000) return `₹ ${(price / 10000000).toFixed(2)} Cr`;
-        if (price >= 100000) return `₹ ${(price / 100000).toFixed(2)} L`;
-        return `₹ ${price.toLocaleString()}`;
-    };
+    const properties = getProperties();
+    const projects = getProjects().reduce((acc, p) => {
+        acc[p.id] = p;
+        return acc;
+    }, {});
 
     return (
         <div className="bg-gray-50 min-h-screen pt-32 pb-24">

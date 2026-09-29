@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePermissions } from "../../features/auth/hooks/usePermissions";
-import { LogOut, Menu, X, LayoutDashboard, Users, Home, ClipboardList, Briefcase, Calendar, FileText, Settings, UserPlus } from "lucide-react";
+import { LogOut, X, LayoutDashboard, Users, Home, ClipboardList, Briefcase, Calendar, FileText, UserPlus } from "lucide-react";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 
 const NAVIGATION_GROUPS = [

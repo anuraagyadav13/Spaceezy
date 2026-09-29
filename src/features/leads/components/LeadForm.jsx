@@ -30,7 +30,7 @@ export default function LeadForm({ employees, onSuccess, onCancel }) {
                 showToast(`${data.name} added to the pipeline`);
                 onSuccess();
             },
-            onError: (err) => {
+            onError: () => {
                 showToast("Failed to create lead", "error");
             }
         });
