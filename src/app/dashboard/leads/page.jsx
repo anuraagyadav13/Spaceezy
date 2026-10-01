@@ -1,119 +1,168 @@
 "use client";
-import { useEffect, useState } from "react";
-import { getEmployees } from "../../../lib/store";
-import { useLeads } from "../../../features/leads/hooks/useLeads";
-import { useUpdateLead } from "../../../features/leads/hooks/useUpdateLead";
-import LeadForm from "../../../features/leads/components/LeadForm";
-import { PermissionGate } from "../../../features/auth/components/PermissionGate";
+import { useState } from "react";
+import Link from "next/link";
+import { getEmployees, getLeads } from "../../../lib/store";
+import { 
+    Search, Filter, Plus, ChevronDown, CheckSquare, 
+    Square, MoreHorizontal, ArrowUpDown, Download, Upload
+} from "lucide-react";
 
-export default function DashboardLeadsPage() {
-    const stages = ["NEW", "CONTACTED", "QUALIFIED", "SITE VISIT", "NEGOTIATION", "BOOKING"];
+export default function LeadsList() {
+    const [leads] = useState(() => getLeads());
+    const [employees] = useState(() => getEmployees());
+    const [selectedLeads, setSelectedLeads] = useState(new Set());
 
-    const { data: leads = [], isLoading } = useLeads();
-    const { mutate: updateLeadStatus } = useUpdateLead();
-    
-    const [employees, setEmployees] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setEmployees(getEmployees());
-        }, 0);
-        return () => clearTimeout(timer);
-    }, []);
-
-    const moveLead = (leadId, currentStage) => {
-        const currentIndex = stages.indexOf(currentStage);
-        if (currentIndex < stages.length - 1) {
-            updateLeadStatus({ id: leadId, status: stages[currentIndex + 1] });
-        }
-    };
 
     const employeeName = (id) => employees.find((e) => e.id === id)?.name || "Unassigned";
 
+    const toggleSelectAll = () => {
+        if (selectedLeads.size === leads.length) {
+            setSelectedLeads(new Set());
+        } else {
+            setSelectedLeads(new Set(leads.map(l => l.id)));
+        }
+    };
+
+    const toggleSelect = (id) => {
+        const newSet = new Set(selectedLeads);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedLeads(newSet);
+    };
+
     return (
-        <div className="flex flex-col h-full overflow-y-auto relative">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-4 sm:px-8 py-6 bg-white border-b border-gray-100 gap-4">
+        <div className="flex flex-col h-full overflow-hidden bg-gray-50/50">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:px-8 sm:py-6 bg-white border-b border-gray-100 shrink-0">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Lead Pipeline</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage and track every lead across your team.</p>
+                    <h1 className="text-2xl font-bold text-gray-900">All Leads</h1>
+                    <p className="text-sm text-gray-500 mt-1">Manage, filter, and assign your sales leads.</p>
                 </div>
-                <div className="flex gap-4 items-center w-full sm:w-auto">
-                    <PermissionGate permission="lead:create">
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity shadow-sm shadow-purple-200"
-                        >
-                            + Add Manual Lead
-                        </button>
-                    </PermissionGate>
+                <div className="flex gap-3 mt-4 sm:mt-0">
+                    <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
+                        <Upload size={16} /> Import
+                    </button>
+                    <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
+                        <Download size={16} /> Export
+                    </button>
+                    <Link href="/dashboard/leads/new" className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-medium hover:opacity-90 transition-opacity shadow-sm shadow-purple-200">
+                        <Plus size={16} /> Add Lead
+                    </Link>
                 </div>
             </div>
 
-            <div className="flex-1 p-4 sm:p-8 overflow-x-auto">
-                <div className="flex gap-6 min-w-max h-full pb-4">
-                    {stages.map((stage) => (
-                        <div key={stage} className="w-[300px] flex flex-col bg-gray-100/50 rounded-2xl p-4 border border-gray-200">
-                            <div className="flex justify-between items-center mb-4 px-2">
-                                <h3 className="font-bold text-gray-800 text-sm tracking-wide">{stage}</h3>
-                                <span className="bg-white px-2.5 py-1 rounded-md text-xs font-black text-purple-600 border border-gray-200 shadow-sm">
-                                    {isLoading ? "..." : leads.filter(l => l.stage === stage).length}
-                                </span>
-                            </div>
-                            <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-1">
-                                {leads.filter(lead => lead.stage === stage).map((lead) => (
-                                    <div key={lead.id} className="bg-white p-4 rounded-2xl border border-transparent shadow-sm hover:border-purple-300 hover:shadow-md transition-all group cursor-grab">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <span className="text-[10px] font-black text-white bg-gradient-to-r from-purple-500 to-indigo-500 px-2 py-1 rounded uppercase tracking-wider shadow-sm">
-                                                {lead.id}
-                                            </span>
-                                            <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-2 py-1 rounded-full border border-gray-200">
-                                                {lead.source}
-                                            </span>
-                                        </div>
-                                        <h4 className="font-bold text-gray-900 mb-0.5">{lead.name}</h4>
-                                        <p className="text-xs text-gray-500 font-medium mb-3">{lead.phone}</p>
-                                        <div className="flex justify-between items-end pt-3 border-t border-gray-100">
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-semibold mb-0.5">INTERESTED IN</p>
-                                                <p className="text-xs font-bold text-gray-800">{lead.project}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-[10px] text-gray-400 font-semibold mb-0.5">BUDGET</p>
-                                                <p className="text-xs font-black text-emerald-600">{lead.budget}</p>
-                                            </div>
-                                        </div>
-                                        <p className="text-[10px] text-gray-400 mt-2">Owner: {employeeName(lead.assignedTo)}</p>
-                                        {stage !== "BOOKING" && (
-                                            <PermissionGate permission="lead:update">
-                                                <button
-                                                    onClick={() => moveLead(lead.id, lead.stage)}
-                                                    className="w-full mt-3 py-2 bg-purple-50 text-purple-700 text-xs font-bold rounded-xl opacity-0 group-hover:opacity-100 hover:bg-purple-600 hover:text-white transition-all duration-300 shadow-sm"
-                                                >
-                                                    Advance to {stages[stages.indexOf(stage) + 1]} →
-                                                </button>
-                                            </PermissionGate>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
+            {/* Toolbar */}
+            <div className="flex flex-col sm:flex-row justify-between items-center p-4 sm:px-8 border-b border-gray-100 bg-white shrink-0 gap-4">
+                {/* Search */}
+                <div className="relative w-full sm:w-80">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input 
+                        type="text" 
+                        placeholder="Search name, phone, email..." 
+                        className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all"
+                    />
+                </div>
+                
+                {/* Filters */}
+                <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar">
+                    <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 shrink-0">
+                        <Filter size={14} className="text-gray-400" /> Stage: All <ChevronDown size={14} className="text-gray-400" />
+                    </button>
+                    <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 shrink-0">
+                        Source: All <ChevronDown size={14} className="text-gray-400" />
+                    </button>
+                    <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 shrink-0">
+                        Assigned To: All <ChevronDown size={14} className="text-gray-400" />
+                    </button>
+                    {selectedLeads.size > 0 && (
+                        <div className="flex items-center gap-2 pl-2 border-l border-gray-200 shrink-0">
+                            <span className="text-sm font-bold text-purple-600">{selectedLeads.size} selected</span>
+                            <button className="text-sm font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg">Assign</button>
+                            <button className="text-sm font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg">Update Stage</button>
                         </div>
-                    ))}
+                    )}
                 </div>
             </div>
 
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-gray-100">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Add New Lead</h2>
-                        <LeadForm 
-                            employees={employees} 
-                            onSuccess={() => setIsModalOpen(false)}
-                            onCancel={() => setIsModalOpen(false)}
-                        />
-                    </div>
+            {/* Table */}
+            <div className="flex-1 overflow-auto bg-white">
+                <table className="w-full text-left border-collapse min-w-[1000px]">
+                    <thead className="bg-gray-50/50 sticky top-0 z-10 shadow-[0_1px_0_rgba(0,0,0,0.05)]">
+                        <tr>
+                            <th className="px-4 py-3 w-12 text-center">
+                                <button onClick={toggleSelectAll} className="text-gray-400 hover:text-purple-600 transition-colors">
+                                    {selectedLeads.size === leads.length && leads.length > 0 ? <CheckSquare size={18} className="text-purple-600" /> : <Square size={18} />}
+                                </button>
+                            </th>
+                            <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 group">
+                                <div className="flex items-center gap-1">Lead Details <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100" /></div>
+                            </th>
+                            <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 group">
+                                <div className="flex items-center gap-1">Stage <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100" /></div>
+                            </th>
+                            <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Source</th>
+                            <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Interested Project</th>
+                            <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Assigned To</th>
+                            <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Creation Date</th>
+                            <th className="px-4 py-3 w-12 text-center"></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {leads.map((lead) => (
+                            <tr key={lead.id} className={`hover:bg-purple-50/30 transition-colors group ${selectedLeads.has(lead.id) ? 'bg-purple-50/30' : ''}`}>
+                                <td className="px-4 py-4 text-center">
+                                    <button onClick={() => toggleSelect(lead.id)} className="text-gray-300 hover:text-purple-600 transition-colors">
+                                        {selectedLeads.has(lead.id) ? <CheckSquare size={18} className="text-purple-600" /> : <Square size={18} />}
+                                    </button>
+                                </td>
+                                <td className="px-4 py-4">
+                                    <Link href={`/dashboard/leads/${lead.id}`} className="block">
+                                        <p className="font-bold text-gray-900 group-hover:text-purple-600 transition-colors">{lead.name}</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">{lead.phone} {lead.email && `• ${lead.email}`}</p>
+                                    </Link>
+                                </td>
+                                <td className="px-4 py-4">
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-100">
+                                        {lead.stage}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-4 text-sm text-gray-600 font-medium">{lead.source || "-"}</td>
+                                <td className="px-4 py-4 text-sm text-gray-900 font-bold">{lead.project || "-"}</td>
+                                <td className="px-4 py-4 text-sm text-gray-600">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden shrink-0">
+                                            <img src={`https://i.pravatar.cc/150?u=${lead.assignedTo}`} alt="" />
+                                        </div>
+                                        <span className="font-medium">{employeeName(lead.assignedTo)}</span>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-4 text-sm text-gray-500 font-medium">{lead.createdAt}</td>
+                                <td className="px-4 py-4 text-center">
+                                    <button className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                                        <MoreHorizontal size={18} />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                        {leads.length === 0 && (
+                            <tr>
+                                <td colSpan="8" className="px-4 py-12 text-center text-gray-500">
+                                    No leads found. Adjust your filters or add a new lead.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-4 sm:px-8 py-3 bg-white border-t border-gray-100 shrink-0">
+                <span className="text-sm text-gray-500">Showing <span className="font-bold text-gray-900">1</span> to <span className="font-bold text-gray-900">{leads.length}</span> of <span className="font-bold text-gray-900">{leads.length}</span> leads</span>
+                <div className="flex items-center gap-2">
+                    <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed">Previous</button>
+                    <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed">Next</button>
                 </div>
-            )}
+            </div>
         </div>
     );
 }

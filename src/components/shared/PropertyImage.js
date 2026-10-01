@@ -5,6 +5,7 @@
 "use client";
 import { useState } from "react";
 import { Building2 } from "lucide-react";
+import Image from "next/image";
 
 export default function PropertyImage({ src, alt, className = "" }) {
     const [error, setError] = useState(false);
@@ -18,11 +19,13 @@ export default function PropertyImage({ src, alt, className = "" }) {
     }
 
     return (
-        <img
+        <Image
             src={src}
             alt={alt}
             onError={() => setError(true)}
             className={`object-cover ${className}`}
+            width={500}
+            height={300}
         />
     );
 }

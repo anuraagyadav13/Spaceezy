@@ -7,6 +7,7 @@ import {
     getDailyWorkByEmployee, getSiteVisitsByEmployee, getBookingsByEmployee,
 } from "../../../../lib/store";
 import { ArrowLeft, Calendar, FileText } from "lucide-react";
+import Image from "next/image";
 
 const VISIT_STYLES = {
     Scheduled: "bg-purple-100 text-purple-700",
@@ -52,7 +53,7 @@ export default function DashboardEmployeeDetailPage() {
                     <ArrowLeft size={16} /> Back to team
                 </Link>
                 <div className="bg-white rounded-3xl p-6 flex items-center gap-4 shadow-sm border border-gray-100">
-                    <img src={employee.avatar} className="w-16 h-16 rounded-full" alt={employee.name} />
+                    <Image src={employee.avatar} alt={employee.name} width={64} height={64} className="w-16 h-16 rounded-full" />
                     <div>
                         <h1 className="text-xl font-bold text-gray-900">{employee.name}</h1>
                         <p className="text-sm text-gray-500">{employee.role} · Joined {employee.joinedDate}</p>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getLeads, getBookings, getProperties, getEmployees } from "../../../lib/store";
+import Image from "next/image";
 
 const STAGES = ["NEW", "CONTACTED", "QUALIFIED", "SITE VISIT", "NEGOTIATION", "BOOKING"];
 const PAYMENT_STATES = ["Paid", "Partial", "Pending"];
@@ -89,7 +90,7 @@ export default function DashboardReportsPage() {
                         {leaderboard.map((emp, idx) => (
                             <Link key={emp.id} href={`/dashboard/team/${emp.id}`} className="flex items-center gap-3 hover:bg-gray-50 -mx-2 px-2 py-1 rounded-xl transition-colors">
                                 <span className="text-xs font-bold text-gray-300 w-4">{idx + 1}</span>
-                                <img src={emp.avatar} className="w-8 h-8 rounded-full" alt={emp.name} />
+                                <Image src={emp.avatar} alt={emp.name} width={32} height={32} className="w-8 h-8 rounded-full" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-900 truncate">{emp.name}</p>
                                     <p className="text-xs text-gray-400 truncate">{emp.role}</p>

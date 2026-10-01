@@ -1,6 +1,7 @@
 "use client";
 import { Menu, Search, Bell } from "lucide-react";
 import { useAuth } from "../../features/auth/hooks/useAuth";
+import Image from "next/image";
 
 export default function AppHeader({ toggleSidebar }) {
     const { user } = useAuth();
@@ -32,11 +33,14 @@ export default function AppHeader({ toggleSidebar }) {
                 <div className="flex items-center gap-3">
                     <div className="hidden sm:block text-right">
                         <p className="text-sm font-bold text-gray-900">{user?.name || "User"}</p>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{user?.role?.replace("_", " ") || "ROLE"}</p>
+                        <div className="flex items-center justify-end gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.5)]"></span>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{user?.role?.replace("_", " ") || "ROLE"}</p>
+                        </div>
                     </div>
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-[2px] shadow-sm">
+                    <div className="relative w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-[2px] shadow-sm">
                         <div className="w-full h-full rounded-full border-2 border-white overflow-hidden bg-white">
-                            <img src={user?.avatar || "https://i.pravatar.cc/150?img=33"} alt="Profile" className="w-full h-full object-cover" />
+                            <Image src={user?.avatar || "https://i.pravatar.cc/150?img=33"} alt="Profile" className="w-full h-full object-cover" width={36} height={36} />
                         </div>
                     </div>
                 </div>

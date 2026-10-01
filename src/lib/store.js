@@ -232,6 +232,11 @@ export function getProperties() {
     ensureSeeded();
     return read(KEYS.properties, []);
 }
+// Compatibility helper for the booking wizard.
+// Existing seed data stores project-level records in the properties collection.
+export function getProjects() {
+    return getProperties();
+}
 export function getPropertyById(id) {
     return getProperties().find((p) => p.id === id) || null;
 }

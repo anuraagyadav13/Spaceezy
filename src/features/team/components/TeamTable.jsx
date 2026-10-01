@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { getLeadsByEmployee, getSiteVisitsByEmployee, getBookingsByEmployee, getDailyWorkByEmployee } from "../../../lib/store";
 
 export function TeamTable({ employees }) {
@@ -14,7 +15,7 @@ export function TeamTable({ employees }) {
                 return (
                     <Link key={emp.id} href={`/dashboard/team/${emp.id}`} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 hover:shadow-md hover:border-purple-200 transition-all">
                         <div className="flex items-center gap-3 mb-5">
-                            <img src={emp.avatar} className="w-12 h-12 rounded-full" alt={emp.name} />
+                            <Image src={emp.avatar} alt={emp.name} width={48} height={48} className="w-12 h-12 rounded-full" />
                             <div className="min-w-0">
                                 <h3 className="font-bold text-gray-900 truncate">{emp.name}</h3>
                                 <p className="text-xs text-gray-500 truncate">{emp.role}</p>
