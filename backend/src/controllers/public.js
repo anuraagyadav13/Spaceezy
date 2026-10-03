@@ -1,7 +1,6 @@
 const { asyncHandler } = require('../utils/errors');
 const LeadService = require('../services/leadService');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../db/prisma');
 
 const handlePublicEnquiry = asyncHandler(async (req, res, next) => {
     // In a real application, you might lookup the spaceezy org ID or use a default

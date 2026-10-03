@@ -1,12 +1,12 @@
 const { AppError, asyncHandler } = require('../utils/errors');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require("../db/prisma");
 const crypto = require('crypto');
 const argon2 = require('argon2');
 
-const prisma = new PrismaClient();
+
 
 const login = asyncHandler(async (req, res, next) => {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
     if (!email || !password) {
         return next(new AppError('Please provide email and password', 400, 'VALIDATION_ERROR'));
@@ -44,8 +44,10 @@ const login = asyncHandler(async (req, res, next) => {
         }
     });
 
+    const cookieName = process.env.SESSION_COOKIE_NAME || 'spaceezy_session';
+
     // Set cookie
-    res.cookie(process.env.SESSION_COOKIE_NAME || 'spaceezy_session', token, {
+    res.cookie(cookieName, token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
@@ -69,8 +71,9 @@ const login = asyncHandler(async (req, res, next) => {
 });
 
 const logout = asyncHandler(async (req, res, next) => {
-    const sessionToken = req.cookies[process.env.SESSION_COOKIE_NAME];
-    
+    const cookieName = process.env.SESSION_COOKIE_NAME || 'spaceezy_session';
+    const sessionToken = req.cookies?.[cookieName];
+
     if (sessionToken) {
         const tokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
         await prisma.session.deleteMany({
@@ -78,7 +81,7 @@ const logout = asyncHandler(async (req, res, next) => {
         });
     }
 
-    res.clearCookie(process.env.SESSION_COOKIE_NAME || 'spaceezy_session');
+    res.clearCookie(cookieName);
 
     res.status(200).json({
         success: true,

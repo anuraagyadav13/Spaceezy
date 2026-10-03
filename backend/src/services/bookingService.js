@@ -1,8 +1,61 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 
 class BookingService {
+    static async getBookings(organizationId, query, role, userId) {
+        const { page = 1, limit = 20, paymentStatus, search, sort = 'desc' } = query;
+        const skip = (page - 1) * limit;
+
+        const where = { organizationId };
+
+        if (role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') {
+            where.assignedToId = userId;
+        }
+
+        if (paymentStatus) where.paymentStatus = paymentStatus;
+
+        if (search) {
+            where.customer = {
+                OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { phone: { contains: search, mode: 'insensitive' } }
+                ]
+            };
+        }
+
+        const [bookings, total] = await Promise.all([
+            prisma.booking.findMany({
+                where,
+                skip: parseInt(skip),
+                take: parseInt(limit),
+                orderBy: { bookingDate: sort === 'asc' ? 'asc' : 'desc' },
+                include: {
+                    customer: { select: { id: true, name: true, phone: true } },
+                    property: { select: { id: true, title: true, unitNumber: true } },
+                    project: { select: { id: true, name: true } },
+                    assignedTo: { select: { id: true, name: true } }
+                }
+            }),
+            prisma.booking.count({ where })
+        ]);
+
+        return { bookings, total, pages: Math.ceil(total / limit) };
+    }
+
+    static async getBookingById(id, organizationId) {
+        const booking = await prisma.booking.findFirst({
+            where: { id, organizationId },
+            include: {
+                customer: true,
+                property: { include: { project: { select: { name: true } } } },
+                project: { select: { id: true, name: true } },
+                assignedTo: { select: { id: true, name: true } }
+            }
+        });
+        if (!booking) throw new AppError('Booking not found', 404, 'NOT_FOUND');
+        return booking;
+    }
+
     static async createBooking(data, organizationId, userId, userRole) {
         return await prisma.$transaction(async (tx) => {
             // 1. Tenant Isolation Checks

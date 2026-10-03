@@ -27,6 +27,9 @@ model Organization {
   customers  Customer[]
   bookings   Booking[]
   siteVisits SiteVisit[]
+  tasks      Task[]
+  calls      Call[]
+  quotations Quotation[]
 }
 
 enum UserRole {
@@ -57,24 +60,27 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sessions             Session[]
-  assignedLeads        Lead[]         @relation("AssignedLeads")
-  createdLeads         Lead[]         @relation("CreatedLeads")
-  leadActivities       LeadActivity[]
-  assignedCustomers    Customer[]     @relation("AssignedCustomers")
-  assignedBookings     Booking[]      @relation("AssignedBookings")
-  assignedSiteVisits   SiteVisit[]    @relation("AssignedSiteVisits")
+  sessions           Session[]
+  assignedLeads      Lead[]         @relation("AssignedLeads")
+  createdLeads       Lead[]         @relation("CreatedLeads")
+  leadActivities     LeadActivity[]
+  assignedCustomers  Customer[]     @relation("AssignedCustomers")
+  assignedBookings   Booking[]      @relation("AssignedBookings")
+  assignedSiteVisits SiteVisit[]    @relation("AssignedSiteVisits")
+  assignedTasks      Task[]         @relation("AssignedTasks")
+  calls              Call[]         @relation("UserCalls")
+  createdQuotations  Quotation[]    @relation("CreatedQuotations")
 
   @@unique([organizationId, email])
 }
 
 model Session {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
 }
 
@@ -130,6 +136,10 @@ model Lead {
 
   activities LeadActivity[]
   siteVisits SiteVisit[]
+  tasks      Task[]
+  calls      Call[]
+  quotations Quotation[]
+  interests  LeadInterest[]
 
   @@index([organizationId])
 }
@@ -177,11 +187,11 @@ model Project {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
+
   name          String
   address       String
   city          String?
-  type          String        // Residential, Commercial, Retail
+  type          String // Residential, Commercial, Retail
   totalUnits    Int?
   occupiedUnits Int?
   status        ProjectStatus @default(AVAILABLE)
@@ -191,14 +201,15 @@ model Project {
   yearBuilt     String?
   floors        String?
   parkingSpots  String?
-  images        String[]      // Array of photo URLs
+  images        String[] // Array of photo URLs
 
-  properties    Property[]
-  leads         Lead[]
-  bookings      Booking[]
+  properties Property[]
+  leads      Lead[]
+  bookings   Booking[]
+  quotations Quotation[]
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId])
 }
@@ -213,28 +224,30 @@ model Property {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  projectId      String
-  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  title          String
-  unitNumber     String?
-  configuration  String?      // e.g. "3 BHK"
-  bhk            Int?
-  area           Int?         // sq.ft
-  floor          Int?
-  facing         String?
-  price          Decimal      @db.Decimal(12, 2)
-  status         PropertyStatus @default(AVAILABLE)
-  version        Int          @default(0) // Optimistic locking
-  featured       Boolean      @default(false)
-  images         String[]     
 
-  leads          Lead[]
-  bookings       Booking[]
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  title         String
+  unitNumber    String?
+  configuration String? // e.g. "3 BHK"
+  bhk           Int?
+  area          Int? // sq.ft
+  floor         Int?
+  facing        String?
+  price         Decimal        @db.Decimal(12, 2)
+  status        PropertyStatus @default(AVAILABLE)
+  version       Int            @default(0) // Optimistic locking
+  featured      Boolean        @default(false)
+  images        String[]
+
+  leads        Lead[]
+  bookings     Booking[]
+  interestedBy LeadInterest[]
+  quotations   Quotation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId, projectId])
 }
@@ -249,20 +262,20 @@ model Customer {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  name           String
-  phone          String
-  email          String?
-  status         CustomerStatus @default(ACTIVE)
-  notes          String?
 
-  assignedToId   String?
-  assignedTo     User?        @relation("AssignedCustomers", fields: [assignedToId], references: [id])
+  name   String
+  phone  String
+  email  String?
+  status CustomerStatus @default(ACTIVE)
+  notes  String?
 
-  bookings       Booking[]
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedCustomers", fields: [assignedToId], references: [id])
 
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  bookings Booking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId])
 }
@@ -278,25 +291,25 @@ model Booking {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  customerId     String
-  customer       Customer     @relation(fields: [customerId], references: [id])
-  
-  projectId      String?
-  project        Project?     @relation(fields: [projectId], references: [id])
 
-  propertyId     String?
-  property       Property?    @relation(fields: [propertyId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
 
-  amount         Decimal      @db.Decimal(12, 2)
-  bookingDate    DateTime     @default(now()) // Stored in UTC
-  paymentStatus  BookingPaymentStatus @default(PENDING)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
 
-  assignedToId   String?
-  assignedTo     User?        @relation("AssignedBookings", fields: [assignedToId], references: [id])
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id])
 
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  amount        Decimal              @db.Decimal(12, 2)
+  bookingDate   DateTime             @default(now()) // Stored in UTC
+  paymentStatus BookingPaymentStatus @default(PENDING)
+
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedBookings", fields: [assignedToId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId])
 }
@@ -312,24 +325,167 @@ model SiteVisit {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  leadId         String?
-  lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
   // Snapshot/Fallback fields for historical records or unlinked visits
-  leadName       String?
-  phone          String?
-  propertyName   String?
-  
-  date           DateTime     // Stored in UTC
-  time           String       // Time string like "11:30 AM" or stored as part of date
-  status         SiteVisitStatus @default(SCHEDULED)
+  leadName     String?
+  phone        String?
+  propertyName String?
 
-  assignedToId   String?
-  assignedTo     User?        @relation("AssignedSiteVisits", fields: [assignedToId], references: [id])
+  date   DateTime // Stored in UTC
+  time   String // Time string like "11:30 AM" or stored as part of date
+  status SiteVisitStatus @default(SCHEDULED)
 
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedSiteVisits", fields: [assignedToId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+}
+
+enum TaskType {
+  FOLLOW_UP
+  MEETING
+  CALL
+  SITE_VISIT
+  OTHER
+}
+
+enum TaskStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model Task {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  type        TaskType   @default(FOLLOW_UP)
+  status      TaskStatus @default(PENDING)
+  dueDate     DateTime // Stored in UTC
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  assignedToId String
+  assignedTo   User   @relation("AssignedTasks", fields: [assignedToId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  FAILED
+}
+
+model Call {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  direction CallDirection
+  status    CallStatus    @default(INITIATED)
+
+  fromNumber String
+  toNumber   String
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  userId String?
+  user   User?   @relation("UserCalls", fields: [userId], references: [id], onDelete: SetNull)
+
+  duration     Int? // in seconds
+  recordingUrl String?
+
+  vendorCallId String? // ID from the telephony provider
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events CallEvent[]
+
+  @@index([organizationId])
+  @@index([vendorCallId])
+}
+
+model CallEvent {
+  id     String @id @default(uuid())
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  status    CallStatus
+  timestamp DateTime   @default(now())
+
+  metadata Json?
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Quotation {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id])
+
+  totalAmount Decimal         @db.Decimal(12, 2)
+  validUntil  DateTime
+  status      QuotationStatus @default(DRAFT)
+
+  notes String?
+
+  createdById String
+  createdBy   User   @relation("CreatedQuotations", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model LeadInterest {
+  id     String @id @default(uuid())
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([leadId, propertyId])
 }

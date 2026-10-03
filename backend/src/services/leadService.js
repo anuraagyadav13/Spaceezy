@@ -1,13 +1,45 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 
 class LeadService {
-    static async createLead(data, organizationId, createdById = null) {
+    static normalizeLeadPayload(data = {}) {
+        const payload = { ...data };
+
+        const assignedToValue = typeof payload.assignedTo === 'string'
+            ? payload.assignedTo.trim()
+            : payload.assignedTo;
+        const assignedToIdValue = typeof payload.assignedToId === 'string'
+            ? payload.assignedToId.trim()
+            : payload.assignedToId;
+
+        const finalAssignedToId = (assignedToIdValue || assignedToValue || '').trim();
+
+        if (finalAssignedToId) {
+            payload.assignedToId = finalAssignedToId;
+        } else {
+            delete payload.assignedToId;
+        }
+
+        delete payload.assignedTo;
+
+        if (payload.stage && !payload.status) {
+            payload.status = payload.stage;
+        }
+
+        delete payload.stage;
+        delete payload.project;
+        delete payload.budget;
+
+        return payload;
+    }
+
+    static async createLead(data = {}, organizationId, createdById = null) {
+        const payload = LeadService.normalizeLeadPayload(data);
+
         return await prisma.$transaction(async (tx) => {
             const lead = await tx.lead.create({
                 data: {
-                    ...data,
+                    ...payload,
                     organizationId,
                     createdById
                 }
@@ -87,6 +119,8 @@ class LeadService {
     }
 
     static async updateLead(id, data, organizationId, userRole, userId) {
+        const payload = LeadService.normalizeLeadPayload(data);
+
         return await prisma.$transaction(async (tx) => {
             const existing = await tx.lead.findFirst({ where: { id, organizationId } });
             
@@ -100,7 +134,7 @@ class LeadService {
 
             const updated = await tx.lead.update({
                 where: { id },
-                data
+                data: payload
             });
 
             // If status changed, log activity
@@ -202,6 +236,290 @@ class LeadService {
             }
 
             return lead;
+        });
+    }
+    static async getMatchingProperties(leadId, organizationId) {
+        const lead = await prisma.lead.findFirst({
+            where: { id: leadId, organizationId }
+        });
+        if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+
+        const where = { organizationId, status: 'AVAILABLE' };
+        
+        if (lead.projectId) {
+            where.projectId = lead.projectId;
+        }
+
+        const properties = await prisma.property.findMany({
+            where,
+            include: { project: { select: { name: true } } },
+            take: 20
+        });
+
+        const interests = await prisma.leadInterest.findMany({
+            where: { leadId },
+            select: { propertyId: true }
+        });
+        const interestedIds = interests.map(i => i.propertyId);
+
+        return properties.map(p => ({
+            ...p,
+            isInterested: interestedIds.includes(p.id)
+        }));
+    }
+
+    static async addInterestedProperty(leadId, propertyId, organizationId) {
+        const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
+        if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+
+        const property = await prisma.property.findFirst({ where: { id: propertyId, organizationId } });
+        if (!property) throw new AppError('Property not found', 404, 'NOT_FOUND');
+
+        try {
+            const interest = await prisma.leadInterest.create({
+                data: {
+                    leadId,
+                    propertyId
+                }
+            });
+            return interest;
+        } catch (error) {
+            if (error.code === 'P2002') return true;
+            throw error;
+        }
+    }
+
+    static async removeInterestedProperty(leadId, propertyId, organizationId) {
+        const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
+        if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+
+        await prisma.leadInterest.deleteMany({
+            where: {
+                leadId,
+                propertyId
+            }
+        });
+
+        return true;
+    }
+
+    // --- Follow-ups ---
+
+    static async getFollowups(organizationId, query) {
+        const { status, limit = 50 } = query;
+        const where = {
+            organizationId,
+            type: { in: ['FOLLOW_UP', 'CALL', 'SITE_VISIT'] }
+        };
+        if (status) where.status = status;
+
+        const activities = await prisma.leadActivity.findMany({
+            where,
+            take: parseInt(limit),
+            orderBy: { createdAt: 'desc' },
+            include: {
+                lead: { select: { name: true } },
+                performedBy: { select: { name: true } }
+            }
+        });
+
+        return activities.map(a => ({
+            id: a.id,
+            refName: a.lead?.name || 'Unknown',
+            type: a.type,
+            dueDate: a.metadata?.dueDate || a.createdAt.toISOString().slice(0, 10),
+            notes: a.description,
+            status: a.metadata?.followupStatus || 'Pending'
+        }));
+    }
+
+    static async toggleFollowupStatus(activityId, organizationId) {
+        const activity = await prisma.leadActivity.findFirst({
+            where: { id: activityId, organizationId }
+        });
+
+        if (!activity) throw new AppError('Follow-up not found', 404, 'NOT_FOUND');
+
+        const metadata = activity.metadata && typeof activity.metadata === 'object' ? activity.metadata : {};
+        const currentStatus = metadata.followupStatus || 'Pending';
+        const newStatus = currentStatus === 'Done' ? 'Pending' : 'Done';
+
+        const updated = await prisma.leadActivity.update({
+            where: { id: activityId },
+            data: {
+                metadata: { ...metadata, followupStatus: newStatus }
+            }
+        });
+
+        return updated;
+    }
+
+    // --- Activities feed ---
+
+    static async getActivities(organizationId, query) {
+        const { limit = 50 } = query;
+
+        const activities = await prisma.leadActivity.findMany({
+            where: { organizationId },
+            take: parseInt(limit),
+            orderBy: { createdAt: 'desc' },
+            include: {
+                lead: { select: { id: true, name: true, source: true, status: true, assignedTo: { select: { name: true } } } },
+                performedBy: { select: { name: true } }
+            }
+        });
+
+        return activities;
+    }
+
+    // --- Bulk assign ---
+
+    static async bulkAssignLeads(leadIds, assignedToId, organizationId, userId) {
+        if (!leadIds || leadIds.length === 0) {
+            throw new AppError('No leads selected', 400, 'BAD_REQUEST');
+        }
+
+        const user = await prisma.user.findFirst({
+            where: { id: assignedToId, organizationId }
+        });
+
+        if (!user) throw new AppError('Assignee not found', 404, 'NOT_FOUND');
+
+        return await prisma.$transaction(async (tx) => {
+            await tx.lead.updateMany({
+                where: {
+                    id: { in: leadIds },
+                    organizationId
+                },
+                data: {
+                    assignedToId
+                }
+            });
+
+            // Log activities for each lead
+            for (const leadId of leadIds) {
+                await tx.leadActivity.create({
+                    data: {
+                        organizationId,
+                        leadId,
+                        type: 'ASSIGNMENT',
+                        description: `Lead reassigned to ${user.name}`,
+                        performedById: userId
+                    }
+                });
+            }
+
+            return { count: leadIds.length };
+        });
+    }
+
+    // --- Duplicates ---
+
+    static async getDuplicates(organizationId, query) {
+        // Simple heuristic: Find leads with matching phone or email
+        // A more advanced approach would use grouping in Prisma, but for this CRM phase:
+        const rawDuplicates = await prisma.$queryRaw`
+            SELECT "phone", COUNT(*) as count 
+            FROM "Lead" 
+            WHERE "organizationId" = ${organizationId} AND "phone" IS NOT NULL AND "phone" != ''
+            GROUP BY "phone" 
+            HAVING COUNT(*) > 1
+        `;
+
+        const duplicatePhones = rawDuplicates.map(r => r.phone);
+
+        if (duplicatePhones.length === 0) return [];
+
+        const leads = await prisma.lead.findMany({
+            where: {
+                organizationId,
+                phone: { in: duplicatePhones }
+            },
+            include: { assignedTo: { select: { name: true } } },
+            orderBy: { phone: 'asc' }
+        });
+
+        // Group by phone for the frontend
+        const groups = {};
+        for (const lead of leads) {
+            if (!groups[lead.phone]) groups[lead.phone] = [];
+            groups[lead.phone].push(lead);
+        }
+
+        return Object.entries(groups).map(([phone, duplicates]) => ({
+            type: 'Phone Match',
+            value: phone,
+            leads: duplicates
+        }));
+    }
+
+    static async mergeLeads(survivingLeadId, duplicateLeadId, organizationId, userId) {
+        if (survivingLeadId === duplicateLeadId) throw new AppError('Cannot merge a lead into itself', 400, 'BAD_REQUEST');
+
+        return await prisma.$transaction(async (tx) => {
+            const survivor = await tx.lead.findFirst({ where: { id: survivingLeadId, organizationId } });
+            const duplicate = await tx.lead.findFirst({ where: { id: duplicateLeadId, organizationId } });
+
+            if (!survivor || !duplicate) throw new AppError('Lead(s) not found', 404, 'NOT_FOUND');
+
+            // Merge fields: survivor takes precedence, but nulls are filled by duplicate
+            const updates = {};
+            if (!survivor.email && duplicate.email) updates.email = duplicate.email;
+            if (!survivor.source && duplicate.source) updates.source = duplicate.source;
+            if (!survivor.projectId && duplicate.projectId) updates.projectId = duplicate.projectId;
+            if (!survivor.propertyId && duplicate.propertyId) updates.propertyId = duplicate.propertyId;
+            if (!survivor.assignedToId && duplicate.assignedToId) updates.assignedToId = duplicate.assignedToId;
+            
+            let message = survivor.message || '';
+            if (duplicate.message) {
+                message = message ? `${message}\n\n[Merged from duplicate]: ${duplicate.message}` : duplicate.message;
+                updates.message = message;
+            }
+
+            if (Object.keys(updates).length > 0) {
+                await tx.lead.update({
+                    where: { id: survivingLeadId },
+                    data: updates
+                });
+            }
+
+            // Move Activities
+            await tx.leadActivity.updateMany({
+                where: { leadId: duplicateLeadId },
+                data: { leadId: survivingLeadId }
+            });
+
+            // Move Interests
+            // Need to handle unique constraints - safely using ignore/delete would be best,
+            // but for simplicity we'll just transfer and catch
+            const duplicateInterests = await tx.leadInterest.findMany({ where: { leadId: duplicateLeadId } });
+            for (const interest of duplicateInterests) {
+                const exists = await tx.leadInterest.findFirst({
+                    where: { leadId: survivingLeadId, propertyId: interest.propertyId }
+                });
+                if (!exists) {
+                    await tx.leadInterest.create({
+                        data: { leadId: survivingLeadId, propertyId: interest.propertyId }
+                    });
+                }
+            }
+            await tx.leadInterest.deleteMany({ where: { leadId: duplicateLeadId } });
+
+            // Finally, delete the duplicate
+            await tx.lead.delete({ where: { id: duplicateLeadId } });
+
+            // Log activity
+            await tx.leadActivity.create({
+                data: {
+                    organizationId,
+                    leadId: survivingLeadId,
+                    type: 'NOTE',
+                    description: `Merged with duplicate lead ${duplicate.name} (${duplicateLeadId})`,
+                    performedById: userId
+                }
+            });
+
+            return { success: true, survivingLeadId };
         });
     }
 }
