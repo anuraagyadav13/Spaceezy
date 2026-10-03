@@ -1,24 +1,33 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getEmployees } from "../../../lib/store";
+import { fetchUsers } from "../../../lib/api/users";
 import Modal from "../../../components/shared/Modal";
 import { TeamTable } from "../../../features/team/components/TeamTable";
 import { TeamMemberForm } from "../../../features/team/components/TeamMemberForm";
 import { PermissionGate } from "../../../features/auth/components/PermissionGate";
+import { AlertCircle } from "lucide-react";
 
 export default function DashboardTeamPage() {
     const [employees, setEmployees] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    const refreshEmployees = () => {
-        setEmployees(getEmployees());
+    const refreshEmployees = async () => {
+        try {
+            setLoading(true);
+            const data = await fetchUsers();
+            setEmployees(data);
+            setError(null);
+        } catch (err) {
+            setError(err.message || "Failed to load team members");
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            refreshEmployees();
-        }, 0);
-        return () => clearTimeout(timer);
+        refreshEmployees();
     }, []);
 
     const handleSaved = () => {

@@ -50,9 +50,27 @@ const updateProject = asyncHandler(async (req, res, next) => {
     });
 });
 
+const deleteProject = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { organizationId } = req.auth;
+    
+    const result = await ProjectService.deleteProject(id, organizationId);
+    
+    const message = result.deleted
+        ? 'Project deleted successfully'
+        : 'Project archived (has associated data)';
+
+    res.status(200).json({
+        success: true,
+        data: result,
+        message
+    });
+});
+
 module.exports = {
     getProjects,
     getProjectById,
     createProject,
-    updateProject
+    updateProject,
+    deleteProject
 };

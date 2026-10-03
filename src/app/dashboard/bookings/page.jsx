@@ -1,16 +1,21 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getBookings, addBooking, updateBookingPaymentStatus, getEmployees } from "../../../lib/store";
+import { fetchBookings, createBooking, updatePaymentStatus } from "../../../lib/api/bookings";
+import { fetchUsers } from "../../../lib/api/users";
 import { showToast } from "../../../lib/toast";
 import Modal from "../../../components/shared/Modal";
 import { PermissionGate } from "../../../features/auth/components/PermissionGate";
 
 const PAYMENT_STYLES = {
     Paid: "bg-emerald-100 text-emerald-700",
+    COMPLETED: "bg-emerald-100 text-emerald-700",
     Partial: "bg-orange-100 text-orange-600",
+    PARTIAL: "bg-orange-100 text-orange-600",
     Pending: "bg-gray-100 text-gray-500",
+    PENDING: "bg-gray-100 text-gray-500",
+    CANCELLED: "bg-red-100 text-red-600"
 };
-const PAYMENT_ORDER = ["Pending", "Partial", "Paid"];
+const PAYMENT_ORDER = ["PENDING", "PARTIAL", "COMPLETED"];
 
 export default function DashboardBookingsPage() {
     const [bookings, setBookings] = useState([]);
@@ -18,32 +23,59 @@ export default function DashboardBookingsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [form, setForm] = useState({ clientName: "", property: "", unit: "", amount: "", bookingDate: "", assignedTo: "" });
 
+    const loadData = async () => {
+        try {
+            const [bookRes, empData] = await Promise.all([
+                fetchBookings(),
+                fetchUsers()
+            ]);
+            const bookList = bookRes.bookings || bookRes || [];
+            setBookings(bookList);
+            const empList = empData || [];
+            setEmployees(empList);
+            if (empList.length && !form.assignedTo) setForm((f) => ({ ...f, assignedTo: empList[0].id }));
+        } catch (err) {
+            showToast(`Failed to load data: ${err.message}`, "error");
+        }
+    };
+
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setBookings(getBookings());
-            const emps = getEmployees();
-            setEmployees(emps);
-            if (emps.length) setForm((f) => ({ ...f, assignedTo: emps[0].id }));
-        }, 0);
-        return () => clearTimeout(timer);
+        loadData();
     }, []);
 
     const employeeName = (id) => employees.find((e) => e.id === id)?.name || "Unassigned";
 
-    const handleAdd = (e) => {
+    const handleAdd = async (e) => {
         e.preventDefault();
-        addBooking({ ...form, paymentStatus: "Pending" });
-        showToast(`Booking added for ${form.clientName}`);
-        setBookings(getBookings());
-        setIsModalOpen(false);
-        setForm({ clientName: "", property: "", unit: "", amount: "", bookingDate: "", assignedTo: employees[0]?.id || "" });
+        try {
+            // Note: form needs to be aligned with backend API expecting customerId and propertyId.
+            // For now, this requires a Customer and Property selection rather than just strings.
+            // As a mock migration step for the UI form:
+            await createBooking({ 
+                customerId: "00000000-0000-0000-0000-000000000000", // Needs a real picker
+                propertyId: "00000000-0000-0000-0000-000000000000", // Needs a real picker
+                amount: parseFloat(form.amount.replace(/[^0-9.]/g, '') || 0), 
+                paymentStatus: "PENDING" 
+            });
+            showToast(`Booking added`);
+            loadData();
+            setIsModalOpen(false);
+            setForm({ clientName: "", property: "", unit: "", amount: "", bookingDate: "", assignedTo: employees[0]?.id || "" });
+        } catch (err) {
+            showToast(`Failed to add booking: ${err.message}`, "error");
+        }
     };
 
-    const cyclePayment = (booking) => {
-        const next = PAYMENT_ORDER[(PAYMENT_ORDER.indexOf(booking.paymentStatus) + 1) % PAYMENT_ORDER.length];
-        updateBookingPaymentStatus(booking.id, next);
-        showToast(`Payment status updated to ${next}`);
-        setBookings(getBookings());
+    const cyclePayment = async (booking) => {
+        const current = booking.paymentStatus;
+        const next = PAYMENT_ORDER[(PAYMENT_ORDER.indexOf(current) + 1) % PAYMENT_ORDER.length];
+        try {
+            await updatePaymentStatus(booking.id, next);
+            showToast(`Payment status updated to ${next}`);
+            loadData();
+        } catch (err) {
+            showToast(`Failed to update status: ${err.message}`, "error");
+        }
     };
 
     return (

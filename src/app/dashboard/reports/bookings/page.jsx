@@ -1,8 +1,22 @@
 "use client";
-import { getBookings } from "../../../../lib/store";
+import { useEffect, useState } from "react";
+import { fetchBookings } from "../../../../lib/api/bookings";
+import { showToast } from "../../../../lib/toast";
 
 export default function BookingReportsPage() {
-    const bookings = getBookings();
+    const [bookings, setBookings] = useState([]);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const data = await fetchBookings({ limit: 500 });
+                setBookings(data.bookings || data || []);
+            } catch (err) {
+                showToast(`Failed to load booking reports: ${err.message}`, "error");
+            }
+        };
+        loadData();
+    }, []);
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">

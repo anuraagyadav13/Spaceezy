@@ -1,13 +1,30 @@
 "use client";
+import { useEffect, useState } from "react";
 import { MessageSquare, Send, CheckCheck, Sparkles } from "lucide-react";
-import { useState } from "react";
-import { getLeads } from "../../../lib/store";
+import { fetchLeads } from "../../../../lib/api/leads";
+import { showToast } from "../../../../lib/toast";
 
 export default function WhatsAppCenterPage() {
-    const leads = getLeads();
-    const [selectedLead, setSelectedLead] = useState(leads[0] || null);
+    const [leads, setLeads] = useState([]);
+    const [selectedLead, setSelectedLead] = useState(null);
     const [messageText, setMessageText] = useState("Hi! Here is the detailed proposal for Alpha Residency with 3BHK availability.");
     const [simulatedSent, setSimulatedSent] = useState(false);
+
+    useEffect(() => {
+        const loadLeads = async () => {
+            try {
+                const data = await fetchLeads({ limit: 10 });
+                const fetchedLeads = data.leads || data || [];
+                setLeads(fetchedLeads);
+                if (fetchedLeads.length > 0 && !selectedLead) {
+                    setSelectedLead(fetchedLeads[0]);
+                }
+            } catch (err) {
+                showToast(`Failed to load leads: ${err.message}`, "error");
+            }
+        };
+        loadLeads();
+    }, []);
 
     const handleSend = () => {
         setSimulatedSent(true);

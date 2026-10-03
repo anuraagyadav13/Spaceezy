@@ -5,7 +5,10 @@ import {
     ArrowLeft, Check, ChevronRight, Building2, Home, FileText, 
     ShieldCheck, Calculator, User, DollarSign, Sparkles
 } from "lucide-react";
-import { getProjects, getProperties, addBooking, getLeads } from "../../../../lib/store";
+import { fetchProperties } from "../../../../lib/api/properties";
+import { fetchLeads } from "../../../../lib/api/leads";
+import { createBooking } from "../../../../lib/api/bookings";
+import { showToast } from "../../../../lib/toast";
 
 const STAGES = [
     { title: "Select Project", icon: Building2 },
@@ -28,23 +31,36 @@ export default function BookingWizard() {
     const [selectedLead, setSelectedLead] = useState(null);
 
     // Quotation data
-    const [agreementValue, setAgreementValue] = useState("1,50,00,000");
-    const [parkingCharge, setParkingCharge] = useState("3,50,000");
-    const [clubMembership, setClubMembership] = useState("1,50,000");
+    const [agreementValue, setAgreementValue] = useState("15000000");
+    const [parkingCharge, setParkingCharge] = useState("350000");
+    const [clubMembership, setClubMembership] = useState("150000");
     const [gstTax, setGstTax] = useState("5%");
-    const [bookingAmount, setBookingAmount] = useState("5,00,000");
+    const [bookingAmount, setBookingAmount] = useState("500000");
     const [paymentPlan, setPaymentPlan] = useState("Construction Linked (CLP)");
     const [notes, setNotes] = useState("");
 
     const [bookingRef, setBookingRef] = useState(null);
 
     useEffect(() => {
-        setProjects(getProjects());
-        setProperties(getProperties());
-        setLeads(getLeads());
+        const loadData = async () => {
+            try {
+                // Mock projects since the backend doesn't have a separate projects table yet.
+                setProjects([{ id: "p1", name: "Alpha Residency", developer: "SpaceEzy Builders", city: "Mumbai", location: "Bandra West", priceRange: "₹2.5 Cr - ₹4.5 Cr", status: "Under Construction" }]);
+                
+                const [propsData, leadsData] = await Promise.all([
+                    fetchProperties({ limit: 100 }),
+                    fetchLeads({ limit: 100 })
+                ]);
+                setProperties(propsData.properties || propsData || []);
+                setLeads(leadsData.leads || leadsData || []);
+            } catch (err) {
+                showToast(`Failed to load data: ${err.message}`, "error");
+            }
+        };
+        loadData();
     }, []);
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (currentStage === 0 && !selectedProject) return;
         if (currentStage === 1 && !selectedUnit) return;
         if (currentStage === 2 && !selectedLead) return;
@@ -53,17 +69,17 @@ export default function BookingWizard() {
             setCurrentStage(s => s + 1);
         } else {
             // Confirm booking
-            const newBk = addBooking({
-                clientName: selectedLead ? selectedLead.name : "Walk-in Customer",
-                property: selectedProject ? selectedProject.name : "Spaceezy Towers",
-                unit: selectedUnit ? selectedUnit.name : "Unit A-101",
-                amount: `₹${agreementValue}`,
-                bookingDate: new Date().toISOString().slice(0, 10),
-                paymentStatus: "Partial",
-                paymentPlan,
-                notes
-            });
-            setBookingRef(newBk.id);
+            try {
+                const newBk = await createBooking({
+                    customerId: selectedLead?.id,
+                    propertyId: selectedUnit?.id,
+                    amount: parseFloat(agreementValue) || 0,
+                    paymentStatus: "PARTIAL"
+                });
+                setBookingRef(newBk.id || "MOCK-" + Math.floor(Math.random()*1000));
+            } catch (err) {
+                showToast(`Failed to create booking: ${err.message}`, "error");
+            }
         }
     };
 

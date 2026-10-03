@@ -2,7 +2,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getLeads, getProperties, updateLeadStage } from "../../../../../lib/store";
+import { fetchLeadById } from "../../../../../lib/api/leads";
+import { fetchProperties } from "../../../../../lib/api/properties";
+import { showToast } from "../../../../../lib/toast";
 import { 
     ArrowLeft, Search, Filter, CheckCircle2, Share2, Heart, 
     Building2, MapPin, Grid, List, Sparkles, X, Check, Send
@@ -28,13 +30,17 @@ export default function PropertyMatchingPage() {
     const [showMoreFilters, setShowMoreFilters] = useState(false);
 
     useEffect(() => {
-        const leads = getLeads();
-        const found = leads.find(l => l.id === params.id);
-        if (found) {
-            setLead(found);
-        }
-        const props = getProperties();
-        setProperties(props);
+        const loadData = async () => {
+            try {
+                const leadData = await fetchLeadById(params.id);
+                setLead(leadData);
+                const propsData = await fetchProperties({ limit: 100 });
+                setProperties(propsData.properties || propsData || []);
+            } catch (err) {
+                showToast(`Failed to load data: ${err.message}`, "error");
+            }
+        };
+        loadData();
     }, [params.id]);
 
     if (!lead) {

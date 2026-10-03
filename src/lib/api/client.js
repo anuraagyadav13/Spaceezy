@@ -1,6 +1,19 @@
 import axios from "axios";
 import { logout } from "../auth";
 
+const unwrapApiEnvelope = (payload) => {
+    if (
+        payload &&
+        typeof payload === "object" &&
+        Object.prototype.hasOwnProperty.call(payload, "success") &&
+        Object.prototype.hasOwnProperty.call(payload, "data")
+    ) {
+        return payload.data;
+    }
+
+    return payload;
+};
+
 const apiClient = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1",
     timeout: 10000,
@@ -21,16 +34,18 @@ apiClient.interceptors.request.use(
 );
 
 apiClient.interceptors.response.use(
-    (response) => response.data,
+    (response) => unwrapApiEnvelope(response.data),
     (error) => {
         if (error.response?.status === 401) {
             logout();
-            if (typeof window !== "undefined") {
+            if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
                 window.location.href = window.location.origin + "/login";
             }
         }
+
+        const payload = error.response?.data;
         return Promise.reject(
-            error.response?.data?.message || "An unexpected error occurred"
+            payload?.message || payload?.error || "An unexpected error occurred"
         );
     }
 );

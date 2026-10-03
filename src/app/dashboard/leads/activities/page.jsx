@@ -1,9 +1,21 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Activity, Phone, Calendar, MessageSquare } from "lucide-react";
-import { getLeads } from "../../../../lib/store";
+import { fetchLeadActivities } from "../../../../lib/api/leads";
+import { showToast } from "../../../../lib/toast";
 
 export default function LeadActivitiesPage() {
-    const leads = getLeads();
+    const [activities, setActivities] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchLeadActivities()
+            .then(data => setActivities(Array.isArray(data) ? data : []))
+            .catch(err => showToast("Failed to load activities", "error"))
+            .finally(() => setLoading(false));
+    }, []);
+
+    if (loading) return <div className="p-8 text-gray-400 font-medium">Loading activities...</div>;
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">
@@ -13,18 +25,19 @@ export default function LeadActivitiesPage() {
             </div>
 
             <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-6">
-                {leads.map(l => (
-                    <div key={l.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                {activities.length === 0 && <p className="text-sm text-gray-400">No activities found.</p>}
+                {activities.map(a => (
+                    <div key={a.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
                                 <Activity size={18} />
                             </div>
                             <div>
-                                <p className="font-bold text-gray-900 text-sm">{l.name} — Stage updated to {l.stage}</p>
-                                <p className="text-xs text-gray-500">Source: {l.source} • Assigned to {l.assignedTo}</p>
+                                <p className="font-bold text-gray-900 text-sm">{a.lead?.name || "Unknown"} — {a.description || `Stage updated to ${a.type}`}</p>
+                                <p className="text-xs text-gray-500">Source: {a.lead?.source || "N/A"} • Assigned to {a.lead?.assignedTo?.name || "Unassigned"}</p>
                             </div>
                         </div>
-                        <span className="text-xs text-gray-400 font-medium">{l.createdAt}</span>
+                        <span className="text-xs text-gray-400 font-medium">{a.createdAt ? new Date(a.createdAt).toLocaleDateString() : ""}</span>
                     </div>
                 ))}
             </div>

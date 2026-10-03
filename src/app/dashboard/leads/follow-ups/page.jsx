@@ -1,15 +1,32 @@
 "use client";
-import { useState } from "react";
-import { getFollowups, toggleFollowupStatus } from "../../../../lib/store";
+import { useEffect, useState } from "react";
+import { fetchFollowups, toggleFollowupStatus } from "../../../../lib/api/leads";
+import { showToast } from "../../../../lib/toast";
 import { CalendarCheck, CheckCircle2, Clock } from "lucide-react";
 
 export default function LeadFollowupsPage() {
-    const [followups, setFollowups] = useState(getFollowups());
+    const [followups, setFollowups] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const handleToggle = (id) => {
-        const updated = toggleFollowupStatus(id);
-        setFollowups(updated);
+    useEffect(() => {
+        fetchFollowups()
+            .then(data => setFollowups(Array.isArray(data) ? data : []))
+            .catch(err => showToast("Failed to load follow-ups", "error"))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const handleToggle = async (id) => {
+        try {
+            await toggleFollowupStatus(id);
+            setFollowups(prev => prev.map(f =>
+                f.id === id ? { ...f, status: f.status === "Done" ? "Pending" : "Done" } : f
+            ));
+        } catch (err) {
+            showToast("Failed to update follow-up", "error");
+        }
     };
+
+    if (loading) return <div className="p-8 text-gray-400 font-medium">Loading follow-ups...</div>;
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">
@@ -31,6 +48,9 @@ export default function LeadFollowupsPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
+                        {followups.length === 0 && (
+                            <tr><td colSpan="6" className="p-4 text-center text-gray-400">No follow-ups found.</td></tr>
+                        )}
                         {followups.map(f => (
                             <tr key={f.id} className="hover:bg-gray-50">
                                 <td className="p-4">

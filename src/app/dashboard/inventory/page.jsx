@@ -2,26 +2,40 @@
 import { useEffect, useState } from "react";
 import AddPropertyForm from "../../../features/inventory/components/AddPropertyForm";
 import PropertyCard from "../../../components/ui/PropertyCard";
-import { getProperties, addProperty } from "../../../lib/store";
+import { fetchProjects, createProject } from "../../../lib/api/projects";
 import { showToast } from "../../../lib/toast";
 import { PermissionGate } from "../../../features/auth/components/PermissionGate";
 
 export default function DashboardInventoryPage() {
     const [showAddForm, setShowAddForm] = useState(false);
     const [properties, setProperties] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const loadProjects = async () => {
+        try {
+            setLoading(true);
+            const data = await fetchProjects();
+            setProperties(data);
+        } catch (err) {
+            showToast(`Failed to load projects: ${err.message}`, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setProperties(getProperties());
-        }, 0);
-        return () => clearTimeout(timer);
+        loadProjects();
     }, []);
 
-    const handleAdd = (data) => {
-        addProperty(data);
-        showToast(`${data.name} added to your portfolio`);
-        setProperties(getProperties());
-        setShowAddForm(false);
+    const handleAdd = async (data) => {
+        try {
+            await createProject(data);
+            showToast(`${data.name} added to your portfolio`);
+            loadProjects();
+            setShowAddForm(false);
+        } catch (err) {
+            showToast(`Error adding project: ${err.message}`, "error");
+        }
     };
 
     return (

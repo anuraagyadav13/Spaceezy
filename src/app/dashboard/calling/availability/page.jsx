@@ -1,9 +1,23 @@
 "use client";
+import { useEffect, useState } from "react";
 import { UserCheck, Clock } from "lucide-react";
-import { getEmployees } from "../../../../lib/store";
+import { fetchUsers } from "../../../../lib/api/users";
+import { showToast } from "../../../../lib/toast";
 
 export default function AgentAvailabilityPage() {
-    const employees = getEmployees();
+    const [employees, setEmployees] = useState([]);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const data = await fetchUsers({ limit: 50 });
+                setEmployees(data.users || data || []);
+            } catch (err) {
+                showToast(`Failed to load agents: ${err.message}`, "error");
+            }
+        };
+        loadData();
+    }, []);
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">

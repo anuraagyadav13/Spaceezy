@@ -1,36 +1,40 @@
-// src/app/login/page.jsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getEmployees } from "../../lib/store";
-import { loginAsOwner, loginAsEmployee } from "../../lib/auth";
-import { Building2, UserCog, ArrowRight } from "lucide-react";
+import { Building2, UserCog, ArrowRight, Lock, Mail } from "lucide-react";
+import { showToast } from "../../lib/toast";
+import { useAuth } from "../../features/auth/hooks/useAuth";
 
 export default function LoginPage() {
     const router = useRouter();
-    const [employees, setEmployees] = useState([]);
-    const [selectedEmployee, setSelectedEmployee] = useState("");
-    const [mode, setMode] = useState(null); // "owner" | "employee"
+    const { login } = useAuth();
+    const [mode, setMode] = useState("employee"); // "owner" | "employee"
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            const emps = getEmployees();
-            setEmployees(emps);
-            if (emps.length) setSelectedEmployee(emps[0].id);
-        }, 0);
-        return () => clearTimeout(timer);
-    }, []);
-
-    const handleOwnerLogin = () => {
-        loginAsOwner();
-        router.push("/dashboard");
-    };
-
-    const handleEmployeeLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
-        if (!selectedEmployee) return;
-        loginAsEmployee(selectedEmployee);
-        router.push("/dashboard");
+        if (!email || !password) {
+            showToast("Please enter email and password", "error");
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const user = await login(email, password);
+            const normalizedRole = String(user?.role ?? "").toUpperCase();
+            const destination = normalizedRole === "ADMIN" || normalizedRole === "SUPER_ADMIN"
+                ? "/dashboard"
+                : "/dashboard/employee";
+
+            showToast("Logged in successfully", "success");
+            router.push(destination);
+        } catch (err) {
+            showToast(err?.message || "Login failed", "error");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -41,11 +45,12 @@ export default function LoginPage() {
                         <div className="w-4 h-4 bg-white rounded-full"></div>
                     </div>
                     <h1 className="text-3xl font-bold text-gray-900 tracking-tight">SpaceEzy CRM</h1>
-                    <p className="text-gray-500 mt-2">Choose how you&apos;d like to sign in</p>
+                    <p className="text-gray-500 mt-2">Sign in to your account</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <button
+                        type="button"
                         onClick={() => setMode("owner")}
                         className={`text-left bg-white rounded-3xl p-6 border-2 transition-all shadow-sm ${mode === "owner" ? "border-purple-500 shadow-md" : "border-transparent hover:border-purple-200"}`}
                     >
@@ -53,10 +58,11 @@ export default function LoginPage() {
                             <Building2 className="text-purple-600" size={22} />
                         </div>
                         <h3 className="font-bold text-gray-900 text-lg mb-1">Owner Portal</h3>
-                        <p className="text-sm text-gray-500">Track leads, properties, finances and your whole team&apos;s daily work.</p>
+                        <p className="text-sm text-gray-500">Track leads, properties, finances and your whole {"team's"} daily work.</p>
                     </button>
 
                     <button
+                        type="button"
                         onClick={() => setMode("employee")}
                         className={`text-left bg-white rounded-3xl p-6 border-2 transition-all shadow-sm ${mode === "employee" ? "border-purple-500 shadow-md" : "border-transparent hover:border-purple-200"}`}
                     >
@@ -68,31 +74,55 @@ export default function LoginPage() {
                     </button>
                 </div>
 
-                {mode === "owner" && (
-                    <div className="mt-8 bg-white rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
-                        <p className="text-sm text-gray-500">Continue as the business owner / admin.</p>
-                        <button onClick={handleOwnerLogin} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity shadow-sm shadow-purple-200">
-                            Enter Dashboard <ArrowRight size={16} />
-                        </button>
-                    </div>
-                )}
+                <form onSubmit={handleLogin} className="bg-white rounded-3xl p-8 shadow-sm">
+                    <h3 className="text-xl font-bold text-gray-900 mb-6">
+                        {mode === "owner" ? "Admin Login" : "Employee Login"}
+                    </h3>
+                    
+                    <div className="space-y-4 mb-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <Mail className="h-5 w-5 text-gray-400" />
+                                </div>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="block w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    placeholder="Enter your email"
+                                    required
+                                />
+                            </div>
+                        </div>
 
-                {mode === "employee" && (
-                    <form onSubmit={handleEmployeeLogin} className="mt-8 bg-white rounded-3xl p-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shadow-sm">
-                        <select
-                            value={selectedEmployee}
-                            onChange={(e) => setSelectedEmployee(e.target.value)}
-                            className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        >
-                            {employees.map((emp) => (
-                                <option key={emp.id} value={emp.id}>{emp.name} — {emp.role}</option>
-                            ))}
-                        </select>
-                        <button type="submit" className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity shadow-sm shadow-blue-200">
-                            Enter Portal <ArrowRight size={16} />
-                        </button>
-                    </form>
-                )}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <Lock className="h-5 w-5 text-gray-400" />
+                                </div>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="block w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    placeholder="Enter your password"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        disabled={isLoading}
+                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-4 rounded-xl font-medium hover:opacity-90 transition-opacity shadow-sm shadow-purple-200 disabled:opacity-50"
+                    >
+                        {isLoading ? "Signing in..." : "Sign In"} <ArrowRight size={18} />
+                    </button>
+                </form>
             </div>
         </div>
     );

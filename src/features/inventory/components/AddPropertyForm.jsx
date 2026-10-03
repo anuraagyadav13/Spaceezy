@@ -3,7 +3,7 @@
 // Property" form on the detail page — same fields, same validation.
 "use client";
 import { useState, useEffect } from "react";
-import { getEmployees } from "../../../lib/store";
+import { fetchUsers } from "../../../lib/api/users";
 
 export default function AddPropertyForm({ onClose, onSubmit, initialData, submitLabel = "Create Property" }) {
     const [employees, setEmployees] = useState([]);
@@ -25,12 +25,14 @@ export default function AddPropertyForm({ onClose, onSubmit, initialData, submit
     });
 
     useEffect(() => {
-        const emps = getEmployees();
-        const timer = setTimeout(() => {
+        let isMounted = true;
+        fetchUsers({ limit: 100 }).then(data => {
+            if (!isMounted) return;
+            const emps = Array.isArray(data) ? data : (data?.users || []);
             setEmployees(emps);
             if (!form.assignedTo && emps.length) setForm((f) => ({ ...f, assignedTo: emps[0].id }));
-        }, 0);
-        return () => clearTimeout(timer);
+        });
+        return () => { isMounted = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

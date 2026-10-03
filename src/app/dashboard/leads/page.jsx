@@ -1,16 +1,39 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getEmployees, getLeads } from "../../../lib/store";
+import { fetchUsers } from "../../../lib/api/users";
+import { fetchLeads } from "../../../lib/api/leads";
 import { 
     Search, Filter, Plus, ChevronDown, CheckSquare, 
-    Square, MoreHorizontal, ArrowUpDown, Download, Upload
+    Square, MoreHorizontal, ArrowUpDown, Download, Upload, AlertCircle
 } from "lucide-react";
 
 export default function LeadsList() {
-    const [leads] = useState(() => getLeads());
-    const [employees] = useState(() => getEmployees());
+    const [leads, setLeads] = useState([]);
+    const [employees, setEmployees] = useState([]);
     const [selectedLeads, setSelectedLeads] = useState(new Set());
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const [leadsData, usersData] = await Promise.all([
+                    fetchLeads(),
+                    fetchUsers()
+                ]);
+                setLeads(leadsData.leads || leadsData || []);
+                setEmployees(usersData.users || usersData || []);
+                setError(null);
+            } catch (err) {
+                setError(err.message || "Failed to load leads from the server");
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
 
 
     const employeeName = (id) => employees.find((e) => e.id === id)?.name || "Unassigned";
@@ -108,48 +131,68 @@ export default function LeadsList() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {leads.map((lead) => (
-                            <tr key={lead.id} className={`hover:bg-purple-50/30 transition-colors group ${selectedLeads.has(lead.id) ? 'bg-purple-50/30' : ''}`}>
-                                <td className="px-4 py-4 text-center">
-                                    <button onClick={() => toggleSelect(lead.id)} className="text-gray-300 hover:text-purple-600 transition-colors">
-                                        {selectedLeads.has(lead.id) ? <CheckSquare size={18} className="text-purple-600" /> : <Square size={18} />}
-                                    </button>
-                                </td>
-                                <td className="px-4 py-4">
-                                    <Link href={`/dashboard/leads/${lead.id}`} className="block">
-                                        <p className="font-bold text-gray-900 group-hover:text-purple-600 transition-colors">{lead.name}</p>
-                                        <p className="text-xs text-gray-500 mt-0.5">{lead.phone} {lead.email && `• ${lead.email}`}</p>
-                                    </Link>
-                                </td>
-                                <td className="px-4 py-4">
-                                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-100">
-                                        {lead.stage}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-4 text-sm text-gray-600 font-medium">{lead.source || "-"}</td>
-                                <td className="px-4 py-4 text-sm text-gray-900 font-bold">{lead.project || "-"}</td>
-                                <td className="px-4 py-4 text-sm text-gray-600">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden shrink-0">
-                                            <img src={`https://i.pravatar.cc/150?u=${lead.assignedTo}`} alt="" />
-                                        </div>
-                                        <span className="font-medium">{employeeName(lead.assignedTo)}</span>
+                        {loading ? (
+                            <tr>
+                                <td colSpan="8" className="px-4 py-12 text-center">
+                                    <div className="flex flex-col items-center justify-center space-y-3">
+                                        <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                                        <p className="text-gray-500 font-medium">Loading leads...</p>
                                     </div>
                                 </td>
-                                <td className="px-4 py-4 text-sm text-gray-500 font-medium">{lead.createdAt}</td>
-                                <td className="px-4 py-4 text-center">
-                                    <button className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
-                                        <MoreHorizontal size={18} />
-                                    </button>
+                            </tr>
+                        ) : error ? (
+                            <tr>
+                                <td colSpan="8" className="px-4 py-12 text-center text-red-500 bg-red-50/50">
+                                    <div className="flex flex-col items-center justify-center space-y-2">
+                                        <AlertCircle size={24} className="text-red-500" />
+                                        <p className="font-bold text-red-600">Failed to load leads</p>
+                                        <p className="text-sm">{error}</p>
+                                    </div>
                                 </td>
                             </tr>
-                        ))}
-                        {leads.length === 0 && (
+                        ) : leads.length === 0 ? (
                             <tr>
                                 <td colSpan="8" className="px-4 py-12 text-center text-gray-500">
                                     No leads found. Adjust your filters or add a new lead.
                                 </td>
                             </tr>
+                        ) : (
+                            leads.map((lead) => (
+                                <tr key={lead.id} className={`hover:bg-purple-50/30 transition-colors group ${selectedLeads.has(lead.id) ? 'bg-purple-50/30' : ''}`}>
+                                    <td className="px-4 py-4 text-center">
+                                        <button onClick={() => toggleSelect(lead.id)} className="text-gray-300 hover:text-purple-600 transition-colors">
+                                            {selectedLeads.has(lead.id) ? <CheckSquare size={18} className="text-purple-600" /> : <Square size={18} />}
+                                        </button>
+                                    </td>
+                                    <td className="px-4 py-4">
+                                        <Link href={`/dashboard/leads/${lead.id}`} className="block">
+                                            <p className="font-bold text-gray-900 group-hover:text-purple-600 transition-colors">{lead.name}</p>
+                                            <p className="text-xs text-gray-500 mt-0.5">{lead.phone} {lead.email && `• ${lead.email}`}</p>
+                                        </Link>
+                                    </td>
+                                    <td className="px-4 py-4">
+                                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-100">
+                                            {lead.status || lead.stage || "NEW"}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-4 text-sm text-gray-600 font-medium">{lead.source || "-"}</td>
+                                    <td className="px-4 py-4 text-sm text-gray-900 font-bold">{lead.project?.name || lead.project || "-"}</td>
+                                    <td className="px-4 py-4 text-sm text-gray-600">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden shrink-0">
+                                                <img src={`https://i.pravatar.cc/150?u=${lead.assignedToId || lead.assignedTo}`} alt="" />
+                                            </div>
+                                            <span className="font-medium">{employeeName(lead.assignedToId || lead.assignedTo)}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-4 text-sm text-gray-500 font-medium">{new Date(lead.createdAt).toLocaleDateString()}</td>
+                                    <td className="px-4 py-4 text-center">
+                                        <button className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                                            <MoreHorizontal size={18} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
                         )}
                     </tbody>
                 </table>

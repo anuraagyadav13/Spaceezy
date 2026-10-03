@@ -1,9 +1,23 @@
 "use client";
+import { useEffect, useState } from "react";
 import { CalendarCheck, MapPin } from "lucide-react";
-import { getSiteVisits } from "../../../../lib/store";
+import { fetchSiteVisits } from "../../../../lib/api/siteVisits";
+import { showToast } from "../../../../lib/toast";
 
 export default function SiteVisitReportsPage() {
-    const visits = getSiteVisits();
+    const [visits, setVisits] = useState([]);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const data = await fetchSiteVisits({ limit: 100 });
+                setVisits(data.siteVisits || data || []);
+            } catch (err) {
+                showToast(`Failed to load site visits: ${err.message}`, "error");
+            }
+        };
+        loadData();
+    }, []);
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">

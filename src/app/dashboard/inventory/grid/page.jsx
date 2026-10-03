@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getProjects, getProperties } from "../../../../lib/store";
+import { fetchProjects } from "../../../../lib/api/projects";
+import { fetchProperties } from "../../../../lib/api/properties";
 import { 
     Building2, Layers, Search, Filter, Grid as GridIcon, List as ListIcon, 
     CheckCircle2, AlertCircle, Bookmark, ShieldAlert, ArrowLeft
@@ -26,8 +27,19 @@ export default function InventoryGridPage() {
     const [selectedUnits, setSelectedUnits] = useState([]);
 
     useEffect(() => {
-        setProjects(getProjects());
-        setProperties(getProperties());
+        const load = async () => {
+            try {
+                const [projData, propData] = await Promise.all([
+                    fetchProjects(),
+                    fetchProperties()
+                ]);
+                setProjects(projData);
+                setProperties(propData);
+            } catch (err) {
+                console.error("Failed to load grid data", err);
+            }
+        };
+        load();
     }, []);
 
     // Floor structure mock generator for grid

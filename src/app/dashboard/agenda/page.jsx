@@ -1,11 +1,29 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Calendar, CheckCircle2, Clock, MapPin, User, AlertCircle } from "lucide-react";
-import { getFollowups, getSiteVisits } from "../../../lib/store";
+import { fetchTasks } from "../../../lib/api/tasks";
+import { fetchSiteVisits } from "../../../lib/api/siteVisits";
+import { showToast } from "../../../lib/toast";
 
 export default function AgendaPage() {
-    const followups = getFollowups();
-    const siteVisits = getSiteVisits();
+    const [followups, setFollowups] = useState([]);
+    const [siteVisits, setSiteVisits] = useState([]);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [tasksRes, visitsRes] = await Promise.all([
+                    fetchTasks({ type: 'FOLLOW_UP', limit: 10 }), // Mocking for today
+                    fetchSiteVisits({ limit: 10 }) // Mocking for today
+                ]);
+                setFollowups(tasksRes.tasks || tasksRes || []);
+                setSiteVisits(visitsRes.siteVisits || visitsRes || []);
+            } catch (err) {
+                showToast(`Failed to load agenda: ${err.message}`, "error");
+            }
+        };
+        loadData();
+    }, []);
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">

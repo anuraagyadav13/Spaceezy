@@ -1,15 +1,20 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getSiteVisits, addSiteVisit, updateSiteVisitStatus, getEmployees } from "../../../lib/store";
+import { fetchSiteVisits, createSiteVisit, updateSiteVisitStatus } from "../../../lib/api/siteVisits";
+import { fetchUsers } from "../../../lib/api/users";
 import { showToast } from "../../../lib/toast";
 import Modal from "../../../components/shared/Modal";
 import { Calendar, Phone } from "lucide-react";
 import { PermissionGate } from "../../../features/auth/components/PermissionGate";
 
 const STATUS_STYLES = {
+    SCHEDULED: "bg-purple-100 text-purple-700",
     Scheduled: "bg-purple-100 text-purple-700",
+    COMPLETED: "bg-emerald-100 text-emerald-700",
     Completed: "bg-emerald-100 text-emerald-700",
+    CANCELLED: "bg-gray-100 text-gray-500",
     Cancelled: "bg-gray-100 text-gray-500",
+    NO_SHOW: "bg-red-100 text-red-500",
 };
 
 export default function DashboardSiteVisitsPage() {
@@ -18,35 +23,60 @@ export default function DashboardSiteVisitsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [form, setForm] = useState({ leadName: "", phone: "", property: "", date: "", time: "", assignedTo: "" });
 
+    const loadData = async () => {
+        try {
+            const [visitRes, empData] = await Promise.all([
+                fetchSiteVisits(),
+                fetchUsers()
+            ]);
+            const visitList = visitRes.siteVisits || visitRes || [];
+            setVisits(visitList);
+            const empList = empData || [];
+            setEmployees(empList);
+            if (empList.length && !form.assignedTo) setForm((f) => ({ ...f, assignedTo: empList[0].id }));
+        } catch (err) {
+            showToast(`Failed to load data: ${err.message}`, "error");
+        }
+    };
+
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setVisits(getSiteVisits());
-            const emps = getEmployees();
-            setEmployees(emps);
-            if (emps.length) setForm((f) => ({ ...f, assignedTo: emps[0].id }));
-        }, 0);
-        return () => clearTimeout(timer);
+        loadData();
     }, []);
 
     const employeeName = (id) => employees.find((e) => e.id === id)?.name || "Unassigned";
 
-    const handleAdd = (e) => {
+    const handleAdd = async (e) => {
         e.preventDefault();
-        addSiteVisit({ ...form, status: "Scheduled" });
-        showToast("Site visit scheduled");
-        setVisits(getSiteVisits());
-        setIsModalOpen(false);
-        setForm({ leadName: "", phone: "", property: "", date: "", time: "", assignedTo: employees[0]?.id || "" });
+        try {
+            await createSiteVisit({
+                leadName: form.leadName,
+                phone: form.phone,
+                propertyName: form.property,
+                date: form.date,
+                time: form.time,
+                assignedToId: form.assignedTo
+            });
+            showToast("Site visit scheduled");
+            loadData();
+            setIsModalOpen(false);
+            setForm({ leadName: "", phone: "", property: "", date: "", time: "", assignedTo: employees[0]?.id || "" });
+        } catch (err) {
+            showToast(`Failed to schedule visit: ${err.message}`, "error");
+        }
     };
 
-    const handleStatus = (id, status) => {
-        updateSiteVisitStatus(id, status);
-        showToast(`Visit marked ${status}`, status === "Cancelled" ? "info" : "success");
-        setVisits(getSiteVisits());
+    const handleStatus = async (id, status) => {
+        try {
+            await updateSiteVisitStatus(id, status);
+            showToast(`Visit marked ${status}`, status === "CANCELLED" ? "info" : "success");
+            loadData();
+        } catch (err) {
+            showToast(`Failed to update status: ${err.message}`, "error");
+        }
     };
 
-    const upcoming = visits.filter((v) => v.status === "Scheduled");
-    const past = visits.filter((v) => v.status !== "Scheduled");
+    const upcoming = visits.filter((v) => v.status === "SCHEDULED" || v.status === "Scheduled");
+    const past = visits.filter((v) => v.status !== "SCHEDULED" && v.status !== "Scheduled");
 
     return (
         <div className="flex flex-col h-full overflow-y-auto bg-gray-50/50">

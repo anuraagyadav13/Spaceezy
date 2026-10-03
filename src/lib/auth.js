@@ -1,34 +1,34 @@
 // src/lib/auth.js
-// Frontend-only session handling. Replace with real auth (NextAuth, JWT,
-// etc.) later — every page only calls these getters/setters, so swapping
-// the implementation won't require touching the UI.
-
 export const ROLES = { OWNER: "owner", EMPLOYEE: "employee" };
 
 const ROLE_KEY = "se_role";
 const EMPLOYEE_KEY = "se_employee_id";
 
+export function clearAuthCache() {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(ROLE_KEY);
+    window.localStorage.removeItem(EMPLOYEE_KEY);
+}
+
+/* ---------- helpers ---------- */
 export function getRole() {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(ROLE_KEY);
+    return null;
 }
 
 export function getCurrentEmployeeId() {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(EMPLOYEE_KEY);
+    return null;
 }
 
+/* ---------- setters ---------- */
 export function loginAsOwner() {
-    window.localStorage.setItem(ROLE_KEY, ROLES.OWNER);
-    window.localStorage.removeItem(EMPLOYEE_KEY);
+    clearAuthCache();
 }
 
 export function loginAsEmployee(employeeId) {
-    window.localStorage.setItem(ROLE_KEY, ROLES.EMPLOYEE);
-    window.localStorage.setItem(EMPLOYEE_KEY, employeeId);
+    clearAuthCache();
 }
 
+/* ---------- logout ---------- */
 export function logout() {
-    window.localStorage.removeItem(ROLE_KEY);
-    window.localStorage.removeItem(EMPLOYEE_KEY);
+    clearAuthCache();
 }

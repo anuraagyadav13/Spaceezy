@@ -1,9 +1,23 @@
 "use client";
+import { useEffect, useState } from "react";
 import { DollarSign, Building2 } from "lucide-react";
-import { getProperties } from "../../../../lib/store";
+import { fetchProperties } from "../../../../lib/api/properties";
+import { showToast } from "../../../../lib/toast";
 
 export default function PricingPage() {
-    const props = getProperties();
+    const [props, setProps] = useState([]);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const data = await fetchProperties({ limit: 100 });
+                setProps(data.properties || data || []);
+            } catch (err) {
+                showToast(`Failed to load pricing data: ${err.message}`, "error");
+            }
+        };
+        loadData();
+    }, []);
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">

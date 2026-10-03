@@ -1,8 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getLeads, getEmployees } from "../../../../lib/store";
+import { fetchLeadById } from "../../../../lib/api/leads";
+import { fetchUsers } from "../../../../lib/api/users";
+import { showToast } from "../../../../lib/toast";
 import { 
     ArrowLeft, Phone, Mail, MessageSquare, Calendar as CalendarIcon,
     FileText, Search, Star, History, MoreHorizontal, User, CalendarCheck
@@ -16,13 +19,23 @@ export default function LeadProfile() {
     const [activeTab, setActiveTab] = useState("Activity");
 
     useEffect(() => {
-        const leads = getLeads();
-        const found = leads.find(l => l.id === params.id);
-        if (found) {
-            setLead(found);
-            const emp = getEmployees().find(e => e.id === found.assignedTo);
-            setEmployee(emp);
-        }
+        const loadData = async () => {
+            try {
+                const leadData = await fetchLeadById(params.id);
+                setLead(leadData);
+                
+                const assignedId = leadData.assignedToId || leadData.assignedTo;
+                if (assignedId) {
+                    const usersData = await fetchUsers();
+                    const emps = usersData.users || usersData || [];
+                    const emp = emps.find(e => e.id === assignedId);
+                    setEmployee(emp);
+                }
+            } catch (err) {
+                showToast(`Failed to load lead profile: ${err.message}`, "error");
+            }
+        };
+        loadData();
     }, [params.id]);
 
     if (!lead) {
@@ -30,6 +43,8 @@ export default function LeadProfile() {
     }
 
     const tabs = ["Activity", "Starred", "Notes", "Calls", "WhatsApp", "History", "Follow-ups", "Emails"];
+    const activityTimeline = Array.isArray(lead.activities) ? lead.activities : [];
+    const currentStatus = lead.status || lead.stage || "NEW";
 
     return (
         <div className="flex h-full overflow-hidden bg-gray-50/50">
@@ -46,7 +61,7 @@ export default function LeadProfile() {
                                 {lead.id}
                             </span>
                             <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-100">
-                                {lead.stage}
+                                {currentStatus}
                             </span>
                             <span className="text-xs text-gray-500 font-bold bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">
                                 {lead.source || "Unknown Source"}
@@ -102,39 +117,30 @@ export default function LeadProfile() {
                     <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar bg-gray-50/50">
                         {activeTab === "Activity" && (
                             <div className="max-w-3xl">
-                                <div className="relative pl-6 border-l-2 border-gray-200 space-y-8">
-                                    <TimelineItem 
-                                        type="Status Change"
-                                        title={`Stage changed to ${lead.stage}`}
-                                        time="Today, 10:45 AM"
-                                        user={employee?.name}
-                                        icon={History}
-                                        color="text-blue-600 bg-blue-100"
-                                    />
-                                    <TimelineItem 
-                                        type="Call"
-                                        title="Outbound Call (Answered)"
-                                        desc="Discussed budget. Client is looking for ready-to-move properties."
-                                        time="Yesterday, 02:30 PM"
-                                        user={employee?.name}
-                                        icon={Phone}
-                                        color="text-emerald-600 bg-emerald-100"
-                                    />
-                                    <TimelineItem 
-                                        type="System"
-                                        title="Lead Created"
-                                        desc={`Source: ${lead.source}`}
-                                        time={lead.createdAt}
-                                        user="System"
-                                        icon={Star}
-                                        color="text-gray-600 bg-gray-200"
-                                    />
-                                </div>
+                                {activityTimeline.length === 0 ? (
+                                    <div className="text-center text-gray-500 p-12 border border-dashed border-gray-200 rounded-2xl bg-white">
+                                        <p>No lead activity exists yet.</p>
+                                    </div>
+                                ) : (
+                                    <div className="relative pl-6 border-l-2 border-gray-200 space-y-8">
+                                        {activityTimeline.map((activity) => (
+                                            <TimelineItem
+                                                key={activity.id}
+                                                type={activity.type || "System"}
+                                                title={activity.description || "Lead activity"}
+                                                time={activity.createdAt ? new Date(activity.createdAt).toLocaleString() : "Unknown time"}
+                                                user={activity.performedBy?.name || activity.performer || employee?.name || "System"}
+                                                icon={activity.type === "STATUS_CHANGE" ? History : activity.type === "CALL" ? Phone : Star}
+                                                color={activity.type === "STATUS_CHANGE" ? "text-blue-600 bg-blue-100" : activity.type === "CALL" ? "text-emerald-600 bg-emerald-100" : "text-gray-600 bg-gray-200"}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                         {activeTab !== "Activity" && (
                             <div className="text-center text-gray-500 p-12">
-                                <p>Mock view for {activeTab} tab.</p>
+                                <p>Not implemented — backend capability missing for the {activeTab.toLowerCase()} lead view.</p>
                             </div>
                         )}
                     </div>
@@ -156,7 +162,7 @@ export default function LeadProfile() {
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Ownership</h3>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                         <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden shrink-0 border border-white shadow-sm">
-                            <Image src={`https://i.pravatar.cc/150?u=${lead.assignedTo}`} alt="" width={32} height={32} className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden shrink-0" />
+                            <Image src={`https://i.pravatar.cc/150?u=${lead.assignedTo}`} alt="" width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
                         </div>
                         <div>
                             <p className="text-sm font-bold text-gray-900">{employee?.name || "Unassigned"}</p>
@@ -223,7 +229,7 @@ function TimelineItem({ type, title, desc, time, user, icon: Icon, color }) {
                 {desc && <p className="text-sm text-gray-600 mb-3">{desc}</p>}
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
                     <div className="w-5 h-5 rounded-full bg-gray-200 overflow-hidden">
-                        <Image src={`https://i.pravatar.cc/150?u=${user}`} alt="" width={40} height={40} className="w-5 h-5 rounded-full bg-gray-200 overflow-hidden" />
+                        <Image src={`https://i.pravatar.cc/150?u=${user}`} alt="" width={20} height={20} className="w-5 h-5 rounded-full object-cover" />
                     </div>
                     {user}
                 </div>

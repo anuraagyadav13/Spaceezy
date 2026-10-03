@@ -1,27 +1,70 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, User, Phone, Mail, Building2 } from "lucide-react";
-import { addLead, getEmployees } from "../../../../lib/store";
+import { createLead } from "../../../../lib/api/leads";
+import { fetchUsers } from "../../../../lib/api/users";
+import { showToast } from "../../../../lib/toast";
 
 export default function NewLeadPage() {
     const router = useRouter();
-    const employees = getEmployees();
+    const [employees, setEmployees] = useState([]);
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
-    const [project, setProject] = useState("Alpha Residency");
-    const [budget, setBudget] = useState("₹1.5 Cr");
+    const [project, setProject] = useState("");
+    const [budget, setBudget] = useState("");
     const [source, setSource] = useState("Website");
-    const [assignedTo, setAssignedTo] = useState(employees[0]?.id || "EMP-001");
+    const [assignedTo, setAssignedTo] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = (e) => {
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const data = await fetchUsers({ limit: 50 });
+                const emps = data.users || data || [];
+                setEmployees(emps);
+                if (emps.length > 0 && !assignedTo) {
+                    setAssignedTo(emps[0].id);
+                }
+            } catch (err) {
+                showToast(`Failed to load users: ${err.message}`, "error");
+            }
+        };
+        loadData();
+    }, []);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!name || !phone) return;
-        addLead({
-            name, phone, email, project, budget, source, assignedTo, stage: "NEW"
-        });
-        router.push("/dashboard/leads");
+        if (!name.trim() || !phone.trim()) {
+            showToast("Lead name and phone are required", "error");
+            return;
+        }
+
+        if (!assignedTo) {
+            showToast("Please assign the lead to a valid sales executive", "error");
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            await createLead({
+                name: name.trim(),
+                phone: phone.trim(),
+                email: email?.trim() || "",
+                project,
+                budget,
+                source,
+                assignedToId: assignedTo,
+                status: "NEW"
+            });
+            showToast("Lead added successfully", "success");
+            router.push("/dashboard/leads");
+        } catch (err) {
+            showToast(`Failed to add lead: ${err.message}`, "error");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -114,8 +157,8 @@ export default function NewLeadPage() {
                     <button type="button" onClick={() => router.back()} className="px-5 py-2.5 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl">
                         Cancel
                     </button>
-                    <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded-xl shadow-sm hover:opacity-95">
-                        Save Lead Record
+                    <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded-xl shadow-sm hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed">
+                        {isSubmitting ? "Saving..." : "Save Lead Record"}
                     </button>
                 </div>
             </form>

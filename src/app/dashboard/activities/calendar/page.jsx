@@ -1,10 +1,29 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
-import { getSiteVisits, getFollowups } from "../../../lib/store";
+import { fetchTasks } from "../../../../lib/api/tasks";
+import { fetchSiteVisits } from "../../../../lib/api/siteVisits";
+import { showToast } from "../../../../lib/toast";
 
 export default function CalendarPage() {
-    const visits = getSiteVisits();
-    const followups = getFollowups();
+    const [visits, setVisits] = useState([]);
+    const [followups, setFollowups] = useState([]);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [tasksRes, visitsRes] = await Promise.all([
+                    fetchTasks({ limit: 50 }),
+                    fetchSiteVisits({ limit: 50 })
+                ]);
+                setFollowups(tasksRes.tasks || tasksRes || []);
+                setVisits(visitsRes.siteVisits || visitsRes || []);
+            } catch (err) {
+                showToast(`Failed to load calendar: ${err.message}`, "error");
+            }
+        };
+        loadData();
+    }, []);
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">

@@ -4,18 +4,41 @@ import {
     CheckSquare, Clock, Filter, Plus, Calendar as CalendarIcon, 
     MessageSquare, Phone, ChevronDown, MoreHorizontal, User
 } from "lucide-react";
-import { getFollowups, getEmployees } from "../../../../lib/store";
+import { fetchTasks, toggleTaskStatus } from "../../../../lib/api/tasks";
+import { fetchUsers } from "../../../../lib/api/users";
+import { showToast } from "../../../../lib/toast";
 
 export default function TasksPage() {
     const [tasks, setTasks] = useState([]);
     const [employees, setEmployees] = useState([]);
 
+    const loadData = async () => {
+        try {
+            const [tasksRes, empData] = await Promise.all([
+                fetchTasks(),
+                fetchUsers()
+            ]);
+            setTasks(tasksRes.tasks || tasksRes || []);
+            setEmployees(empData || []);
+        } catch (err) {
+            showToast(`Failed to load tasks: ${err.message}`, "error");
+        }
+    };
+
     useEffect(() => {
-        setTasks(getFollowups());
-        setEmployees(getEmployees());
+        loadData();
     }, []);
 
     const employeeName = (id) => employees.find((e) => e.id === id)?.name || "Unassigned";
+
+    const handleToggle = async (taskId) => {
+        try {
+            await toggleTaskStatus(taskId);
+            loadData();
+        } catch (err) {
+            showToast(`Failed to update task: ${err.message}`, "error");
+        }
+    };
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50">
@@ -54,8 +77,8 @@ export default function TasksPage() {
                         </h3>
                         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                             <div className="divide-y divide-gray-100">
-                                {tasks.filter(t => t.status === "Pending" && new Date(t.dueDate) < new Date()).map(task => (
-                                    <TaskRow key={task.id} task={task} employeeName={employeeName(task.assignedTo)} overdue />
+                                {tasks.filter(t => (t.status === "Pending" || t.status === "PENDING") && new Date(t.dueDate) < new Date()).map(task => (
+                                    <TaskRow key={task.id} task={task} employeeName={employeeName(task.assignedTo)} overdue onToggle={handleToggle} />
                                 ))}
                             </div>
                         </div>
@@ -69,8 +92,8 @@ export default function TasksPage() {
                         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                             <div className="divide-y divide-gray-100">
                                 {/* Using fallback if no 'today' logic explicitly matches mock data */}
-                                {tasks.filter(t => t.status === "Pending" && new Date(t.dueDate) >= new Date()).map(task => (
-                                    <TaskRow key={task.id} task={task} employeeName={employeeName(task.assignedTo)} />
+                                {tasks.filter(t => (t.status === "Pending" || t.status === "PENDING") && new Date(t.dueDate) >= new Date()).map(task => (
+                                    <TaskRow key={task.id} task={task} employeeName={employeeName(task.assignedTo)} onToggle={handleToggle} />
                                 ))}
                             </div>
                         </div>
@@ -83,8 +106,8 @@ export default function TasksPage() {
                         </h3>
                         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden opacity-70">
                             <div className="divide-y divide-gray-100">
-                                {tasks.filter(t => t.status === "Done").map(task => (
-                                    <TaskRow key={task.id} task={task} employeeName={employeeName(task.assignedTo)} completed />
+                                {tasks.filter(t => t.status === "Done" || t.status === "COMPLETED").map(task => (
+                                    <TaskRow key={task.id} task={task} employeeName={employeeName(task.assignedTo)} completed onToggle={handleToggle} />
                                 ))}
                             </div>
                         </div>
@@ -96,7 +119,7 @@ export default function TasksPage() {
     );
 }
 
-function TaskRow({ task, employeeName, overdue, completed }) {
+function TaskRow({ task, employeeName, overdue, completed, onToggle }) {
     const getIcon = () => {
         if (task.type?.toLowerCase().includes("call")) return Phone;
         if (task.type?.toLowerCase().includes("visit")) return CalendarIcon;
@@ -108,7 +131,7 @@ function TaskRow({ task, employeeName, overdue, completed }) {
     return (
         <div className={`p-4 flex items-center gap-4 group transition-colors hover:bg-gray-50 ${completed ? 'bg-gray-50' : ''}`}>
             {/* Checkbox */}
-            <button className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-purple-500 text-transparent hover:text-purple-200'}`}>
+            <button onClick={() => onToggle && onToggle(task.id)} className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-purple-500 text-transparent hover:text-purple-200'}`}>
                 <CheckSquare size={14} className={completed ? "text-white" : "text-transparent"} />
             </button>
 

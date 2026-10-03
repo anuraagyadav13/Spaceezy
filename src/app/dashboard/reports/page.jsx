@@ -1,12 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getLeads, getBookings, getProperties, getEmployees } from "../../../lib/store";
+import { fetchLeads } from "../../../lib/api/leads";
+import { fetchBookings } from "../../../lib/api/bookings";
+import { fetchProperties } from "../../../lib/api/properties";
+import { fetchUsers } from "../../../lib/api/users";
+import { showToast } from "../../../lib/toast";
 import Image from "next/image";
 
 const STAGES = ["NEW", "CONTACTED", "QUALIFIED", "SITE VISIT", "NEGOTIATION", "BOOKING"];
-const PAYMENT_STATES = ["Paid", "Partial", "Pending"];
-const PAYMENT_COLORS = { Paid: "bg-emerald-500", Partial: "bg-orange-400", Pending: "bg-gray-300" };
+const PAYMENT_STATES = ["COMPLETED", "PARTIAL", "PENDING"];
+const PAYMENT_COLORS = { COMPLETED: "bg-emerald-500", PARTIAL: "bg-orange-400", PENDING: "bg-gray-300" };
 
 export default function DashboardReportsPage() {
     const [leads, setLeads] = useState([]);
@@ -15,13 +19,25 @@ export default function DashboardReportsPage() {
     const [employees, setEmployees] = useState([]);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setLeads(getLeads());
-            setBookings(getBookings());
-            setProperties(getProperties());
-            setEmployees(getEmployees());
-        }, 0);
-        return () => clearTimeout(timer);
+        const loadData = async () => {
+            try {
+                // Warning: This is a heavy client-side aggregation.
+                // In production, this should be handled by a dedicated /api/v1/reports/dashboard endpoint.
+                const [leadsRes, bookingsRes, propsRes, empsRes] = await Promise.all([
+                    fetchLeads({ limit: 1000 }),
+                    fetchBookings({ limit: 1000 }),
+                    fetchProperties({ limit: 1000 }),
+                    fetchUsers({ limit: 1000 })
+                ]);
+                setLeads(leadsRes.leads || leadsRes || []);
+                setBookings(bookingsRes.bookings || bookingsRes || []);
+                setProperties(propsRes.properties || propsRes || []);
+                setEmployees(empsRes.users || empsRes || []);
+            } catch (err) {
+                showToast(`Failed to load reports: ${err.message}`, "error");
+            }
+        };
+        loadData();
     }, []);
 
     const totalLeads = leads.length;

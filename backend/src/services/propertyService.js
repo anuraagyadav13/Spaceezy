@@ -67,6 +67,13 @@ class PropertyService {
             payload.area = Number(payload.area);
         }
 
+        const areaFields = ['areaCarpet', 'areaSaleable', 'areaBuiltUp', 'areaProject', 'areaCovered', 'areaTerrace'];
+        areaFields.forEach(field => {
+            if (payload[field] !== undefined && payload[field] !== null && typeof payload[field] === 'string') {
+                payload[field] = Number(payload[field]) || null;
+            }
+        });
+
         if (payload.floor !== undefined && payload.floor !== null && typeof payload.floor === 'string') {
             payload.floor = Number(payload.floor);
         }
@@ -74,7 +81,6 @@ class PropertyService {
         delete payload.name;
         delete payload.address;
         delete payload.project;
-        delete payload.type;
         delete payload.category;
 
         return payload;

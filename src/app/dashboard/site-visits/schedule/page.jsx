@@ -1,24 +1,57 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { addSiteVisit, getLeads, getEmployees } from "../../../../lib/store";
+import { createSiteVisit } from "../../../../lib/api/siteVisits";
+import { fetchLeads } from "../../../../lib/api/leads";
+import { fetchUsers } from "../../../../lib/api/users";
+import { showToast } from "../../../../lib/toast";
 
 export default function ScheduleSiteVisitPage() {
     const router = useRouter();
-    const leads = getLeads();
-    const employees = getEmployees();
+    const [leads, setLeads] = useState([]);
+    const [employees, setEmployees] = useState([]);
+    
+    const [leadName, setLeadName] = useState("");
+    const [property, setProperty] = useState("");
+    const [date, setDate] = useState("");
+    const [time, setTime] = useState("");
+    const [assignedTo, setAssignedTo] = useState("");
 
-    const [leadName, setLeadName] = useState(leads[0]?.name || "Sapphire Holloway");
-    const [property, setProperty] = useState("Alpha Residency");
-    const [date, setDate] = useState("2026-09-29");
-    const [time, setTime] = useState("11:30 AM");
-    const [assignedTo] = useState(employees[0]?.id || "EMP-001");
+    useEffect(() => {
+        Promise.all([
+            fetchLeads({ limit: 100 }),
+            fetchUsers({ limit: 100 })
+        ]).then(([leadsData, usersData]) => {
+            const leadsList = Array.isArray(leadsData) ? leadsData : (leadsData?.leads || []);
+            const usersList = Array.isArray(usersData) ? usersData : (usersData?.users || []);
+            
+            setLeads(leadsList);
+            setEmployees(usersList);
+            
+            if (leadsList.length > 0) setLeadName(leadsList[0].name);
+            if (usersList.length > 0) setAssignedTo(usersList[0].id);
+        }).catch(err => {
+            showToast("Failed to load reference data", "error");
+        });
+    }, []);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        addSiteVisit({ leadName, property, date, time, assignedTo, status: "Scheduled" });
-        router.push("/dashboard/site-visits");
+        try {
+            await createSiteVisit({
+                leadName,
+                property,
+                date,
+                time,
+                assignedToId: assignedTo,
+                status: "Scheduled"
+            });
+            showToast("Site visit scheduled successfully", "success");
+            router.push("/dashboard/site-visits");
+        } catch (error) {
+            showToast("Failed to schedule site visit", "error");
+        }
     };
 
     return (
@@ -51,6 +84,18 @@ export default function ScheduleSiteVisitPage() {
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Time</label>
                         <input type="text" required value={time} onChange={e => setTime(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold" />
                     </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Assign To</label>
+                    <select 
+                        value={assignedTo} 
+                        onChange={e => setAssignedTo(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold"
+                    >
+                        {employees.map(emp => (
+                            <option key={emp.id} value={emp.id}>{emp.name}</option>
+                        ))}
+                    </select>
                 </div>
                 <div className="pt-4 flex justify-end gap-3">
                     <button type="button" onClick={() => router.back()} className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl">Cancel</button>

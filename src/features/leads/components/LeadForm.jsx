@@ -25,7 +25,16 @@ export default function LeadForm({ employees, onSuccess, onCancel }) {
     });
 
     const onSubmit = (data) => {
-        createLead(data, {
+        const payload = {
+            ...data,
+            assignedToId: data.assignedToId || data.assignedTo,
+            status: data.status || data.stage || "NEW",
+        };
+
+        delete payload.assignedTo;
+        delete payload.stage;
+
+        createLead(payload, {
             onSuccess: () => {
                 showToast(`${data.name} added to the pipeline`);
                 onSuccess();

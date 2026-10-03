@@ -1,21 +1,21 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
-import { getLeadsByEmployee, getSiteVisitsByEmployee, getBookingsByEmployee, getDailyWorkByEmployee } from "../../../lib/store";
 
 export function TeamTable({ employees }) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {employees.map((emp) => {
-                const leadCount = getLeadsByEmployee(emp.id).length;
-                const visitCount = getSiteVisitsByEmployee(emp.id).filter((v) => v.status === "Scheduled").length;
-                const bookingCount = getBookingsByEmployee(emp.id).length;
-                const workDays = getDailyWorkByEmployee(emp.id);
-                const lastEntry = workDays[0];
+                // Placeholder counts until dashboard aggregation API is implemented
+                const leadCount = emp._count?.assignedLeads || 0;
+                const visitCount = 0;
+                const bookingCount = 0;
+                const lastEntry = null;
+                
                 return (
                     <Link key={emp.id} href={`/dashboard/team/${emp.id}`} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 hover:shadow-md hover:border-purple-200 transition-all">
                         <div className="flex items-center gap-3 mb-5">
-                            <Image src={emp.avatar} alt={emp.name} width={48} height={48} className="w-12 h-12 rounded-full" />
+                            <Image src={emp.avatar || `https://i.pravatar.cc/150?u=${emp.email || emp.id}`} alt={emp.name || 'User'} width={48} height={48} className="w-12 h-12 rounded-full" />
                             <div className="min-w-0">
                                 <h3 className="font-bold text-gray-900 truncate">{emp.name}</h3>
                                 <p className="text-xs text-gray-500 truncate">{emp.role}</p>

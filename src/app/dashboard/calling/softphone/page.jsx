@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
     Phone, PhoneCall, PhoneOff, Mic, MicOff, Volume2, 
     User, Clock, Play, Pause, AlertCircle, ShieldCheck, CheckCircle2
 } from "lucide-react";
-import { getLeads } from "../../../../lib/store";
+import { fetchLeads } from "../../../../lib/api/leads";
 
 export default function BrowserSoftphonePage() {
     const [agentStatus, setAgentStatus] = useState("Available"); // Available, On Call, After Call Work
@@ -14,8 +14,24 @@ export default function BrowserSoftphonePage() {
     const [callDuration, setCallDuration] = useState(0);
     const [selectedOutcome, setSelectedOutcome] = useState("Site Visit Scheduled");
 
-    const leads = getLeads();
-    const activeLead = leads[0] || { name: "Sapphire Holloway", phone: "+91 98765 43210", project: "Alpha Residency" };
+    const [leads, setLeads] = useState([]);
+    const [activeLead, setActiveLead] = useState({ name: "Sapphire Holloway", phone: "+91 98765 43210", project: "Alpha Residency" });
+
+    useEffect(() => {
+        const loadLeads = async () => {
+            try {
+                const data = await fetchLeads({ limit: 10 });
+                const fetchedLeads = data.leads || data || [];
+                setLeads(fetchedLeads);
+                if (fetchedLeads.length > 0) {
+                    setActiveLead(fetchedLeads[0]);
+                }
+            } catch (error) {
+                console.error("Failed to fetch leads", error);
+            }
+        };
+        loadLeads();
+    }, []);
 
     const handleStartCall = () => {
         setCallState("ringing");

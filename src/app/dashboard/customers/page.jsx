@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../features/auth/hooks/useAuth";
-import { getClientsByEmployee, addClient, updateClient } from "../../../lib/store";
+import { fetchCustomers, createCustomer, updateCustomer } from "../../../lib/api/customers";
 import { showToast } from "../../../lib/toast";
 import Modal from "../../../components/shared/Modal";
 import { PermissionGate } from "../../../features/auth/components/PermissionGate";
@@ -13,35 +13,43 @@ export default function DashboardCustomersPage() {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", property: "", notes: "" });
 
-    // Mock behavior for role scopes since backend isn't available
-    const fetchClients = () => {
+    const loadClients = async () => {
         if (!user) return;
-        const data = getClientsByEmployee(user.id || "EMP-001"); 
-        setClients(data);
+        try {
+            const data = await fetchCustomers();
+            setClients(data.customers || data || []);
+        } catch (err) {
+            showToast(`Failed to load customers: ${err.message}`, "error");
+        }
     };
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchClients();
-        }, 0);
-        return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        loadClients();
     }, [user]);
 
-    const handleAdd = (e) => {
+    const handleAdd = async (e) => {
         e.preventDefault();
-        addClient({ ...form, assignedTo: user?.id || "EMP-001" });
-        showToast(`${form.name} added as a client`);
-        setForm({ name: "", phone: "", email: "", property: "", notes: "" });
-        setIsAddOpen(false);
-        fetchClients();
+        try {
+            await createCustomer({ ...form, assignedToId: user?.id });
+            showToast(`${form.name} added as a client`);
+            setForm({ name: "", phone: "", email: "", property: "", notes: "" });
+            setIsAddOpen(false);
+            loadClients();
+        } catch (err) {
+            showToast(`Failed to add customer: ${err.message}`, "error");
+        }
     };
 
-    const handleStatusChange = (client, status) => {
-        updateClient(client.id, { status });
-        showToast(`${client.name} marked ${status}`);
-        fetchClients();
-        setSelected({ ...client, status });
+    const handleStatusChange = async (client, status) => {
+        const uppercaseStatus = status.toUpperCase();
+        try {
+            await updateCustomer({ id: client.id, status: uppercaseStatus });
+            showToast(`${client.name} marked ${status}`);
+            loadClients();
+            setSelected({ ...client, status: uppercaseStatus });
+        } catch (err) {
+            showToast(`Failed to update status: ${err.message}`, "error");
+        }
     };
 
     return (

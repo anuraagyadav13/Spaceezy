@@ -1,9 +1,34 @@
 "use client";
+import { useEffect, useState } from "react";
 import { AlertCircle, Clock } from "lucide-react";
-import { getFollowups } from "../../../lib/store";
+import { fetchOverdueTasks, toggleTaskStatus } from "../../../../lib/api/tasks";
+import { showToast } from "../../../../lib/toast";
 
 export default function OverdueActivitiesPage() {
-    const overdue = getFollowups().filter(f => f.status === "Pending");
+    const [overdue, setOverdue] = useState([]);
+
+    const loadData = async () => {
+        try {
+            const data = await fetchOverdueTasks();
+            setOverdue(data.tasks || data || []);
+        } catch (err) {
+            showToast(`Failed to load overdue tasks: ${err.message}`, "error");
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const handleExecute = async (taskId) => {
+        try {
+            await toggleTaskStatus(taskId);
+            showToast("Task completed successfully", "success");
+            loadData();
+        } catch (err) {
+            showToast(`Failed to update task: ${err.message}`, "error");
+        }
+    };
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">
@@ -33,7 +58,7 @@ export default function OverdueActivitiesPage() {
                                 <td className="p-4 text-gray-600">{f.dueDate}</td>
                                 <td className="p-4"><span className="bg-red-50 text-red-700 font-bold px-2 py-0.5 rounded">2 Days Overdue</span></td>
                                 <td className="p-4 text-right">
-                                    <button onClick={() => alert("Follow-up executed!")} className="px-3 py-1.5 bg-purple-600 text-white font-bold rounded-lg text-xs hover:bg-purple-700">
+                                    <button onClick={() => handleExecute(f.id)} className="px-3 py-1.5 bg-purple-600 text-white font-bold rounded-lg text-xs hover:bg-purple-700">
                                         Execute Now
                                     </button>
                                 </td>
