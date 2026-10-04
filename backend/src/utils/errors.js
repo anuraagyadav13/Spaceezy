@@ -16,35 +16,55 @@ const asyncHandler = (fn) => {
 };
 
 const errorHandler = (err, req, res, next) => {
-    err.statusCode = err.statusCode || 500;
-    err.code = err.code || 'INTERNAL_ERROR';
-    err.message = err.message || 'Something went wrong';
+    // Always log the full error for debugging
+    console.error('ERROR 💥:', err.message);
+    if (err.stack) console.error(err.stack);
 
-    if (process.env.NODE_ENV === 'development') {
-        res.status(err.statusCode).json({
+    // Handle Prisma-specific errors
+    if (err.code && err.code.startsWith('P')) {
+        let message = err.message;
+        let statusCode = 400;
+
+        switch (err.code) {
+            case 'P2002':
+                message = `Duplicate value: ${err.meta?.target?.join(', ') || 'unique constraint'}`;
+                statusCode = 409;
+                break;
+            case 'P2003':
+                message = `Invalid reference: foreign key constraint failed on ${err.meta?.field_name || 'field'}`;
+                break;
+            case 'P2025':
+                message = 'Record not found';
+                statusCode = 404;
+                break;
+            default:
+                message = `Database error [${err.code}]: ${err.meta?.message || err.message}`;
+        }
+
+        return res.status(statusCode).json({
+            success: false,
+            message,
+            code: err.code,
+        });
+    }
+
+    // Handle AppError (operational errors)
+    if (err.isOperational) {
+        return res.status(err.statusCode || 400).json({
             success: false,
             message: err.message,
             code: err.code,
-            error: err,
-            stack: err.stack,
         });
-    } else {
-        // Production mode, don't leak error details
-        if (err.isOperational) {
-            res.status(err.statusCode).json({
-                success: false,
-                message: err.message,
-                code: err.code,
-            });
-        } else {
-            console.error('ERROR 💥', err);
-            res.status(500).json({
-                success: false,
-                message: 'Something went wrong',
-                code: 'INTERNAL_ERROR',
-            });
-        }
     }
+
+    // Unhandled errors — still return the actual message for debugging
+    const statusCode = err.statusCode || 500;
+    res.status(statusCode).json({
+        success: false,
+        message: err.message || 'Something went wrong',
+        code: err.code || 'INTERNAL_ERROR',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    });
 };
 
 const notFoundHandler = (req, res, next) => {

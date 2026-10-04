@@ -40,7 +40,7 @@ const getProjectsQuerySchema = {
 const createProjectSchema = {
     body: z.object({
         name: z.string().min(1, 'Project name is required'),
-        address: z.string().min(1, 'Address is required'),
+        address: z.string().optional(),
         projectType: z.enum(PROJECT_TYPES).optional().default('Residential'),
         type: z.string().optional(), // Legacy compat
         status: z.enum(PROJECT_STATUSES).optional(),

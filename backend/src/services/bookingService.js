@@ -101,12 +101,75 @@ class BookingService {
                     projectId: property.projectId,
                     amount: data.amount,
                     paymentStatus: data.paymentStatus || 'PENDING',
-                    assignedToId: userId
+                    assignedToId: userId,
+                    leadId: data.leadId || null
                 }
             });
 
+            // 4. If created from a lead, sync the lead to BOOKED
+            if (data.leadId) {
+                const lead = await tx.lead.findFirst({ where: { id: data.leadId, organizationId } });
+                if (lead && lead.status !== 'BOOKED') {
+                    await tx.lead.update({ where: { id: lead.id }, data: { status: 'BOOKED' } });
+                    await tx.leadActivity.create({
+                        data: {
+                            organizationId,
+                            leadId: lead.id,
+                            type: 'STATUS_CHANGE',
+                            description: `Stage changed from ${lead.status} to BOOKED`,
+                            performedById: userId,
+                            metadata: { from: lead.status, to: 'BOOKED', reason: 'booking confirmed', bookingId: booking.id }
+                        }
+                    });
+                }
+                await tx.leadActivity.create({
+                    data: {
+                        organizationId,
+                        leadId: data.leadId,
+                        type: 'NOTE',
+                        description: `Booking confirmed for ${customer.name}`,
+                        performedById: userId,
+                        metadata: { bookingId: booking.id, amount: data.amount, propertyId: data.propertyId }
+                    }
+                });
+            }
+
             return booking;
         });
+    }
+
+    static async createBookingFromLead(leadId, data, organizationId, userId, userRole) {
+        const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
+        if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+
+        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
+            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
+        }
+
+        const phone = (data.customer && data.customer.phone) || lead.phone;
+        const name = (data.customer && data.customer.name) || lead.name;
+        const email = (data.customer && data.customer.email) || lead.email || null;
+
+        let customer = await prisma.customer.findFirst({ where: { organizationId, phone } });
+        if (!customer) {
+            customer = await prisma.customer.create({
+                data: {
+                    organizationId,
+                    name,
+                    phone,
+                    email,
+                    assignedToId: lead.assignedToId || userId
+                }
+            });
+        }
+
+        return await BookingService.createBooking({
+            customerId: customer.id,
+            propertyId: data.propertyId,
+            amount: data.amount,
+            paymentStatus: data.paymentStatus,
+            leadId
+        }, organizationId, userId, userRole);
     }
 
     static async cancelBooking(bookingId, organizationId, userId, userRole) {
@@ -150,6 +213,28 @@ class BookingService {
                         version: { increment: 1 }
                     }
                 });
+            }
+
+            // 5. If this booking came from a lead, write the lead back to an active stage
+            if (booking.leadId) {
+                const lead = await tx.lead.findFirst({ where: { id: booking.leadId } });
+                if (lead && lead.status === 'BOOKED') {
+                    const activeQuotation = await tx.quotation.findFirst({
+                        where: { leadId: lead.id, status: { in: ['DRAFT', 'SENT', 'ACCEPTED'] } }
+                    });
+                    const nextStatus = activeQuotation ? 'QUOTATION' : 'CONTACTED';
+                    await tx.lead.update({ where: { id: lead.id }, data: { status: nextStatus } });
+                    await tx.leadActivity.create({
+                        data: {
+                            organizationId,
+                            leadId: lead.id,
+                            type: 'STATUS_CHANGE',
+                            description: `Stage changed from BOOKED to ${nextStatus}`,
+                            performedById: userId,
+                            metadata: { from: 'BOOKED', to: nextStatus, reason: 'booking cancelled', bookingId: bookingId }
+                        }
+                    });
+                }
             }
 
             return updatedBooking;

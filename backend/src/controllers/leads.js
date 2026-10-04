@@ -1,5 +1,6 @@
 const { asyncHandler, AppError } = require('../utils/errors');
 const LeadService = require('../services/leadService');
+const BookingService = require('../services/bookingService');
 
 const getLeads = asyncHandler(async (req, res, next) => {
     const { organizationId, role, userId } = req.auth;
@@ -107,8 +108,8 @@ const removeInterestedProperty = asyncHandler(async (req, res, next) => {
 });
 
 const getFollowups = asyncHandler(async (req, res, next) => {
-    const { organizationId } = req.auth;
-    const result = await LeadService.getFollowups(organizationId, req.query);
+    const { organizationId, role, userId } = req.auth;
+    const result = await LeadService.getFollowups(organizationId, req.query, role, userId);
     
     res.status(200).json({
         success: true,
@@ -131,8 +132,8 @@ const toggleFollowupStatus = asyncHandler(async (req, res, next) => {
 });
 
 const getActivities = asyncHandler(async (req, res, next) => {
-    const { organizationId } = req.auth;
-    const result = await LeadService.getActivities(organizationId, req.query);
+    const { organizationId, role, userId } = req.auth;
+    const result = await LeadService.getActivities(organizationId, req.query, role, userId);
     
     res.status(200).json({
         success: true,
@@ -179,6 +180,61 @@ const mergeLeads = asyncHandler(async (req, res, next) => {
     });
 });
 
+const transitionStage = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { organizationId, role, userId } = req.auth;
+    const { target, ...payload } = req.body;
+
+    if (!target) throw new AppError('target is required', 422, 'VALIDATION_ERROR');
+
+    const result = await LeadService.transitionStage(id, target, payload, organizationId, role, userId);
+
+    res.status(200).json({
+        success: true,
+        data: result,
+        message: `Lead moved to ${target}`
+    });
+});
+
+const logContact = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { organizationId, role, userId } = req.auth;
+
+    const result = await LeadService.logContact(id, req.body, organizationId, role, userId);
+
+    res.status(200).json({
+        success: true,
+        data: result,
+        message: 'Contact logged'
+    });
+});
+
+const scheduleFollowUp = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { organizationId, role, userId } = req.auth;
+
+    const result = await LeadService.scheduleFollowUp(id, req.body, organizationId, role, userId);
+
+    res.status(201).json({
+        success: true,
+        data: result,
+        message: 'Follow-up scheduled'
+    });
+});
+
+const createBookingFromLead = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { organizationId, role, userId } = req.auth;
+
+    const result = await BookingService.createBookingFromLead(id, req.body, organizationId, userId, role);
+
+    res.status(201).json({
+        success: true,
+        data: result,
+        message: 'Booking created successfully'
+    });
+});
+
 module.exports = {
     getLeads,
     getLeadById,
@@ -193,5 +249,9 @@ module.exports = {
     getActivities,
     bulkAssignLeads,
     getDuplicates,
-    mergeLeads
+    mergeLeads,
+    transitionStage,
+    logContact,
+    scheduleFollowUp,
+    createBookingFromLead
 };

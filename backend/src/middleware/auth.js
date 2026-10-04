@@ -61,6 +61,7 @@ const requirePermission = (permission) => {
                 'customer:view', 'customer:create', 'customer:update', 'customer:delete',
                 'task:view', 'task:create', 'task:update', 'task:delete',
                 'project:view', 'project:create', 'project:update', 'project:delete',
+                'quotation:view', 'quotation:create', 'quotation:update',
             ],
             ADMIN: [
                 'lead:view', 'lead:create', 'lead:update',
@@ -73,6 +74,7 @@ const requirePermission = (permission) => {
                 'customer:view', 'customer:create', 'customer:update',
                 'task:view', 'task:create', 'task:update', 'task:delete',
                 'project:view', 'project:create', 'project:update',
+                'quotation:view', 'quotation:create', 'quotation:update',
             ],
             SALES_MANAGER: [
                 'lead:view', 'lead:create', 'lead:update',
@@ -83,6 +85,7 @@ const requirePermission = (permission) => {
                 'task:view', 'task:create', 'task:update',
                 'project:view',
                 'employee:view',
+                'quotation:view', 'quotation:create', 'quotation:update',
             ],
             SALES_EXECUTIVE: [
                 'lead:view', 'lead:create', 'lead:update',
@@ -92,6 +95,7 @@ const requirePermission = (permission) => {
                 'customer:view', 'customer:create', 'customer:update',
                 'task:view', 'task:create', 'task:update',
                 'project:view',
+                'quotation:view', 'quotation:create', 'quotation:update',
             ],
             CHANNEL_PARTNER: [
                 'lead:view', 'lead:create',
@@ -99,6 +103,7 @@ const requirePermission = (permission) => {
                 'task:view',
                 'project:view',
                 'inventory:view',
+                'quotation:view',
             ],
         };
         

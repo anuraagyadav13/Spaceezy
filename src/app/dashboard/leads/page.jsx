@@ -1,14 +1,67 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { fetchUsers } from "../../../lib/api/users";
 import { fetchLeads } from "../../../lib/api/leads";
 import { 
-    Search, Filter, Plus, ChevronDown, CheckSquare, 
-    Square, MoreHorizontal, ArrowUpDown, Download, Upload, AlertCircle
+    Search, Filter, ChevronDown, CheckSquare, 
+    Square, MoreHorizontal, ArrowUpDown, Download, AlertCircle, X
 } from "lucide-react";
+import LeadPipelineDashboard from "../../../features/pipeline/components/LeadPipelineDashboard";
 
-export default function LeadsList() {
+const LEAD_VIEWS = [
+    { key: "all", label: "All Leads" },
+    { key: "pipeline", label: "Pipeline" }
+];
+
+function LeadsWorkspace() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const view = searchParams.get("view") === "pipeline" ? "pipeline" : "all";
+
+    const switchView = (next) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (next === "pipeline") params.set("view", "pipeline");
+        else params.delete("view");
+        const qs = params.toString();
+        router.replace(qs ? `/dashboard/leads?${qs}` : "/dashboard/leads", { scroll: false });
+    };
+
+    return (
+        <div className="flex flex-col h-full overflow-hidden bg-gray-50/50">
+            <nav aria-label="Leads views" className="bg-white border-b border-gray-100 px-4 sm:px-8 py-3 shrink-0">
+                <div className="flex gap-2">
+                    {LEAD_VIEWS.map((tab) => (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => switchView(tab.key)}
+                            aria-current={view === tab.key ? "page" : undefined}
+                            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+                                view === tab.key
+                                    ? "bg-purple-50 border-purple-200 text-purple-700"
+                                    : "bg-transparent border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </nav>
+            <div className="flex-1 min-h-0 flex flex-col">
+                {view === "pipeline" ? <LeadPipelineDashboard /> : <LeadsListContent />}
+            </div>
+        </div>
+    );
+}
+
+function LeadsListContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const stage = searchParams.get("stage") || "";
+    const stageLabel = searchParams.get("stageLabel") || stage;
+
     const [leads, setLeads] = useState([]);
     const [employees, setEmployees] = useState([]);
     const [selectedLeads, setSelectedLeads] = useState(new Set());
@@ -20,7 +73,7 @@ export default function LeadsList() {
             try {
                 setLoading(true);
                 const [leadsData, usersData] = await Promise.all([
-                    fetchLeads(),
+                    fetchLeads(stage ? { stage } : {}),
                     fetchUsers()
                 ]);
                 setLeads(leadsData.leads || leadsData || []);
@@ -33,7 +86,7 @@ export default function LeadsList() {
             }
         };
         loadData();
-    }, []);
+    }, [stage]);
 
 
     const employeeName = (id) => employees.find((e) => e.id === id)?.name || "Unassigned";
@@ -63,14 +116,8 @@ export default function LeadsList() {
                 </div>
                 <div className="flex gap-3 mt-4 sm:mt-0">
                     <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
-                        <Upload size={16} /> Import
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors shadow-sm">
                         <Download size={16} /> Export
                     </button>
-                    <Link href="/dashboard/leads/new" className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-medium hover:opacity-90 transition-opacity shadow-sm shadow-purple-200">
-                        <Plus size={16} /> Add Lead
-                    </Link>
                 </div>
             </div>
 
@@ -88,9 +135,19 @@ export default function LeadsList() {
                 
                 {/* Filters */}
                 <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar">
-                    <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 shrink-0">
-                        <Filter size={14} className="text-gray-400" /> Stage: All <ChevronDown size={14} className="text-gray-400" />
-                    </button>
+                    {stage ? (
+                        <button
+                            onClick={() => router.replace("/dashboard/leads", { scroll: false })}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-700 hover:bg-purple-100 shrink-0 font-semibold"
+                            title="Clear stage filter"
+                        >
+                            Stage: {stageLabel} <X size={14} />
+                        </button>
+                    ) : (
+                        <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 shrink-0">
+                            <Filter size={14} className="text-gray-400" /> Stage: All <ChevronDown size={14} className="text-gray-400" />
+                        </button>
+                    )}
                     <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 shrink-0">
                         Source: All <ChevronDown size={14} className="text-gray-400" />
                     </button>
@@ -207,5 +264,13 @@ export default function LeadsList() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function LeadsList() {
+    return (
+        <Suspense fallback={<div className="p-8 text-gray-400 font-medium">Loading leads...</div>}>
+            <LeadsWorkspace />
+        </Suspense>
     );
 }

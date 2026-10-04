@@ -232,12 +232,30 @@ class ProjectService {
     static async createProject(data, organizationId) {
         const payload = ProjectService.normalizePayload(data);
 
-        return await prisma.project.create({
-            data: {
-                ...payload,
-                organizationId
-            }
-        });
+        // Default address to project name if not provided
+        if (!payload.address) {
+            payload.address = payload.name || 'TBD';
+        }
+
+        try {
+            return await prisma.project.create({
+                data: {
+                    ...payload,
+                    organizationId
+                }
+            });
+        } catch (err) {
+            console.error('=== PROJECT CREATE ERROR ===');
+            console.error('Prisma error:', err.message);
+            console.error('Error code:', err.code);
+            console.error('Meta:', err.meta);
+            console.error('Payload sent:', JSON.stringify({ ...payload, organizationId }, null, 2));
+            throw new AppError(
+                `Failed to create project: ${err.message}`,
+                400,
+                'CREATE_FAILED'
+            );
+        }
     }
 
     static async updateProject(id, data, organizationId) {

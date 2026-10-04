@@ -94,6 +94,8 @@ enum LeadStatus {
   BOOKED
   CLOSED
   LOST
+  FOLLOW_UP
+  QUOTATION
 }
 
 model Lead {
@@ -110,6 +112,8 @@ model Lead {
   landingPage String?
 
   status LeadStatus @default(NEW)
+
+  budget Decimal? @db.Decimal(14, 2)
 
   assignedToId String?
   assignedTo   User?   @relation("AssignedLeads", fields: [assignedToId], references: [id])
@@ -140,8 +144,13 @@ model Lead {
   calls      Call[]
   quotations Quotation[]
   interests  LeadInterest[]
+  bookings   Booking[]
 
   @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, assignedToId])
+  @@index([organizationId, projectId])
 }
 
 enum ActivityType {
@@ -173,6 +182,8 @@ model LeadActivity {
   createdAt DateTime @default(now())
 
   @@index([organizationId])
+  @@index([organizationId, createdAt])
+  @@index([leadId, createdAt])
 }
 
 enum ProjectStatus {
@@ -356,6 +367,9 @@ model Booking {
   bookingDate   DateTime             @default(now()) // Stored in UTC
   paymentStatus BookingPaymentStatus @default(PENDING)
 
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
   assignedToId String?
   assignedTo   User?   @relation("AssignedBookings", fields: [assignedToId], references: [id])
 
@@ -363,6 +377,7 @@ model Booking {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  @@index([leadId])
 }
 
 enum SiteVisitStatus {
@@ -396,6 +411,7 @@ model SiteVisit {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  @@index([organizationId, status, date])
 }
 
 enum TaskType {
@@ -433,6 +449,8 @@ model Task {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  @@index([organizationId, status, dueDate])
+  @@index([leadId])
 }
 
 enum CallDirection {
@@ -526,6 +544,8 @@ model Quotation {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  @@index([leadId, status])
+  @@index([organizationId, createdAt])
 }
 
 model LeadInterest {

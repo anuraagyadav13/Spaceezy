@@ -1,6 +1,6 @@
 const { z } = require('zod');
 
-const leadStatusEnum = z.enum(['NEW', 'CONTACTED', 'INTERESTED', 'QUALIFIED', 'SITE_VISIT', 'NEGOTIATION', 'BOOKED', 'CLOSED', 'LOST']);
+const leadStatusEnum = z.enum(['NEW', 'CONTACTED', 'INTERESTED', 'QUALIFIED', 'SITE_VISIT', 'NEGOTIATION', 'BOOKED', 'CLOSED', 'LOST', 'FOLLOW_UP', 'QUOTATION']);
 
 const createLeadSchema = {
     body: z.object({

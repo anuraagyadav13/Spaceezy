@@ -103,6 +103,7 @@ const siteVisitRoutes = require('./routes/siteVisits');
 const customerRoutes = require('./routes/customers');
 const taskRoutes = require('./routes/tasks');
 const bookingRoutes = require('./routes/bookings');
+const quotationRoutes = require('./routes/quotations');
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/leads', leadRoutes);
@@ -114,6 +115,7 @@ app.use('/api/v1/site-visits', siteVisitRoutes);
 app.use('/api/v1/customers', customerRoutes);
 app.use('/api/v1/tasks', taskRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
+app.use('/api/v1/quotations', quotationRoutes);
 
 // Error handling
 app.use(notFoundHandler);

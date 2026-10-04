@@ -1,5 +1,21 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { PIPELINE_STAGES, groupToStatuses, groupToCanonicalStatus } = require('../constants/stageGroups');
+
+function parseBudget(value) {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'number') return value;
+    const str = String(value).trim().replace(/[₹,\s]/g, '');
+    const match = str.match(/^([\d.]+)\s*(cr|crore|l|lakh|k|thousand)?$/i);
+    if (!match) return null;
+    const num = parseFloat(match[1]);
+    if (isNaN(num)) return null;
+    const unit = (match[2] || '').toLowerCase();
+    if (unit === 'cr' || unit === 'crore') return num * 10000000;
+    if (unit === 'l' || unit === 'lakh') return num * 100000;
+    if (unit === 'k' || unit === 'thousand') return num * 1000;
+    return num;
+}
 
 class LeadService {
     static normalizeLeadPayload(data = {}) {
@@ -23,18 +39,315 @@ class LeadService {
         delete payload.assignedTo;
 
         if (payload.stage && !payload.status) {
-            payload.status = payload.stage;
+            payload.status = groupToCanonicalStatus(payload.stage) || payload.stage;
         }
 
         delete payload.stage;
         delete payload.project;
-        delete payload.budget;
+
+        if (payload.budget !== undefined) {
+            const parsed = parseBudget(payload.budget);
+            if (parsed !== null) {
+                payload.budget = parsed;
+            } else {
+                delete payload.budget;
+            }
+        }
 
         return payload;
     }
 
+    static buildLeadScope(role, userId, filters = {}) {
+        const where = {};
+        const isExecutive = role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER';
+
+        if (isExecutive) {
+            where.assignedToId = userId;
+        } else if (filters.assignedTo) {
+            where.assignedToId = filters.assignedTo;
+        }
+
+        if (filters.projectId) where.projectId = filters.projectId;
+        if (filters.source) where.source = filters.source;
+
+        if (filters.from || filters.to) {
+            where.createdAt = {};
+            if (filters.from) where.createdAt.gte = new Date(filters.from);
+            if (filters.to) where.createdAt.lt = new Date(filters.to);
+        }
+
+        if (filters.stage) {
+            const statuses = groupToStatuses(filters.stage);
+            if (statuses.length) where.status = { in: statuses };
+        }
+
+        if (filters.search) {
+            const term = String(filters.search).trim();
+            if (term) {
+                where.OR = [
+                    { name: { contains: term, mode: 'insensitive' } },
+                    { phone: { contains: term } },
+                    { email: { contains: term, mode: 'insensitive' } }
+                ];
+            }
+        }
+
+        return where;
+    }
+
+    static async transitionStage(id, target, payload = {}, organizationId, role, userId) {
+        const validTargets = [...PIPELINE_STAGES, 'BOOKED', 'LOST', 'CLOSED'];
+        if (!validTargets.includes(target)) {
+            throw new AppError(`Invalid target stage: ${target}`, 422, 'VALIDATION_ERROR');
+        }
+
+        return await prisma.$transaction(async (tx) => {
+            const lead = await tx.lead.findFirst({ where: { id, organizationId } });
+            if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+
+            if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
+                throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
+            }
+
+            if (groupToStatuses(target).includes(lead.status) || lead.status === target) {
+                throw new AppError(`Lead is already in stage ${target}`, 409, 'SAME_STAGE');
+            }
+
+            if (target === 'BOOKING' || target === 'BOOKED') {
+                throw new AppError('Leads can only reach Booking via the booking conversion workflow', 409, 'TRANSITION_REQUIRES_BOOKING');
+            }
+
+            if (lead.status === 'BOOKED' && target !== 'LOST' && target !== 'CLOSED') {
+                throw new AppError('A booked lead can only leave the Booking stage via booking cancellation', 409, 'INVALID_TRANSITION');
+            }
+
+            if (target === 'SITE_VISIT') {
+                const hasVisit = await tx.siteVisit.findFirst({
+                    where: { leadId: id, status: { in: ['SCHEDULED', 'COMPLETED', 'NO_SHOW'] } }
+                });
+                if (!hasVisit) {
+                    if (!payload.siteVisit || !payload.siteVisit.date || !payload.siteVisit.time) {
+                        throw new AppError('Moving to Site Visit requires a scheduled visit', 409, 'TRANSITION_REQUIRES_SITE_VISIT');
+                    }
+                    await tx.siteVisit.create({
+                        data: {
+                            organizationId,
+                            leadId: id,
+                            leadName: lead.name,
+                            phone: lead.phone,
+                            propertyName: payload.siteVisit.propertyName || null,
+                            date: new Date(payload.siteVisit.date),
+                            time: payload.siteVisit.time,
+                            status: 'SCHEDULED',
+                            assignedToId: payload.siteVisit.assignedToId || lead.assignedToId || userId,
+                        }
+                    });
+                    await tx.leadActivity.create({
+                        data: {
+                            organizationId,
+                            leadId: id,
+                            type: 'SITE_VISIT',
+                            description: `Site visit scheduled for ${payload.siteVisit.date} ${payload.siteVisit.time}`,
+                            performedById: userId,
+                            metadata: { date: payload.siteVisit.date, time: payload.siteVisit.time }
+                        }
+                    });
+                }
+            }
+
+            if (target === 'QUOTATION') {
+                const hasQuotation = await tx.quotation.findFirst({
+                    where: { leadId: id, status: { in: ['DRAFT', 'SENT', 'ACCEPTED'] } }
+                });
+                if (!hasQuotation) {
+                    if (!payload.quotation || !payload.quotation.projectId || !payload.quotation.totalAmount) {
+                        throw new AppError('Moving to Quotation requires a quotation', 409, 'TRANSITION_REQUIRES_QUOTATION');
+                    }
+                    await tx.quotation.create({
+                        data: {
+                            organizationId,
+                            leadId: id,
+                            projectId: payload.quotation.projectId,
+                            propertyId: payload.quotation.propertyId || null,
+                            totalAmount: payload.quotation.totalAmount,
+                            validUntil: payload.quotation.validUntil ? new Date(payload.quotation.validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                            status: 'SENT',
+                            notes: payload.quotation.notes || null,
+                            createdById: userId,
+                        }
+                    });
+                    await tx.leadActivity.create({
+                        data: {
+                            organizationId,
+                            leadId: id,
+                            type: 'NOTE',
+                            description: `Quotation created for project ${payload.quotation.projectId}`,
+                            performedById: userId,
+                            metadata: { projectId: payload.quotation.projectId, totalAmount: payload.quotation.totalAmount }
+                        }
+                    });
+                }
+            }
+
+            if (target === 'FOLLOW_UP') {
+                const hasTask = await tx.task.findFirst({
+                    where: { leadId: id, type: 'FOLLOW_UP', status: 'PENDING' }
+                });
+                if (!hasTask) {
+                    if (!payload.followUp || !payload.followUp.dueDate) {
+                        throw new AppError('Moving to Follow-up requires a follow-up date', 409, 'TRANSITION_REQUIRES_FOLLOW_UP');
+                    }
+                    const dueDate = new Date(payload.followUp.dueDate);
+                    await tx.task.create({
+                        data: {
+                            organizationId,
+                            leadId: id,
+                            type: 'FOLLOW_UP',
+                            status: 'PENDING',
+                            dueDate,
+                            title: payload.followUp.title || 'Follow-up',
+                            description: payload.followUp.notes || null,
+                            assignedToId: payload.followUp.assignedToId || lead.assignedToId || userId,
+                        }
+                    });
+                    await tx.lead.update({ where: { id }, data: { nextFollowUpAt: dueDate } });
+                    await tx.leadActivity.create({
+                        data: {
+                            organizationId,
+                            leadId: id,
+                            type: 'FOLLOW_UP',
+                            description: `Follow-up scheduled for ${dueDate.toISOString()}`,
+                            performedById: userId,
+                            metadata: { dueDate: dueDate.toISOString() }
+                        }
+                    });
+                }
+            }
+
+            const updated = await tx.lead.update({
+                where: { id },
+                data: { status: target }
+            });
+
+            await tx.leadActivity.create({
+                data: {
+                    organizationId,
+                    leadId: id,
+                    type: 'STATUS_CHANGE',
+                    description: `Stage changed from ${lead.status} to ${target}`,
+                    performedById: userId,
+                    metadata: { from: lead.status, to: target, reason: payload.reason || null }
+                }
+            });
+
+            return updated;
+        });
+    }
+
+    static async logContact(id, data = {}, organizationId, role, userId) {
+        const channel = data.channel || 'MANUAL';
+        const typeMap = { CALL: 'CALL', EMAIL: 'EMAIL', WHATSAPP: 'NOTE', MANUAL: 'NOTE' };
+        const type = typeMap[channel] || 'NOTE';
+
+        return await prisma.$transaction(async (tx) => {
+            const lead = await tx.lead.findFirst({ where: { id, organizationId } });
+            if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+
+            if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
+                throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
+            }
+
+            await tx.leadActivity.create({
+                data: {
+                    organizationId,
+                    leadId: id,
+                    type,
+                    description: data.notes || `Contact logged via ${channel}`,
+                    performedById: userId,
+                    metadata: { channel, duration: data.duration || null, notes: data.notes || null }
+                }
+            });
+
+            if (lead.status === 'NEW') {
+                await tx.lead.update({ where: { id }, data: { status: 'CONTACTED' } });
+                await tx.leadActivity.create({
+                    data: {
+                        organizationId,
+                        leadId: id,
+                        type: 'STATUS_CHANGE',
+                        description: 'Stage changed from NEW to CONTACTED',
+                        performedById: userId,
+                        metadata: { from: 'NEW', to: 'CONTACTED', reason: 'contact logged' }
+                    }
+                });
+            }
+
+            return await tx.lead.findUnique({ where: { id } });
+        });
+    }
+
+    static async scheduleFollowUp(id, data = {}, organizationId, role, userId) {
+        if (!data.dueDate) throw new AppError('dueDate is required', 422, 'VALIDATION_ERROR');
+
+        return await prisma.$transaction(async (tx) => {
+            const lead = await tx.lead.findFirst({ where: { id, organizationId } });
+            if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+
+            if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
+                throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
+            }
+
+            const dueDate = new Date(data.dueDate);
+            const task = await tx.task.create({
+                data: {
+                    organizationId,
+                    leadId: id,
+                    type: 'FOLLOW_UP',
+                    status: 'PENDING',
+                    dueDate,
+                    title: data.title || 'Follow-up',
+                    description: data.notes || null,
+                    assignedToId: data.assignedToId || lead.assignedToId || userId,
+                }
+            });
+
+            await tx.lead.update({ where: { id }, data: { nextFollowUpAt: dueDate } });
+
+            await tx.leadActivity.create({
+                data: {
+                    organizationId,
+                    leadId: id,
+                    type: 'FOLLOW_UP',
+                    description: `Follow-up scheduled for ${dueDate.toISOString()}`,
+                    performedById: userId,
+                    metadata: { taskId: task.id, dueDate: dueDate.toISOString() }
+                }
+            });
+
+            if (lead.status === 'NEW' || lead.status === 'CONTACTED') {
+                await tx.lead.update({ where: { id }, data: { status: 'FOLLOW_UP' } });
+                await tx.leadActivity.create({
+                    data: {
+                        organizationId,
+                        leadId: id,
+                        type: 'STATUS_CHANGE',
+                        description: `Stage changed from ${lead.status} to FOLLOW_UP`,
+                        performedById: userId,
+                        metadata: { from: lead.status, to: 'FOLLOW_UP', reason: 'follow-up scheduled' }
+                    }
+                });
+            }
+
+            return task;
+        });
+    }
+
     static async createLead(data = {}, organizationId, createdById = null) {
         const payload = LeadService.normalizeLeadPayload(data);
+
+        if (payload.status === 'BOOKED') {
+            throw new AppError('Leads can only reach Booking via the booking conversion workflow', 409, 'TRANSITION_REQUIRES_BOOKING');
+        }
 
         return await prisma.$transaction(async (tx) => {
             const lead = await tx.lead.create({
@@ -61,22 +374,13 @@ class LeadService {
     }
 
     static async getLeads(organizationId, query, userRole, userId) {
-        const { page = 1, limit = 10, search, status, source, assignedTo, sort = 'desc' } = query;
+        const { page = 1, limit = 10, search, status, source, assignedTo, sort = 'desc', projectId, from, to, stage } = query;
         const skip = (page - 1) * limit;
 
-        const where = { organizationId };
-
-        // Role-based data scoping
-        if (userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') {
-            where.assignedToId = userId;
-        } else if (userRole === 'SALES_MANAGER') {
-            // Simplified for now: in reality would check team hierarchy
-            // For now, manager sees everything in organization, or you could implement team scope
-        }
+        const where = { organizationId, ...LeadService.buildLeadScope(userRole, userId, { assignedTo, projectId, from, to, stage }) };
 
         if (status) where.status = status;
         if (source) where.source = source;
-        if (assignedTo) where.assignedToId = assignedTo;
         if (search) {
             where.OR = [
                 { name: { contains: search, mode: 'insensitive' } },
@@ -121,37 +425,25 @@ class LeadService {
     static async updateLead(id, data, organizationId, userRole, userId) {
         const payload = LeadService.normalizeLeadPayload(data);
 
-        return await prisma.$transaction(async (tx) => {
-            const existing = await tx.lead.findFirst({ where: { id, organizationId } });
-            
-            if (!existing) {
-                throw new AppError('Lead not found', 404, 'NOT_FOUND');
-            }
+        const existing = await prisma.lead.findFirst({ where: { id, organizationId } });
+        if (!existing) {
+            throw new AppError('Lead not found', 404, 'NOT_FOUND');
+        }
 
-            if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && existing.assignedToId !== userId) {
-                throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
-            }
+        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && existing.assignedToId !== userId) {
+            throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
+        }
 
-            const updated = await tx.lead.update({
-                where: { id },
-                data: payload
-            });
+        if (data.status && data.status !== existing.status) {
+            return await LeadService.transitionStage(id, data.status, data, organizationId, userRole, userId);
+        }
 
-            // If status changed, log activity
-            if (data.status && data.status !== existing.status) {
-                await tx.leadActivity.create({
-                    data: {
-                        organizationId,
-                        leadId: id,
-                        type: 'STATUS_CHANGE',
-                        description: `Status changed from ${existing.status} to ${data.status}`,
-                        performedById: userId
-                    }
-                });
-            }
-
-            return updated;
+        const updated = await prisma.lead.update({
+            where: { id },
+            data: payload
         });
+
+        return updated;
     }
 
     static async deleteLead(id, organizationId, userRole, userId) {
@@ -305,50 +597,66 @@ class LeadService {
 
     // --- Follow-ups ---
 
-    static async getFollowups(organizationId, query) {
+    static async getFollowups(organizationId, query, userRole, userId) {
         const { status, limit = 50 } = query;
         const where = {
             organizationId,
-            type: { in: ['FOLLOW_UP', 'CALL', 'SITE_VISIT'] }
+            type: 'FOLLOW_UP',
+            ...LeadService.buildLeadScope(userRole, userId, {}),
         };
         if (status) where.status = status;
 
-        const activities = await prisma.leadActivity.findMany({
+        const tasks = await prisma.task.findMany({
             where,
             take: parseInt(limit),
-            orderBy: { createdAt: 'desc' },
+            orderBy: { dueDate: 'asc' },
             include: {
                 lead: { select: { name: true } },
-                performedBy: { select: { name: true } }
+                assignedTo: { select: { name: true } }
             }
         });
 
-        return activities.map(a => ({
-            id: a.id,
-            refName: a.lead?.name || 'Unknown',
-            type: a.type,
-            dueDate: a.metadata?.dueDate || a.createdAt.toISOString().slice(0, 10),
-            notes: a.description,
-            status: a.metadata?.followupStatus || 'Pending'
-        }));
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const todayEnd = todayStart + 24 * 60 * 60 * 1000;
+
+        return tasks.map(t => {
+            let dueBucket = 'UPCOMING';
+            if (t.status === 'COMPLETED') {
+                dueBucket = 'COMPLETED';
+            } else if (t.status === 'CANCELLED') {
+                dueBucket = 'CANCELLED';
+            } else {
+                const due = new Date(t.dueDate).getTime();
+                if (due < todayStart) dueBucket = 'OVERDUE';
+                else if (due < todayEnd) dueBucket = 'DUE_TODAY';
+            }
+
+            return {
+                id: t.id,
+                refName: t.lead?.name || 'Unknown',
+                type: t.type,
+                dueDate: t.dueDate.toISOString().slice(0, 10),
+                notes: t.description || t.title,
+                status: t.status,
+                dueBucket,
+                assignedTo: t.assignedTo?.name || null,
+            };
+        });
     }
 
-    static async toggleFollowupStatus(activityId, organizationId) {
-        const activity = await prisma.leadActivity.findFirst({
-            where: { id: activityId, organizationId }
+    static async toggleFollowupStatus(taskId, organizationId) {
+        const task = await prisma.task.findFirst({
+            where: { id: taskId, organizationId }
         });
 
-        if (!activity) throw new AppError('Follow-up not found', 404, 'NOT_FOUND');
+        if (!task) throw new AppError('Follow-up not found', 404, 'NOT_FOUND');
 
-        const metadata = activity.metadata && typeof activity.metadata === 'object' ? activity.metadata : {};
-        const currentStatus = metadata.followupStatus || 'Pending';
-        const newStatus = currentStatus === 'Done' ? 'Pending' : 'Done';
+        const newStatus = task.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
 
-        const updated = await prisma.leadActivity.update({
-            where: { id: activityId },
-            data: {
-                metadata: { ...metadata, followupStatus: newStatus }
-            }
+        const updated = await prisma.task.update({
+            where: { id: taskId },
+            data: { status: newStatus }
         });
 
         return updated;
@@ -356,11 +664,23 @@ class LeadService {
 
     // --- Activities feed ---
 
-    static async getActivities(organizationId, query) {
-        const { limit = 50 } = query;
+    static async getActivities(organizationId, query, userRole, userId) {
+        const { limit = 50, from, to } = query;
+
+        const where = { organizationId };
+
+        if (userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') {
+            where.lead = { assignedToId: userId };
+        }
+
+        if (from || to) {
+            where.createdAt = {};
+            if (from) where.createdAt.gte = new Date(from);
+            if (to) where.createdAt.lt = new Date(to);
+        }
 
         const activities = await prisma.leadActivity.findMany({
-            where: { organizationId },
+            where,
             take: parseInt(limit),
             orderBy: { createdAt: 'desc' },
             include: {

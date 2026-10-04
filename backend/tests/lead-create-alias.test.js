@@ -5,6 +5,7 @@ jest.mock('../src/db/prisma', () => ({
   $transaction: jest.fn(),
   lead: { create: jest.fn(), },
   leadActivity: { create: jest.fn(), findMany: jest.fn() },
+  task: { findMany: jest.fn() },
 }));
 
 describe('LeadService.createLead legacy field compatibility', () => {
@@ -50,6 +51,41 @@ describe('LeadService.createLead legacy field compatibility', () => {
     expect(createMock.mock.calls[0][0].data).not.toHaveProperty('assignedTo');
     expect(createMock.mock.calls[0][0].data).not.toHaveProperty('stage');
     expect(createMock.mock.calls[0][0].data).not.toHaveProperty('project');
+  });
+
+  it('parses budget strings into numeric values', async () => {
+    const createMock = jest.fn().mockResolvedValue({ id: 'lead-budget' });
+    const activityMock = jest.fn().mockResolvedValue({ id: 'act-budget' });
+
+    prisma.$transaction.mockImplementation(async (callback) => {
+      const tx = { lead: { create: createMock }, leadActivity: { create: activityMock } };
+      return callback(tx);
+    });
+
+    await LeadService.createLead({
+      name: 'Budget Test',
+      phone: '9999999999',
+      budget: '₹1.5 Cr',
+    }, 'org-123', 'user-123');
+
+    expect(createMock.mock.calls[0][0].data).toHaveProperty('budget', 15000000);
+  });
+
+  it('drops unparseable budget values', async () => {
+    const createMock = jest.fn().mockResolvedValue({ id: 'lead-budget-2' });
+    const activityMock = jest.fn().mockResolvedValue({ id: 'act-budget-2' });
+
+    prisma.$transaction.mockImplementation(async (callback) => {
+      const tx = { lead: { create: createMock }, leadActivity: { create: activityMock } };
+      return callback(tx);
+    });
+
+    await LeadService.createLead({
+      name: 'Budget Test 2',
+      phone: '9999999998',
+      budget: 'not-a-number',
+    }, 'org-123', 'user-123');
+
     expect(createMock.mock.calls[0][0].data).not.toHaveProperty('budget');
   });
 
@@ -91,16 +127,16 @@ describe('LeadService.createLead legacy field compatibility', () => {
     expect(createMock.mock.calls[0][0].data).not.toHaveProperty('stage');
   });
 
-  it('queries only valid follow-up activity enum values', async () => {
+  it('queries FOLLOW_UP tasks for the follow-ups feed', async () => {
     const findManyMock = jest.fn().mockResolvedValue([]);
-    prisma.leadActivity.findMany = findManyMock;
+    prisma.task.findMany = findManyMock;
 
-    await LeadService.getFollowups('org-123', { limit: '25' });
+    await LeadService.getFollowups('org-123', { limit: '25' }, 'ADMIN', 'user-123');
 
     expect(findManyMock).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         organizationId: 'org-123',
-        type: { in: ['FOLLOW_UP', 'CALL', 'SITE_VISIT'] }
+        type: 'FOLLOW_UP'
       }),
       take: 25
     }));

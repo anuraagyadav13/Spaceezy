@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "OrgStatus" AS ENUM ('ACTIVE', 'INACTIVE');
 
@@ -14,7 +17,7 @@ CREATE TYPE "LeadStatus" AS ENUM ('NEW', 'CONTACTED', 'INTERESTED', 'QUALIFIED',
 CREATE TYPE "ActivityType" AS ENUM ('NOTE', 'CALL', 'EMAIL', 'STATUS_CHANGE', 'ASSIGNMENT', 'FOLLOW_UP', 'SITE_VISIT');
 
 -- CreateEnum
-CREATE TYPE "ProjectStatus" AS ENUM ('PRE_LAUNCH', 'UNDER_CONSTRUCTION', 'AVAILABLE', 'FULLY_OCCUPIED', 'RENOVATING');
+CREATE TYPE "ProjectStatus" AS ENUM ('UPCOMING', 'PRE_LAUNCH', 'UNDER_CONSTRUCTION', 'READY_TO_MOVE', 'AVAILABLE', 'COMPLETED', 'FULLY_OCCUPIED', 'RENOVATING', 'ON_HOLD', 'SOLD_OUT', 'INACTIVE');
 
 -- CreateEnum
 CREATE TYPE "PropertyStatus" AS ENUM ('AVAILABLE', 'RESERVED', 'SOLD');
@@ -128,19 +131,45 @@ CREATE TABLE "Project" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "address" TEXT NOT NULL,
-    "city" TEXT,
-    "type" TEXT NOT NULL,
-    "totalUnits" INTEGER,
-    "occupiedUnits" INTEGER,
+    "projectType" TEXT NOT NULL DEFAULT 'Residential',
     "status" "ProjectStatus" NOT NULL DEFAULT 'AVAILABLE',
-    "price" DECIMAL(12,2),
+    "developer" TEXT,
     "description" TEXT,
+    "shortDescription" TEXT,
+    "address" TEXT NOT NULL,
+    "locality" TEXT,
+    "city" TEXT,
+    "state" TEXT,
+    "pincode" TEXT,
+    "latitude" DOUBLE PRECISION,
+    "longitude" DOUBLE PRECISION,
+    "mapUrl" TEXT,
+    "landmark" TEXT,
+    "totalLandArea" DOUBLE PRECISION,
+    "landAreaUnit" TEXT,
+    "totalTowers" INTEGER,
+    "totalFloors" INTEGER,
+    "totalUnits" INTEGER,
+    "availableUnits" INTEGER,
+    "launchDate" TIMESTAMP(3),
+    "expectedCompletionDate" TIMESTAMP(3),
+    "possessionDate" TIMESTAMP(3),
+    "reraRegistered" BOOLEAN NOT NULL DEFAULT false,
+    "reraNumber" TEXT,
+    "reraAuthority" TEXT,
+    "startingPrice" DECIMAL(12,2),
+    "maximumPrice" DECIMAL(12,2),
+    "pricePerSqFt" DECIMAL(12,2),
+    "priceUnit" TEXT,
+    "maintenanceCharges" DECIMAL(12,2),
+    "plcCharges" DECIMAL(12,2),
+    "parkingCharges" DECIMAL(12,2),
+    "clubCharges" DECIMAL(12,2),
+    "otherCharges" DECIMAL(12,2),
     "amenities" TEXT[],
-    "yearBuilt" TEXT,
-    "floors" TEXT,
-    "parkingSpots" TEXT,
     "images" TEXT[],
+    "documents" JSONB,
+    "connectivity" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -153,10 +182,18 @@ CREATE TABLE "Property" (
     "organizationId" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
+    "purpose" TEXT,
+    "type" TEXT,
     "unitNumber" TEXT,
     "configuration" TEXT,
     "bhk" INTEGER,
     "area" INTEGER,
+    "areaCarpet" INTEGER,
+    "areaSaleable" INTEGER,
+    "areaBuiltUp" INTEGER,
+    "areaProject" INTEGER,
+    "areaCovered" INTEGER,
+    "areaTerrace" INTEGER,
     "floor" INTEGER,
     "facing" TEXT,
     "price" DECIMAL(12,2) NOT NULL,
@@ -164,6 +201,7 @@ CREATE TABLE "Property" (
     "version" INTEGER NOT NULL DEFAULT 0,
     "featured" BOOLEAN NOT NULL DEFAULT false,
     "images" TEXT[],
+    "amenities" TEXT[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

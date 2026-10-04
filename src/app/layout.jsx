@@ -2,6 +2,7 @@
 import "./globals.css";
 import QueryProvider from "../components/providers/QueryProvider";
 import { AuthProvider } from "../features/auth/providers/AuthProvider";
+import ToastContainer from "../components/shared/ToastContainer";
 
 export const metadata = {
   title: "SpaceEzy CRM",
@@ -15,6 +16,7 @@ export default function RootLayout({ children }) {
         <QueryProvider>
           <AuthProvider>
             {children}
+            <ToastContainer />
           </AuthProvider>
         </QueryProvider>
       </body>

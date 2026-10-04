@@ -109,3 +109,38 @@ export const mergeLeads = async (survivorId, duplicateLeadId) => {
     const response = await apiClient.post(`/leads/${survivorId}/merge`, { duplicateLeadId });
     return response;
 };
+
+// --- Pipeline aggregate ---
+
+export const fetchPipelineDashboard = async (params = {}) => {
+    const cleanParams = {};
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+            cleanParams[key] = value;
+        }
+    });
+    const response = await apiClient.get('/leads/pipeline', { params: cleanParams });
+    return response;
+};
+
+// --- Stage transitions & lead actions ---
+
+export const transitionLeadStage = async ({ id, target, ...payload }) => {
+    const response = await apiClient.post(`/leads/${id}/stage`, { target, ...payload });
+    return response;
+};
+
+export const logLeadContact = async ({ id, ...data }) => {
+    const response = await apiClient.post(`/leads/${id}/contact`, data);
+    return response;
+};
+
+export const scheduleLeadFollowUp = async ({ id, ...data }) => {
+    const response = await apiClient.post(`/leads/${id}/follow-ups`, data);
+    return response;
+};
+
+export const createLeadBooking = async ({ id, ...data }) => {
+    const response = await apiClient.post(`/leads/${id}/bookings`, data);
+    return response;
+};

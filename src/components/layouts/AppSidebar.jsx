@@ -25,15 +25,7 @@ const NAVIGATION_GROUPS = [
         title: "LEADS",
         icon: Users,
         items: [
-            { label: "All Leads", href: "/dashboard/leads" },
-            { label: "Add New Lead", href: "/dashboard/leads/new" },
-            { label: "Re-engaged Leads", href: "/dashboard/leads/re-engaged" },
-            { label: "Lead Assignment", href: "/dashboard/leads/assignment" },
-            { label: "Import Leads", href: "/dashboard/leads/import" },
-            { label: "Duplicate Leads", href: "/dashboard/leads/duplicates" },
-            { label: "Follow-ups", href: "/dashboard/leads/follow-ups" },
-            { label: "Lead Activities", href: "/dashboard/leads/activities" },
-            { label: "Untouched Leads", href: "/dashboard/leads/untouched" }
+            { label: "Leads", href: "/dashboard/leads" }
         ]
     },
     {
