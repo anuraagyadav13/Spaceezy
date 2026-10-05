@@ -2,17 +2,38 @@ const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 
 class ProjectService {
+    // Writable Project scalar fields (mass-assignment protection: arbitrary
+    // client keys like `assignedTo`/`image`/`owner` are never persisted).
+    static WRITABLE_FIELDS = [
+        'name', 'projectType', 'status', 'developer', 'description', 'shortDescription',
+        'address', 'locality', 'city', 'state', 'pincode', 'latitude', 'longitude',
+        'mapUrl', 'landmark', 'totalLandArea', 'landAreaUnit', 'totalTowers',
+        'totalFloors', 'totalUnits', 'availableUnits', 'launchDate',
+        'expectedCompletionDate', 'possessionDate', 'reraRegistered', 'reraNumber',
+        'reraAuthority', 'startingPrice', 'maximumPrice', 'pricePerSqFt', 'priceUnit',
+        'maintenanceCharges', 'plcCharges', 'parkingCharges', 'clubCharges',
+        'otherCharges', 'amenities', 'images', 'documents', 'connectivity'
+    ];
+
     /**
      * Normalize incoming project payload — convert dates, handle legacy fields, etc.
+     * Result contains ONLY allowlisted, schema-valid fields.
      */
     static normalizePayload(data = {}) {
-        const payload = { ...data };
+        const source = { ...data };
 
         // Legacy compatibility: map 'type' to 'projectType' if projectType is not set
-        if (payload.type && !payload.projectType) {
-            payload.projectType = payload.type;
+        if (source.type && !source.projectType) {
+            source.projectType = source.type;
         }
-        delete payload.type; // 'type' is not a Prisma field on Project
+        if (!source.name && source.projectName) {
+            source.name = source.projectName;
+        }
+
+        const payload = {};
+        for (const field of ProjectService.WRITABLE_FIELDS) {
+            if (source[field] !== undefined) payload[field] = source[field];
+        }
 
         // Convert date strings to Date objects
         const dateFields = ['launchDate', 'expectedCompletionDate', 'possessionDate'];
@@ -31,24 +52,16 @@ class ProjectService {
             }
         });
 
-        const floatFields = ['totalLandArea', 'latitude', 'longitude'];
+        const floatFields = ['totalLandArea', 'latitude', 'longitude',
+            'startingPrice', 'maximumPrice', 'pricePerSqFt',
+            'maintenanceCharges', 'plcCharges', 'parkingCharges', 'clubCharges', 'otherCharges'];
         floatFields.forEach(field => {
-            if (payload[field] !== undefined && payload[field] !== null) {
+            if (payload[field] !== undefined && payload[field] !== null && payload[field] !== '') {
                 payload[field] = parseFloat(payload[field]) || null;
+            } else if (payload[field] === '') {
+                payload[field] = null;
             }
         });
-
-        // Clean up fields that shouldn't be passed to Prisma
-        delete payload.id;
-        delete payload.organizationId;
-        delete payload.createdAt;
-        delete payload.updatedAt;
-        // Remove legacy fields not in the schema
-        delete payload.occupiedUnits;
-        delete payload.price;
-        delete payload.yearBuilt;
-        delete payload.floors;
-        delete payload.parkingSpots;
 
         return payload;
     }
@@ -136,24 +149,32 @@ class ProjectService {
         const project = await prisma.project.findFirst({
             where: { id, organizationId },
             include: {
+                configurations: {
+                    orderBy: { createdAt: 'asc' },
+                    include: { _count: { select: { properties: true } } }
+                },
                 properties: {
                     select: {
                         id: true,
                         title: true,
                         unitNumber: true,
                         configuration: true,
+                        configurationId: true,
+                        tower: true,
+                        purpose: true,
                         bhk: true,
                         area: true,
                         areaCarpet: true,
                         areaSaleable: true,
                         floor: true,
+                        facing: true,
                         price: true,
                         status: true,
-                        purpose: true,
                         type: true,
-                        facing: true
+                        version: true,
+                        featured: true
                     },
-                    orderBy: { createdAt: 'desc' }
+                    orderBy: [{ tower: 'asc' }, { floor: 'asc' }, { unitNumber: 'asc' }]
                 },
                 leads: {
                     select: {

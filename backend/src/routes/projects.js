@@ -5,10 +5,14 @@ const { requireAuth, requirePermission } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { createProjectSchema, updateProjectSchema, getProjectsQuerySchema } = require('../validators/project');
 const { getPropertiesQuerySchema } = require('../validators/property');
+const configurationRoutes = require('./configurations');
 
 const router = express.Router();
 
 router.use(requireAuth());
+
+// Nested configurations (Project -> Configuration -> Property)
+router.use('/:projectId/configurations', configurationRoutes);
 
 router.get('/', requirePermission('project:view'), validate(getProjectsQuerySchema), getProjects);
 router.post('/', requirePermission('project:create'), validate(createProjectSchema), createProject);

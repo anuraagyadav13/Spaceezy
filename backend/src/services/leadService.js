@@ -694,8 +694,8 @@ class LeadService {
 
     // --- Bulk assign ---
 
-    static async bulkAssignLeads(leadIds, assignedToId, organizationId, userId) {
-        if (!leadIds || leadIds.length === 0) {
+    static async bulkAssignLeads(leadIds, assignedToId, organizationId, userId, userRole = 'ADMIN') {
+        if (!Array.isArray(leadIds) || leadIds.length === 0) {
             throw new AppError('No leads selected', 400, 'BAD_REQUEST');
         }
 
@@ -704,8 +704,29 @@ class LeadService {
         });
 
         if (!user) throw new AppError('Assignee not found', 404, 'NOT_FOUND');
+        if (user.status !== 'ACTIVE') throw new AppError('Cannot assign leads to an inactive user', 400, 'BAD_REQUEST');
+
+        const isRestrictedRole = ['SALES_EXECUTIVE', 'CHANNEL_PARTNER'].includes(userRole);
 
         return await prisma.$transaction(async (tx) => {
+            const leads = await tx.lead.findMany({
+                where: {
+                    id: { in: leadIds },
+                    organizationId
+                },
+                select: { id: true, assignedToId: true }
+            });
+
+            const foundIds = new Set(leads.map(l => l.id));
+            const missing = leadIds.filter(id => !foundIds.has(id));
+            if (missing.length > 0) {
+                throw new AppError(`Lead(s) not found or out of scope: ${missing.join(', ')}`, 404, 'NOT_FOUND');
+            }
+
+            if (isRestrictedRole && leads.some(l => l.assignedToId !== userId)) {
+                throw new AppError('You do not have access to one or more selected leads', 403, 'FORBIDDEN');
+            }
+
             await tx.lead.updateMany({
                 where: {
                     id: { in: leadIds },
@@ -773,7 +794,7 @@ class LeadService {
         }));
     }
 
-    static async mergeLeads(survivingLeadId, duplicateLeadId, organizationId, userId) {
+    static async mergeLeads(survivingLeadId, duplicateLeadId, organizationId, userId, userRole = 'ADMIN') {
         if (survivingLeadId === duplicateLeadId) throw new AppError('Cannot merge a lead into itself', 400, 'BAD_REQUEST');
 
         return await prisma.$transaction(async (tx) => {
@@ -781,6 +802,11 @@ class LeadService {
             const duplicate = await tx.lead.findFirst({ where: { id: duplicateLeadId, organizationId } });
 
             if (!survivor || !duplicate) throw new AppError('Lead(s) not found', 404, 'NOT_FOUND');
+
+            if (['SALES_EXECUTIVE', 'CHANNEL_PARTNER'].includes(userRole) &&
+                (survivor.assignedToId !== userId || duplicate.assignedToId !== userId)) {
+                throw new AppError('You do not have access to one or more selected leads', 403, 'FORBIDDEN');
+            }
 
             // Merge fields: survivor takes precedence, but nulls are filled by duplicate
             const updates = {};

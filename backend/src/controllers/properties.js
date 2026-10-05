@@ -76,11 +76,26 @@ const deleteProperty = asyncHandler(async (req, res, next) => {
     });
 });
 
+const bulkImport = asyncHandler(async (req, res) => {
+    const { organizationId } = req.auth;
+
+    const result = await PropertyService.bulkImportProperties(organizationId, req.body);
+
+    res.status(result.dryRun ? 200 : 201).json({
+        success: true,
+        data: result,
+        message: result.dryRun
+            ? `Dry run complete: ${result.total - result.failed.length} valid, ${result.failed.length} failed`
+            : `Import complete: ${result.created} created, ${result.failed.length} failed`
+    });
+});
+
 module.exports = {
     getProperties,
     getPropertiesForProject,
     getPropertyById,
     createProperty,
     updateProperty,
-    deleteProperty
+    deleteProperty,
+    bulkImport
 };

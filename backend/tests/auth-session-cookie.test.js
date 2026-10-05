@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../src/app');
 const { requireAuth } = require('../src/middleware/auth');
+const { AppError } = require('../src/utils/errors');
 const prisma = require('../src/db/prisma');
 
 jest.mock('../src/db/prisma', () => ({
@@ -28,6 +29,7 @@ describe('requireAuth session cookie fallback', () => {
         id: 'user-123',
         organizationId: 'org-123',
         role: 'SALES_EXECUTIVE',
+        status: 'ACTIVE',
       },
     });
 
@@ -40,6 +42,33 @@ describe('requireAuth session cookie fallback', () => {
       organizationId: 'org-123',
       role: 'SALES_EXECUTIVE',
     });
+  });
+
+  it('rejects sessions belonging to a deactivated user with 401', async () => {
+    const req = {
+      cookies: { spaceezy_session: 'test-session-token' },
+    };
+    const res = {};
+    const next = jest.fn();
+
+    prisma.session.findUnique.mockResolvedValue({
+      expiresAt: new Date(Date.now() + 60_000),
+      user: {
+        id: 'user-123',
+        organizationId: 'org-123',
+        role: 'SALES_EXECUTIVE',
+        status: 'INACTIVE',
+      },
+    });
+
+    await requireAuth()(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    const error = next.mock.calls[0][0];
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.statusCode).toBe(401);
+    expect(error.code).toBe('UNAUTHORIZED');
+    expect(req.auth).toBeUndefined();
   });
 });
 

@@ -44,9 +44,13 @@ apiClient.interceptors.response.use(
         }
 
         const payload = error.response?.data;
-        return Promise.reject(
+        const apiError = new Error(
             payload?.message || payload?.error || "An unexpected error occurred"
         );
+        apiError.status = error.response?.status ?? null;
+        apiError.code = payload?.code ?? null;
+        apiError.errors = payload?.errors ?? null;
+        return Promise.reject(apiError);
     }
 );
 

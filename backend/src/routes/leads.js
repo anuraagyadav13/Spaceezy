@@ -2,7 +2,7 @@ const express = require('express');
 const { getLeads, getLeadById, createLead, updateLead, deleteLead, getMatchingProperties, addInterestedProperty, removeInterestedProperty, getFollowups, toggleFollowupStatus, getActivities, bulkAssignLeads, getDuplicates, mergeLeads, transitionStage, logContact, scheduleFollowUp, createBookingFromLead } = require('../controllers/leads');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const validate = require('../middleware/validate');
-const { createLeadSchema, updateLeadSchema, getLeadsQuerySchema } = require('../validators/lead');
+const { createLeadSchema, updateLeadSchema, getLeadsQuerySchema, bulkAssignSchema, mergeLeadSchema } = require('../validators/lead');
 const pipelineRoutes = require('./pipeline');
 
 const router = express.Router();
@@ -16,7 +16,7 @@ router.use('/pipeline', pipelineRoutes);
 router.get('/follow-ups', requirePermission('lead:view'), getFollowups);
 router.patch('/follow-ups/:id/toggle', requirePermission('lead:update'), toggleFollowupStatus);
 router.get('/activities', requirePermission('lead:view'), getActivities);
-router.patch('/bulk-assign', requirePermission('lead:update'), bulkAssignLeads);
+router.patch('/bulk-assign', requirePermission('lead:assign'), validate(bulkAssignSchema), bulkAssignLeads);
 router.get('/duplicates', requirePermission('lead:view'), getDuplicates);
 
 router.get('/', requirePermission('lead:view'), validate(getLeadsQuerySchema), getLeads);
@@ -37,6 +37,6 @@ router.post('/:id/interested-properties', requirePermission('lead:update'), addI
 router.delete('/:id/interested-properties/:propId', requirePermission('lead:update'), removeInterestedProperty);
 
 // Merge
-router.post('/:id/merge', requirePermission('lead:update'), mergeLeads);
+router.post('/:id/merge', requirePermission('lead:merge'), validate(mergeLeadSchema), mergeLeads);
 
 module.exports = router;

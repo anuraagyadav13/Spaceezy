@@ -23,6 +23,7 @@ model Organization {
   leads      Lead[]
   activities LeadActivity[]
   projects   Project[]
+  configurations Configuration[]
   properties Property[]
   customers  Customer[]
   bookings   Booking[]
@@ -256,15 +257,40 @@ model Project {
   documents    Json? // e.g. [{name: "Brochure", url: "..."}]
   connectivity Json? // e.g. [{name: "Airport", category: "Transport", distance: "5km", time: "10m"}]
 
-  properties Property[]
-  leads      Lead[]
-  bookings   Booking[]
-  quotations Quotation[]
+  properties     Property[]
+  configurations Configuration[]
+  leads          Lead[]
+  bookings       Booking[]
+  quotations     Quotation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+}
+
+// Project -> Configuration -> Property/Unit
+model Configuration {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String   // e.g. "2 BHK", "Retail Shop"
+  bhk         Int?
+  areaSaleable Int? // sq.ft
+  basePrice   Decimal? @db.Decimal(12, 2)
+  active      Boolean  @default(true)
+
+  properties Property[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, name])
+  @@index([organizationId, projectId])
 }
 
 enum PropertyStatus {
@@ -281,9 +307,13 @@ model Property {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  configurationId String?
+  config          Configuration? @relation(fields: [configurationId], references: [id], onDelete: SetNull)
+
   title         String
   purpose       String? // Sale, Resale, Rent
   type          String? // Residential, Commercial, Plot
+  tower         String? // Tower/block
   unitNumber    String?
   configuration String? // e.g. "3 BHK"
   bhk           Int?
@@ -311,6 +341,7 @@ model Property {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([projectId, unitNumber])
   @@index([organizationId, projectId])
 }
 

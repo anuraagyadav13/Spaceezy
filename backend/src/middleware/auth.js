@@ -24,6 +24,10 @@ const requireAuth = () => {
             return next(new AppError('Session expired or invalid', 401, 'UNAUTHORIZED'));
         }
 
+        if (session.user.status !== 'ACTIVE') {
+            return next(new AppError('Account is deactivated', 401, 'UNAUTHORIZED'));
+        }
+
         // Attach authenticated context to the request
         req.auth = {
             userId: session.user.id,
@@ -52,6 +56,7 @@ const requirePermission = (permission) => {
         const rolePermissions = {
             SUPER_ADMIN: [
                 'lead:view', 'lead:create', 'lead:update', 'lead:delete',
+                'lead:assign', 'lead:merge',
                 'employee:view', 'employee:create', 'employee:update', 'employee:delete',
                 'inventory:view', 'inventory:create', 'inventory:update',
                 'booking:view', 'booking:create', 'booking:update', 'booking:approve',
@@ -65,6 +70,7 @@ const requirePermission = (permission) => {
             ],
             ADMIN: [
                 'lead:view', 'lead:create', 'lead:update',
+                'lead:assign', 'lead:merge',
                 'employee:view',
                 'inventory:view', 'inventory:create', 'inventory:update',
                 'booking:view', 'booking:create', 'booking:update',
@@ -78,6 +84,7 @@ const requirePermission = (permission) => {
             ],
             SALES_MANAGER: [
                 'lead:view', 'lead:create', 'lead:update',
+                'lead:assign', 'lead:merge',
                 'booking:view', 'booking:create', 'booking:update',
                 'inventory:view',
                 'site_visit:view', 'site_visit:create', 'site_visit:update',

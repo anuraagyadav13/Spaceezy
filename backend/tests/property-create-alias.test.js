@@ -25,9 +25,11 @@ describe('PropertyService.createProperty legacy compatibility', () => {
       address: 'Noida'
     }, 'org-123');
 
-    expect(prisma.project.findFirst).toHaveBeenCalledWith({
-      where: { id: 'project-123', organizationId: 'org-123' }
-    });
+    expect(prisma.project.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'project-123', organizationId: 'org-123' }
+      })
+    );
 
     expect(prisma.property.create).toHaveBeenCalledWith({
       data: expect.objectContaining({

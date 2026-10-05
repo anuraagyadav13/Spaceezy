@@ -81,3 +81,21 @@ export const deleteProperty = async (id) => {
     const response = await apiClient.delete(`/properties/${id}`);
     return response;
 };
+
+export const bulkImportProperties = async ({ projectId, rows, dryRun = false }) => {
+    const payload = {
+        projectId,
+        dryRun,
+        rows: (rows || []).map((row) => {
+            const clean = {};
+            Object.entries(row).forEach(([key, value]) => {
+                if (value !== undefined && value !== null && String(value).trim() !== '') {
+                    clean[key] = typeof value === 'string' ? value.trim() : value;
+                }
+            });
+            return clean;
+        })
+    };
+    const response = await apiClient.post('/properties/bulk-import', payload);
+    return response;
+};

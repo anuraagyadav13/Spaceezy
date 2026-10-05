@@ -4,6 +4,7 @@ const ROLE_PERMISSIONS = {
     SUPER_ADMIN: [
         "lead:view", "lead:create", "lead:update", "lead:delete", "lead:assign",
         "inventory:view", "inventory:create", "inventory:update",
+        "project:view", "project:create", "project:update", "project:delete",
         "booking:view", "booking:create", "booking:approve",
         "commission:view", "commission:approve",
         "task:view", "task:create", "task:update", "task:delete",
@@ -12,6 +13,7 @@ const ROLE_PERMISSIONS = {
     ADMIN: [
         "lead:view", "lead:create", "lead:update", "lead:assign",
         "inventory:view", "inventory:create", "inventory:update",
+        "project:view", "project:create", "project:update",
         "booking:view", "booking:create",
         "commission:view",
         "task:view", "task:create", "task:update", "task:delete",
@@ -20,6 +22,7 @@ const ROLE_PERMISSIONS = {
     SALES_MANAGER: [
         "lead:view", "lead:create", "lead:update", "lead:assign",
         "inventory:view",
+        "project:view",
         "booking:view", "booking:create",
         "commission:view",
         "task:view", "task:create", "task:update",
@@ -28,6 +31,7 @@ const ROLE_PERMISSIONS = {
     SALES_EXECUTIVE: [
         "lead:view", "lead:create", "lead:update",
         "inventory:view",
+        "project:view",
         "booking:view", "booking:create",
         "task:view", "task:create", "task:update",
         "quotation:view", "quotation:create", "quotation:update"
@@ -35,6 +39,7 @@ const ROLE_PERMISSIONS = {
     CHANNEL_PARTNER: [
         "lead:view", "lead:create",
         "inventory:view",
+        "project:view",
         "commission:view",
         "task:view",
         "quotation:view"

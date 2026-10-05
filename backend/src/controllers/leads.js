@@ -144,9 +144,9 @@ const getActivities = asyncHandler(async (req, res, next) => {
 
 const bulkAssignLeads = asyncHandler(async (req, res, next) => {
     const { leadIds, assignedToId } = req.body;
-    const { organizationId, userId } = req.auth;
+    const { organizationId, userId, role } = req.auth;
     
-    const result = await LeadService.bulkAssignLeads(leadIds, assignedToId, organizationId, userId);
+    const result = await LeadService.bulkAssignLeads(leadIds, assignedToId, organizationId, userId, role);
     
     res.status(200).json({
         success: true,
@@ -169,9 +169,9 @@ const getDuplicates = asyncHandler(async (req, res, next) => {
 const mergeLeads = asyncHandler(async (req, res, next) => {
     const { id } = req.params; // survivor
     const { duplicateLeadId } = req.body;
-    const { organizationId, userId } = req.auth;
+    const { organizationId, userId, role } = req.auth;
     
-    const result = await LeadService.mergeLeads(id, duplicateLeadId, organizationId, userId);
+    const result = await LeadService.mergeLeads(id, duplicateLeadId, organizationId, userId, role);
     
     res.status(200).json({
         success: true,

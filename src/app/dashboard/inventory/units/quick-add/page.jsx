@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ChevronRight, Eye, Plus, UploadCloud, Search, Sofa, Armchair, Box, Monitor, Briefcase, Square, X } from "lucide-react";
-import { createProject, fetchProjects } from "../../../../../lib/api/projects";
+import { useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronRight, Eye, Plus, UploadCloud, X } from "lucide-react";
+import { fetchProjects } from "../../../../../lib/api/projects";
+import { fetchConfigurations } from "../../../../../lib/api/configurations";
 import { createProperty } from "../../../../../lib/api/properties";
 import { showToast } from "../../../../../lib/toast";
 import { AmenitiesSelector } from "../../../../../components/AmenitiesSelector";
@@ -24,8 +26,6 @@ const UNIT_TYPES = [
 
 const RESIDENTIAL_CONFIGURATIONS = ["1 RK", "1 BHK", "1.5 BHK", "2 BHK", "2.5 BHK", "3 BHK", "3.5 BHK", "4 BHK", "4.5 BHK", "5 BHK", "5.5 BHK", "6 BHK"];
 const COMMERCIAL_CONFIGURATIONS = ["Office", "Retail Shop", "Showroom", "Commercial Space", "Warehouse", "Industrial Unit", "Co-working Space", "Food Court", "Restaurant", "Clinic", "Studio", "Godown"];
-
-const FURNISHING_OPTIONS = ["Furnished", "Semi-Furnished", "Unfurnished"];
 
 const parseCurrencyValue = (value) => {
     if (value === null || value === undefined || value === "") return 0;
@@ -102,39 +102,39 @@ const UnitIllustration = ({ type, active = false }) => {
 
 export default function QuickAddWizard() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [projects, setProjects] = useState([]);
+    const [projectConfigs, setProjectConfigs] = useState([]);
     const [currentStep, setCurrentStep] = useState(0);
     const [formData, setFormData] = useState({
         purpose: "Sale",
         category: "Residential",
         type: "Residential",
-        projectName: "Binghamti Hills",
+        projectId: "",
         tower: "",
         floor: "",
         unitName: "",
         configuration: "2 BHK",
+        configurationId: "",
         totalFloors: "",
         amenities: [],
         images: [],
         areaCarpet: "",
         areaSaleable: "",
-        furnishing: "Unfurnished",
         basePrice: "",
         allInclusivePrice: "",
-        description: "",
     });
 
     useEffect(() => {
         const loadProjects = async () => {
             try {
+                const preselected = new URLSearchParams(window.location.search).get("projectId") || "";
                 const data = await fetchProjects({ limit: 200 });
                 const projectList = Array.isArray(data) ? data : data?.projects || [];
                 setProjects(projectList);
 
-                setFormData((prev) => ({
-                    ...prev,
-                    projectName: prev.projectName || projectList[0]?.name || "",
-                }));
+                const valid = projectList.some((p) => p.id === preselected) ? preselected : "";
+                setFormData((prev) => ({ ...prev, projectId: prev.projectId || valid || projectList[0]?.id || "" }));
             } catch (err) {
                 console.error("Failed to load projects", err);
             }
@@ -142,6 +142,21 @@ export default function QuickAddWizard() {
 
         loadProjects();
     }, []);
+
+    useEffect(() => {
+        const loadConfigs = async () => {
+            setProjectConfigs([]);
+            setFormData((prev) => ({ ...prev, configurationId: "" }));
+            if (!formData.projectId) return;
+            try {
+                const list = await fetchConfigurations(formData.projectId);
+                setProjectConfigs(Array.isArray(list) ? list : []);
+            } catch {
+                setProjectConfigs([]);
+            }
+        };
+        loadConfigs();
+    }, [formData.projectId]);
 
     const handleImageUpload = (e) => {
         const files = Array.from(e.target.files);
@@ -177,67 +192,61 @@ export default function QuickAddWizard() {
 
     const saveUnit = async () => {
         try {
-            const projectName = formData.projectName?.trim();
-            if (!projectName) {
-                throw new Error("Project name is required.");
+            const selectedProject = projects.find((p) => p.id === formData.projectId);
+            if (!selectedProject) {
+                showToast("Select a project before saving the unit.", "error");
+                return;
             }
 
-            const projects = await fetchProjects({ search: projectName, limit: 20 });
-            const projectList = Array.isArray(projects) ? projects : projects?.projects || [];
-            const matchedProject = projectList.find((project) => project.name?.toLowerCase() === projectName.toLowerCase());
-
-            let projectId = matchedProject?.id;
-            if (!projectId) {
-                const createdProject = await createProject({
-                    name: projectName,
-                    address: projectName,
-                    city: "",
-                    type: formData.category,
-                    status: "AVAILABLE",
-                    totalUnits: 0,
-                    occupiedUnits: 0,
-                });
-                projectId = createdProject?.id;
-            }
-
-            if (!projectId) {
-                throw new Error("Unable to resolve project. Please add a project first.");
+            const unitName = formData.unitName?.trim();
+            if (!unitName) {
+                showToast("Unit name is required.", "error");
+                return;
             }
 
             const bhkMatch = String(formData.configuration || "").match(/\d+/);
             const bhk = bhkMatch ? Number(bhkMatch[0]) : null;
             const saleableArea = Number(formData.areaSaleable) || Number(formData.areaCarpet) || null;
-            const price = parseCurrencyValue(formData.allInclusivePrice || formData.basePrice || "0");
+            const price = parseCurrencyValue(formData.allInclusivePrice || formData.basePrice || "");
+            if (!price || price <= 0) {
+                showToast("Enter a valid base price or all-inclusive price.", "error");
+                return;
+            }
+
+            const selectedConfig = projectConfigs.find((c) => c.id === formData.configurationId);
 
             const payload = {
-                projectId,
-                title: `${projectName} ${formData.tower ? `${formData.tower} ` : ""}${formData.unitName || "Unit"}`.trim(),
-                purpose: formData.purpose || "Sale",
-                type: formData.type || "Residential",
-                unitNumber: formData.unitName || "",
-                configuration: formData.configuration,
+                projectId: selectedProject.id,
+                title: `${selectedProject.name} ${formData.tower ? `${formData.tower} ` : ""}${unitName}`.trim(),
+                purpose: formData.purpose === "Rental" ? "Rent" : formData.purpose || "Sale",
+                unitNumber: unitName,
+                tower: formData.tower?.trim() || null,
+                configuration: selectedConfig ? selectedConfig.name : (formData.configuration || null),
                 bhk,
-                area: saleableArea, // Keeping as legacy fallback
+                area: saleableArea,
                 areaCarpet: Number(formData.areaCarpet) || null,
                 areaSaleable: Number(formData.areaSaleable) || null,
                 areaBuiltUp: Number(formData.builtUpArea) || null,
                 areaProject: Number(formData.projectArea) || null,
                 areaCovered: Number(formData.coveredArea) || null,
                 areaTerrace: Number(formData.terraceArea) || null,
-                floor: Number(formData.floor) || null,
+                floor: formData.floor !== "" && formData.floor !== null ? Number(formData.floor) : null,
                 price,
                 status: "AVAILABLE",
                 featured: false,
                 images: formData.images || [],
                 amenities: formData.amenities || [],
-                description: formData.description || "",
             };
+            if (selectedConfig) payload.configurationId = selectedConfig.id;
 
             await createProperty(payload);
-            showToast("Property created successfully", "success");
-            router.push("/dashboard/inventory");
+            queryClient.invalidateQueries({ queryKey: ["projects"] });
+            queryClient.invalidateQueries({ queryKey: ["properties"] });
+            if (selectedProject.id) queryClient.invalidateQueries({ queryKey: ["project", selectedProject.id] });
+            showToast("Unit created successfully", "success");
+            router.push(`/dashboard/inventory/projects/${selectedProject.id}`);
         } catch (err) {
-            showToast(`Failed to create property: ${err.message}`, "error");
+            showToast(`Failed to create unit: ${err?.message || err}`, "error");
         }
     };
 
@@ -281,13 +290,13 @@ export default function QuickAddWizard() {
                             <div className="mt-4 flex gap-3">
                                 <div className="relative flex-1">
                                     <select
-                                        value={formData.projectName || ""}
-                                        onChange={(e) => updateField("projectName", e.target.value)}
+                                        value={formData.projectId || ""}
+                                        onChange={(e) => updateField("projectId", e.target.value)}
                                         className="w-full rounded-xl border border-[#d9d2e3] bg-[#f7f5f9] px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-violet-400"
                                     >
                                         <option value="">Select existing project</option>
                                         {projects.map((project) => (
-                                            <option key={project.id} value={project.name}>
+                                            <option key={project.id} value={project.id}>
                                                 {project.name}
                                             </option>
                                         ))}
@@ -398,14 +407,35 @@ export default function QuickAddWizard() {
 
                             <div>
                                 <label className="text-[13px] font-bold uppercase tracking-[0.18em] text-gray-700">Configuration</label>
+                                {projectConfigs.length > 0 && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {projectConfigs.map((c) => {
+                                            const selected = formData.configurationId === c.id;
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={c.id}
+                                                    onClick={() => setFormData((prev) => ({ ...prev, configurationId: selected ? "" : c.id, configuration: c.name }))}
+                                                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${selected ? "border-violet-500 bg-violet-600 text-white" : "border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-400"}`}
+                                                    title={c.basePrice ? `Base price: ${c.basePrice}` : ""}
+                                                >
+                                                    {c.name}{c.bhk ? ` · ${c.bhk} BHK` : ""}{c.basePrice ? ` · ₹${Number(c.basePrice).toLocaleString("en-IN")}` : ""}
+                                                </button>
+                                            );
+                                        })}
+                                        <span className="text-[11px] text-gray-400 self-center">
+                                            {formData.configurationId ? "Linked to project configuration" : "or pick a free-text type below"}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="mt-3 grid grid-cols-4 gap-3">
                                     {(formData.type === "Commercial" ? COMMERCIAL_CONFIGURATIONS : RESIDENTIAL_CONFIGURATIONS).map((config) => {
-                                        const selected = formData.configuration === config;
+                                        const selected = formData.configuration === config && !formData.configurationId;
                                         return (
                                             <button
                                                 type="button"
                                                 key={config}
-                                                onClick={() => updateField("configuration", config)}
+                                                onClick={() => setFormData((prev) => ({ ...prev, configuration: config, configurationId: "" }))}
                                                 className={`rounded-xl border px-3 py-3 text-sm font-medium transition ${selected ? "border-violet-400 bg-violet-50 text-violet-700" : "border-[#d9d2e3] bg-[#f7f5f9] text-gray-700 hover:border-violet-200"}`}
                                             >
                                                 {config}
@@ -477,39 +507,17 @@ export default function QuickAddWizard() {
                         <input value={formData.areaCarpet} onChange={(e) => updateField("areaCarpet", e.target.value)} placeholder="Enter carpet area" className="mt-3 w-full rounded-xl border border-[#d9d2e3] bg-[#f7f5f9] px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-violet-400" />
                     </div>
                     <div>
-                        <label className="text-[13px] font-bold uppercase tracking-[0.18em] text-gray-700">Furnishing</label>
-                        <div className="mt-3 grid grid-cols-3 gap-2">
-                            {["Furnished", "Semi-Furnished", "Unfurnished"].map((opt) => {
-                                const isSelected = formData.furnishing === opt;
-                                const Icon = formData.type === "Commercial" 
-                                    ? (opt === "Furnished" ? Monitor : opt === "Semi-Furnished" ? Briefcase : Square)
-                                    : (opt === "Furnished" ? Sofa : opt === "Semi-Furnished" ? Armchair : Box);
-                                return (
-                                    <button
-                                        type="button"
-                                        key={opt}
-                                        onClick={() => updateField("furnishing", opt)}
-                                        className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-3 transition-all ${isSelected ? "border-violet-400 bg-violet-50 text-violet-700 shadow-[0_0_0_1px_rgba(124,58,237,0.15)]" : "border-[#d9d2e3] bg-white text-gray-600 hover:border-violet-200"}`}
-                                    >
-                                        <Icon size={20} className={isSelected ? "text-violet-600" : "text-gray-400"} />
-                                        <span className="text-xs font-medium text-center">{opt}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        <label className="text-[13px] font-bold uppercase tracking-[0.18em] text-gray-700">Saleable area</label>
+                        <input value={formData.areaSaleable} onChange={(e) => updateField("areaSaleable", e.target.value)} placeholder="Enter saleable area" className="mt-3 w-full rounded-xl border border-[#d9d2e3] bg-[#f7f5f9] px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-violet-400" />
                     </div>
                     <div>
-                        <label className="text-[13px] font-bold uppercase tracking-[0.18em] text-gray-700">Base price</label>
+                        <label className="text-[13px] font-bold uppercase tracking-[0.18em] text-gray-700">Base price *</label>
                         <input value={formData.basePrice} onChange={(e) => updateField("basePrice", e.target.value)} placeholder="Enter base price" className="mt-3 w-full rounded-xl border border-[#d9d2e3] bg-[#f7f5f9] px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-violet-400" />
                     </div>
                     <div>
                         <label className="text-[13px] font-bold uppercase tracking-[0.18em] text-gray-700">All-inclusive price</label>
                         <input value={formData.allInclusivePrice} onChange={(e) => updateField("allInclusivePrice", e.target.value)} placeholder="Enter all-inclusive price" className="mt-3 w-full rounded-xl border border-[#d9d2e3] bg-[#f7f5f9] px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-violet-400" />
                     </div>
-                </div>
-                <div>
-                    <label className="text-[13px] font-bold uppercase tracking-[0.18em] text-gray-700">Description</label>
-                    <textarea value={formData.description} onChange={(e) => updateField("description", e.target.value)} rows={4} placeholder="Enter notes for this unit" className="mt-3 w-full resize-none rounded-xl border border-[#d9d2e3] bg-[#f7f5f9] px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-violet-400" />
                 </div>
             </div>
         );

@@ -21,3 +21,8 @@ export const updateProject = async ({ id, ...data }) => {
     const response = await apiClient.patch(`/projects/${id}`, data);
     return response;
 };
+
+export const deleteProject = async (id) => {
+    const response = await apiClient.delete(`/projects/${id}`);
+    return response;
+};

@@ -62,8 +62,26 @@ const getLeadsQuerySchema = {
     })
 };
 
+const bulkAssignSchema = {
+    body: z.object({
+        leadIds: z.array(z.string().uuid()).min(1, 'At least one lead is required'),
+        assignedToId: z.string().uuid('assignedToId must be a valid UUID')
+    })
+};
+
+const mergeLeadSchema = {
+    params: z.object({
+        id: z.string().uuid('id must be a valid UUID')
+    }),
+    body: z.object({
+        duplicateLeadId: z.string().uuid('duplicateLeadId must be a valid UUID')
+    })
+};
+
 module.exports = {
     createLeadSchema,
     updateLeadSchema,
-    getLeadsQuerySchema
+    getLeadsQuerySchema,
+    bulkAssignSchema,
+    mergeLeadSchema
 };
