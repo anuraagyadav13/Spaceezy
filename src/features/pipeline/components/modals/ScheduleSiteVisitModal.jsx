@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Modal from "../../../../components/shared/Modal";
 import { useTransitionLeadStage } from "../../hooks/useLeadMutations";
 import { fetchProjects } from "../../../../lib/api/projects";
+import { fetchProperties } from "../../../../lib/api/properties";
 
 const inputClass =
     "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all";
@@ -18,7 +19,8 @@ const defaultDate = () => {
 export default function ScheduleSiteVisitModal({ lead, isOpen, onClose }) {
     const [date, setDate] = useState(defaultDate());
     const [time, setTime] = useState("11:00");
-    const [propertyName, setPropertyName] = useState("");
+    const [projectId, setProjectId] = useState("");
+    const [propertyId, setPropertyId] = useState("");
     const transitionStage = useTransitionLeadStage();
 
     const { data: projects } = useQuery({
@@ -29,9 +31,20 @@ export default function ScheduleSiteVisitModal({ lead, isOpen, onClose }) {
         enabled: isOpen
     });
 
+    const effectiveProjectId = projectId || lead?.projectId || "";
+
+    const { data: units, isLoading: unitsLoading } = useQuery({
+        queryKey: ["properties", "for-project", effectiveProjectId, "site-visit"],
+        queryFn: () => fetchProperties(effectiveProjectId, { limit: 200 }),
+        enabled: isOpen && Boolean(effectiveProjectId),
+        staleTime: 60 * 1000,
+        retry: 1
+    });
+
     if (!lead) return null;
 
     const projectList = Array.isArray(projects) ? projects : [];
+    const unitList = Array.isArray(units) ? units : [];
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -43,7 +56,8 @@ export default function ScheduleSiteVisitModal({ lead, isOpen, onClose }) {
                 siteVisit: {
                     date,
                     time,
-                    propertyName: propertyName || undefined
+                    ...(effectiveProjectId ? { projectId: effectiveProjectId } : {}),
+                    ...(propertyId ? { propertyId } : {})
                 },
                 successMessage: "Site visit scheduled"
             },
@@ -85,11 +99,33 @@ export default function ScheduleSiteVisitModal({ lead, isOpen, onClose }) {
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Project / Property</label>
-                    <select value={propertyName} onChange={(e) => setPropertyName(e.target.value)} className={inputClass}>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Project</label>
+                    <select
+                        value={effectiveProjectId}
+                        onChange={(e) => { setProjectId(e.target.value); setPropertyId(""); }}
+                        className={inputClass}
+                    >
                         <option value="">Not specified yet</option>
                         {projectList.map((project) => (
-                            <option key={project.id} value={project.name}>{project.name}</option>
+                            <option key={project.id} value={project.id}>{project.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Unit (optional)</label>
+                    <select
+                        value={propertyId}
+                        onChange={(e) => setPropertyId(e.target.value)}
+                        disabled={!effectiveProjectId || unitsLoading}
+                        className={`${inputClass} disabled:opacity-60`}
+                    >
+                        <option value="">{!effectiveProjectId ? "Select a project first" : unitsLoading ? "Loading units..." : "Whole project visit"}</option>
+                        {unitList.map((unit) => (
+                            <option key={unit.id} value={unit.id}>
+                                {unit.unitNumber ? `Unit ${unit.unitNumber}` : unit.title}
+                                {unit.price ? ` — ₹${Number(unit.price).toLocaleString("en-IN")}` : ""}
+                            </option>
                         ))}
                     </select>
                 </div>

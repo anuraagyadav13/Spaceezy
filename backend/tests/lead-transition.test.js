@@ -8,6 +8,9 @@ jest.mock('../src/db/prisma', () => ({
   siteVisit: { findFirst: jest.fn(), create: jest.fn() },
   quotation: { findFirst: jest.fn(), create: jest.fn() },
   task: { findFirst: jest.fn(), create: jest.fn() },
+  project: { findFirst: jest.fn() },
+  property: { findFirst: jest.fn() },
+  user: { findFirst: jest.fn() },
 }));
 
 const ORG = 'org-1';
@@ -33,6 +36,15 @@ function setupTx(lead, overrides = {}) {
     task: {
       findFirst: jest.fn().mockResolvedValue(overrides.existingTask || null),
       create: jest.fn().mockResolvedValue({ id: 'task-1' }),
+    },
+    project: {
+      findFirst: jest.fn().mockResolvedValue(overrides.project || { id: 'proj-1', organizationId: ORG }),
+    },
+    property: {
+      findFirst: jest.fn().mockResolvedValue(overrides.property || null),
+    },
+    user: {
+      findFirst: jest.fn().mockResolvedValue({ id: USER, organizationId: ORG, status: 'ACTIVE' }),
     },
   };
   prisma.$transaction.mockImplementation(async (callback) => callback(tx));

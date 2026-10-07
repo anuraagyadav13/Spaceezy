@@ -46,6 +46,7 @@ const createPropertySchema = {
         price: z.number().min(0, 'Price must be positive').optional(),
         status: z.literal('AVAILABLE').optional(),
         featured: z.boolean().optional(),
+        isPublic: z.boolean().optional(),
         images: z.array(z.string()).optional(),
         amenities: z.array(z.string()).optional()
     })
@@ -66,6 +67,7 @@ const updatePropertySchema = {
         price: z.number().min(0).optional(),
         status: z.enum(PROPERTY_STATUSES).optional(),
         featured: z.boolean().optional(),
+        isPublic: z.boolean().optional(),
         images: z.array(z.string()).optional(),
         amenities: z.array(z.string()).optional()
     })

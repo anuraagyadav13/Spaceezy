@@ -9,6 +9,7 @@ import { fetchConfigurations } from "../../../../../lib/api/configurations";
 import { createProperty } from "../../../../../lib/api/properties";
 import { showToast } from "../../../../../lib/toast";
 import { AmenitiesSelector } from "../../../../../components/AmenitiesSelector";
+import { configurationsFor } from "../../../../../lib/propertyRequirement";
 
 const STEPS = ["Basic Detail", "Amenities", "Gallery", "Other Details"];
 
@@ -23,9 +24,6 @@ const UNIT_TYPES = [
     { name: "Commercial", icon: "commercial" },
     { name: "Plot", icon: "plot" },
 ];
-
-const RESIDENTIAL_CONFIGURATIONS = ["1 RK", "1 BHK", "1.5 BHK", "2 BHK", "2.5 BHK", "3 BHK", "3.5 BHK", "4 BHK", "4.5 BHK", "5 BHK", "5.5 BHK", "6 BHK"];
-const COMMERCIAL_CONFIGURATIONS = ["Office", "Retail Shop", "Showroom", "Commercial Space", "Warehouse", "Industrial Unit", "Co-working Space", "Food Court", "Restaurant", "Clinic", "Studio", "Godown"];
 
 const parseCurrencyValue = (value) => {
     if (value === null || value === undefined || value === "") return 0;
@@ -429,7 +427,7 @@ export default function QuickAddWizard() {
                                     </div>
                                 )}
                                 <div className="mt-3 grid grid-cols-4 gap-3">
-                                    {(formData.type === "Commercial" ? COMMERCIAL_CONFIGURATIONS : RESIDENTIAL_CONFIGURATIONS).map((config) => {
+                                    {configurationsFor(formData.type === "Commercial" ? "Commercial" : "Residential").map((config) => {
                                         const selected = formData.configuration === config && !formData.configurationId;
                                         return (
                                             <button

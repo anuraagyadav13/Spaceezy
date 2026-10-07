@@ -7,7 +7,9 @@ export const useUpdateLead = () => {
     return useMutation({
         mutationFn: updateLeadStatus,
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["leads"] });
+            ["leads", "lead", "timeline", "agenda", "needs-attention", "pipeline"].forEach((key) =>
+                queryClient.invalidateQueries({ queryKey: [key] })
+            );
         },
     });
 };

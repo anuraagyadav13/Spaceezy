@@ -1,14 +1,17 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { generatePublicToken } = require('../utils/publicLink');
 
 const AREA_FIELDS = ['area', 'areaCarpet', 'areaSaleable', 'areaBuiltUp', 'areaProject', 'areaCovered', 'areaTerrace'];
 
 // Unit fields a client may set on create (mass-assignment protection).
 // `status` is forced to AVAILABLE by the service; `type` is intentionally
 // excluded (derived from Project, not client input); ids/org never writable.
+// `publicToken` is server-generated only — never client-writable.
 const CREATE_FIELDS = [
     'title', 'unitNumber', 'configuration', 'configurationId', 'purpose', 'tower',
     'bhk', 'floor', 'facing', 'price', 'featured', 'images', 'amenities',
+    'isPublic',
     ...AREA_FIELDS
 ];
 
@@ -266,24 +269,35 @@ class PropertyService {
 
         await PropertyService.assertUnitNumberFree(normalized.projectId, payload.unitNumber, organizationId);
 
-        try {
-            return await prisma.property.create({
-                data: {
-                    ...payload,
-                    projectId: normalized.projectId,
-                    organizationId,
-                    status: 'AVAILABLE'
+        const baseData = {
+            ...payload,
+            projectId: normalized.projectId,
+            organizationId,
+            status: 'AVAILABLE'
+        };
+
+        // Every unit gets an opaque public share token at birth. The unique
+        // index makes collisions impossible across orgs; retry on the
+        // (astronomically unlikely) collision rather than failing the create.
+        for (let attempt = 0; attempt < 4; attempt++) {
+            try {
+                return await prisma.property.create({
+                    data: { ...baseData, publicToken: generatePublicToken() }
+                });
+            } catch (err) {
+                const target = err.code === 'P2002' ? String((err.meta && err.meta.target) || '') : '';
+                if (err.code === 'P2002' && target.includes('publicToken')) continue;
+                if (err.code === 'P2002') {
+                    throw new AppError(`Unit number "${payload.unitNumber}" already exists in this project`, 409, 'CONFLICT');
                 }
-            });
-        } catch (err) {
-            if (err.code === 'P2002') {
-                throw new AppError(`Unit number "${payload.unitNumber}" already exists in this project`, 409, 'CONFLICT');
+                if (err.code === 'P2003') {
+                    throw new AppError('Invalid project or configuration reference', 400, 'BAD_REQUEST');
+                }
+                throw err;
             }
-            if (err.code === 'P2003') {
-                throw new AppError('Invalid project or configuration reference', 400, 'BAD_REQUEST');
-            }
-            throw err;
         }
+        // Unreachable in practice; keeps the contract explicit.
+        throw new AppError('Could not allocate a unique share token, please retry', 503, 'SERVICE_UNAVAILABLE');
     }
 
     static async updateProperty(id, data, organizationId) {

@@ -16,6 +16,10 @@ export default function PipelineLeadCard({
 }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const nextFollowUp = lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt) : null;
+    const projectName =
+        typeof lead.project === "string" ? lead.project : lead.project?.name || "";
+    const configurationName =
+        typeof lead.configuration === "string" ? lead.configuration : lead.configuration?.name || "";
 
     const handleAction = (type) => {
         setMenuOpen(false);
@@ -49,11 +53,11 @@ export default function PipelineLeadCard({
                     )}
                 </div>
 
-                {(lead.project || lead.configuration) && (
+                {(projectName || configurationName) && (
                     <p className="text-xs text-gray-600 mt-1.5 truncate">
-                        {lead.project}
-                        {lead.project && lead.configuration ? " • " : ""}
-                        {lead.configuration}
+                        {projectName}
+                        {projectName && configurationName ? " • " : ""}
+                        {configurationName}
                     </p>
                 )}
 
@@ -119,7 +123,7 @@ export default function PipelineLeadCard({
 
 export const CARD_ACTIONS = [
     { key: "contact", label: "Log contact", icon: Phone, permission: "lead:update" },
-    { key: "assign", label: "Assign", icon: UserPlus, permission: "lead:update" },
+    { key: "assign", label: "Assign", icon: UserPlus, permission: "lead:assign" },
     { key: "followUp", label: "Schedule follow-up", icon: Clock3, permission: "task:create" },
     { key: "siteVisit", label: "Schedule site visit", icon: MapPin, permission: "lead:update" },
     { key: "quotation", label: "Create quotation", icon: FileText, permission: "quotation:create" },

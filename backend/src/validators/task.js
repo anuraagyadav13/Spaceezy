@@ -1,5 +1,11 @@
 const { z } = require('zod');
 
+const idParamsSchema = {
+    params: z.object({
+        id: z.string().uuid('id must be a valid UUID')
+    })
+};
+
 const getTasksQuerySchema = {
     query: z.object({
         page: z.string().optional(),
@@ -18,9 +24,11 @@ const createTaskSchema = {
         description: z.string().optional(),
         type: z.enum(['FOLLOW_UP', 'MEETING', 'CALL', 'SITE_VISIT', 'OTHER']).optional(),
         status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
+        priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
         dueDate: z.string().min(1, 'Due date is required'),
         leadId: z.string().uuid().optional(),
-        assignedToId: z.string().uuid().optional()
+        assignedToId: z.string().uuid().optional(),
+        sourceCallId: z.string().uuid().optional()
     })
 };
 
@@ -30,14 +38,31 @@ const updateTaskSchema = {
         description: z.string().optional(),
         type: z.enum(['FOLLOW_UP', 'MEETING', 'CALL', 'SITE_VISIT', 'OTHER']).optional(),
         status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
+        priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
         dueDate: z.string().optional(),
         leadId: z.string().uuid().optional().nullable(),
         assignedToId: z.string().uuid().optional()
     })
 };
 
+const taskStatusSchema = {
+    body: z.object({
+        status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED'])
+    })
+};
+
+const rescheduleTaskSchema = {
+    body: z.object({
+        dueDate: z.string().min(1, 'dueDate is required'),
+        reason: z.string().max(500).optional()
+    })
+};
+
 module.exports = {
+    idParamsSchema,
     getTasksQuerySchema,
     createTaskSchema,
-    updateTaskSchema
+    updateTaskSchema,
+    taskStatusSchema,
+    rescheduleTaskSchema
 };

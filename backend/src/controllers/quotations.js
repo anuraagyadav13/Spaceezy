@@ -26,9 +26,9 @@ const getQuotationById = asyncHandler(async (req, res, next) => {
 });
 
 const createQuotation = asyncHandler(async (req, res, next) => {
-    const { organizationId, userId } = req.auth;
+    const { organizationId, userId, role } = req.auth;
 
-    const quotation = await QuotationService.createQuotation(req.body, organizationId, userId);
+    const quotation = await QuotationService.createQuotation(req.body, organizationId, userId, role);
 
     res.status(201).json({
         success: true,
@@ -39,12 +39,10 @@ const createQuotation = asyncHandler(async (req, res, next) => {
 
 const updateQuotation = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
-    const { organizationId, userId } = req.auth;
-    const { status } = req.body;
+    const { organizationId, userId, role } = req.auth;
+    const { status, notes } = req.body;
 
-    if (!status) throw new AppError('status is required', 422, 'VALIDATION_ERROR');
-
-    const quotation = await QuotationService.updateQuotationStatus(id, status, organizationId, userId);
+    const quotation = await QuotationService.updateQuotationStatus(id, status, organizationId, userId, role, notes);
 
     res.status(200).json({
         success: true,

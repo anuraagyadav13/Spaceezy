@@ -1,47 +1,71 @@
 import { useAuth } from "./useAuth";
 
+// Mirrors backend requirePermission() role matrix in src/middleware/auth.js
 const ROLE_PERMISSIONS = {
     SUPER_ADMIN: [
-        "lead:view", "lead:create", "lead:update", "lead:delete", "lead:assign",
+        "lead:view", "lead:create", "lead:update", "lead:delete", "lead:assign", "lead:merge",
+        "employee:view", "employee:create", "employee:update", "employee:delete",
         "inventory:view", "inventory:create", "inventory:update",
-        "project:view", "project:create", "project:update", "project:delete",
-        "booking:view", "booking:create", "booking:approve",
+        "booking:view", "booking:create", "booking:update", "booking:approve",
+        "payment:view", "payment:create",
         "commission:view", "commission:approve",
+        "site_visit:view", "site_visit:create", "site_visit:update", "site_visit:delete",
+        "customer:view", "customer:create", "customer:update", "customer:delete",
         "task:view", "task:create", "task:update", "task:delete",
-        "quotation:view", "quotation:create", "quotation:update"
+        "project:view", "project:create", "project:update", "project:delete",
+        "quotation:view", "quotation:create", "quotation:update",
+        "call:view", "call:create", "call:update",
+        "whatsapp:view", "whatsapp:create", "whatsapp:manage",
+        "recording:view", "pii:view"
     ],
     ADMIN: [
-        "lead:view", "lead:create", "lead:update", "lead:assign",
+        "lead:view", "lead:create", "lead:update", "lead:assign", "lead:merge",
+        "employee:view", "employee:update",
         "inventory:view", "inventory:create", "inventory:update",
-        "project:view", "project:create", "project:update",
-        "booking:view", "booking:create",
+        "booking:view", "booking:create", "booking:update",
+        "payment:view",
         "commission:view",
+        "site_visit:view", "site_visit:create", "site_visit:update", "site_visit:delete",
+        "customer:view", "customer:create", "customer:update",
         "task:view", "task:create", "task:update", "task:delete",
-        "quotation:view", "quotation:create", "quotation:update"
+        "project:view", "project:create", "project:update",
+        "quotation:view", "quotation:create", "quotation:update",
+        "call:view", "call:create", "call:update",
+        "whatsapp:view", "whatsapp:create", "whatsapp:manage",
+        "recording:view", "pii:view"
     ],
     SALES_MANAGER: [
-        "lead:view", "lead:create", "lead:update", "lead:assign",
+        "lead:view", "lead:create", "lead:update", "lead:assign", "lead:merge",
+        "booking:view", "booking:create", "booking:update",
         "inventory:view",
+        "site_visit:view", "site_visit:create", "site_visit:update",
+        "customer:view", "customer:create", "customer:update",
+        "task:view", "task:create", "task:update", "task:delete",
         "project:view",
-        "booking:view", "booking:create",
-        "commission:view",
-        "task:view", "task:create", "task:update",
-        "quotation:view", "quotation:create", "quotation:update"
+        "employee:view",
+        "quotation:view", "quotation:create", "quotation:update",
+        "call:view", "call:create", "call:update",
+        "whatsapp:view", "whatsapp:create", "whatsapp:manage",
+        "recording:view"
     ],
     SALES_EXECUTIVE: [
         "lead:view", "lead:create", "lead:update",
-        "inventory:view",
-        "project:view",
         "booking:view", "booking:create",
+        "inventory:view",
+        "site_visit:view", "site_visit:create", "site_visit:update",
+        "customer:view", "customer:create", "customer:update",
         "task:view", "task:create", "task:update",
-        "quotation:view", "quotation:create", "quotation:update"
+        "project:view",
+        "quotation:view", "quotation:create", "quotation:update",
+        "call:view", "call:create", "call:update",
+        "whatsapp:view", "whatsapp:create"
     ],
     CHANNEL_PARTNER: [
         "lead:view", "lead:create",
-        "inventory:view",
-        "project:view",
-        "commission:view",
+        "site_visit:view",
         "task:view",
+        "project:view",
+        "inventory:view",
         "quotation:view"
     ]
 };

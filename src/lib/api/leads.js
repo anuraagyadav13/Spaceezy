@@ -7,6 +7,12 @@ export const fetchLeads = async (params = {}) => {
     return unwrapList(response, 'leads');
 };
 
+// Full paginated envelope ({ leads, total, pages }) for counts/stats.
+export const fetchLeadsPage = async (params = {}) => {
+    const response = await apiClient.get('/leads', { params });
+    return response;
+};
+
 export const fetchLeadById = async (id) => {
     const response = await apiClient.get(`/leads/${id}`);
     return response;
@@ -39,7 +45,6 @@ export const createLead = async (data = {}) => {
 
     delete payload.stage;
     delete payload.project;
-    delete payload.budget;
 
     const response = await apiClient.post('/leads', payload);
     return response;
@@ -47,6 +52,12 @@ export const createLead = async (data = {}) => {
 
 export const updateLeadStatus = async ({ id, status, ...data }) => {
     const response = await apiClient.patch(`/leads/${id}`, { status, ...data });
+    return response;
+};
+
+// Full lead edit (contact details, assignment, project refs + requirement).
+export const updateLead = async ({ id, ...data }) => {
+    const response = await apiClient.patch(`/leads/${id}`, data);
     return response;
 };
 
@@ -70,6 +81,21 @@ export const addInterestedProperty = async (leadId, propertyId) => {
 export const removeInterestedProperty = async (leadId, propertyId) => {
     const response = await apiClient.delete(`/leads/${leadId}/interested-properties/${propertyId}`);
     return response;
+};
+
+// Authoritative WhatsApp proposal message built from database values
+// (project, configuration, tower, unit, area, location, price, availability).
+export const buildPropertyProposal = async (leadId, propertyIds) => {
+    const response = await apiClient.post(`/leads/${leadId}/proposal`, { propertyIds });
+    return response; // { body, unitCount }
+};
+
+// Public property share: server builds the WhatsApp message including the
+// unit's public URL. Rejects with 409 PROPERTY_NOT_PUBLISHED when the unit or
+// its project is not published on the public website.
+export const sharePropertyOnWhatsApp = async (leadId, propertyId) => {
+    const response = await apiClient.post(`/leads/${leadId}/property-share`, { propertyId });
+    return response; // { body, publicUrl, publicToken, property }
 };
 
 // --- Follow-ups ---
@@ -120,6 +146,24 @@ export const fetchPipelineDashboard = async (params = {}) => {
         }
     });
     const response = await apiClient.get('/leads/pipeline', { params: cleanParams });
+    return response;
+};
+
+// --- Self-claim (SALES_EXECUTIVE only) ---
+
+export const fetchClaimableLeads = async (params = {}) => {
+    const cleanParams = {};
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+            cleanParams[key] = value;
+        }
+    });
+    const response = await apiClient.get('/leads/claimable', { params: cleanParams });
+    return response;
+};
+
+export const claimLead = async (id) => {
+    const response = await apiClient.post(`/leads/${id}/claim`);
     return response;
 };
 

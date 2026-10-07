@@ -49,46 +49,57 @@ describe('BookingService.createBookingFromLead', () => {
     expect(prisma.customer.findFirst).not.toHaveBeenCalled();
   });
 
-  it('reuses an existing customer matched by phone and passes leadId to createBooking', async () => {
+  it('delegates conversion to createBooking with the lead scope', async () => {
     prisma.lead.findFirst.mockResolvedValue({ id: 'l1', name: 'Rohit', phone: '9998887776', email: 'r@x.com', assignedToId: 'exec-1' });
-    prisma.customer.findFirst.mockResolvedValue({ id: 'cust-1' });
     const spy = jest.spyOn(BookingService, 'createBooking').mockResolvedValue({ id: 'b1' });
 
     await BookingService.createBookingFromLead('l1', { propertyId: 'p1', amount: 5000000 }, ORG, USER, 'ADMIN');
 
-    expect(prisma.customer.findFirst).toHaveBeenCalledWith({ where: { organizationId: ORG, phone: '9998887776' } });
-    expect(prisma.customer.create).not.toHaveBeenCalled();
     expect(spy).toHaveBeenCalledWith(
-      { customerId: 'cust-1', propertyId: 'p1', amount: 5000000, paymentStatus: undefined, leadId: 'l1' },
+      { propertyId: 'p1', amount: 5000000, paymentStatus: undefined, leadId: 'l1' },
       ORG, USER, 'ADMIN'
     );
+    // Customer resolution happens inside the booking transaction, not before
+    expect(prisma.customer.findFirst).not.toHaveBeenCalled();
+    expect(prisma.customer.create).not.toHaveBeenCalled();
   });
 
-  it('creates a customer from lead details when no customer matches', async () => {
-    prisma.lead.findFirst.mockResolvedValue({ id: 'l1', name: 'Rohit', phone: '9998887776', email: 'r@x.com', assignedToId: 'exec-1' });
-    prisma.customer.findFirst.mockResolvedValue(null);
-    prisma.customer.create.mockResolvedValue({ id: 'cust-new' });
-    jest.spyOn(BookingService, 'createBooking').mockResolvedValue({ id: 'b1' });
+  it('creates the customer inside the transaction from lead details when no customer matches', async () => {
+    const tx = makeTx({
+      property: { findFirst: jest.fn().mockResolvedValue({ id: 'p1', projectId: 'proj-1', status: 'AVAILABLE', version: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn() },
+      lead: { findFirst: jest.fn().mockResolvedValue({ id: 'l1', name: 'Rohit', phone: '9998887776', email: 'r@x.com', assignedToId: 'exec-1', status: 'QUOTATION', projectId: null, propertyId: null }), update: jest.fn() },
+      customer: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'cust-new', name: 'Rohit' })
+      },
+      booking: { create: jest.fn().mockResolvedValue({ id: 'b1' }), findFirst: jest.fn().mockResolvedValue(null), update: jest.fn(), updateMany: jest.fn(), count: jest.fn() }
+    });
+    runTx(tx);
 
     await BookingService.createBookingFromLead('l1', { propertyId: 'p1', amount: 100 }, ORG, USER, 'ADMIN');
 
-    expect(prisma.customer.create).toHaveBeenCalledWith({
+    expect(tx.customer.findFirst).toHaveBeenCalledWith({ where: { organizationId: ORG, phone: '9998887776' } });
+    expect(tx.customer.create).toHaveBeenCalledWith({
       data: { organizationId: ORG, name: 'Rohit', phone: '9998887776', email: 'r@x.com', assignedToId: 'exec-1' }
+    });
+    expect(tx.booking.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ leadId: 'l1', customerId: 'cust-new' })
     });
   });
 
   it('prefers explicit customer payload over lead details', async () => {
     prisma.lead.findFirst.mockResolvedValue({ id: 'l1', name: 'Rohit', phone: '999', email: null, assignedToId: 'exec-1' });
-    prisma.customer.findFirst.mockResolvedValue(null);
-    prisma.customer.create.mockResolvedValue({ id: 'cust-new' });
-    jest.spyOn(BookingService, 'createBooking').mockResolvedValue({ id: 'b1' });
+    const spy = jest.spyOn(BookingService, 'createBooking').mockResolvedValue({ id: 'b1' });
 
     await BookingService.createBookingFromLead('l1', { propertyId: 'p1', amount: 100, customer: { name: 'Explicit', phone: '111', email: 'e@x.com' } }, ORG, USER, 'ADMIN');
 
-    expect(prisma.customer.findFirst).toHaveBeenCalledWith({ where: { organizationId: ORG, phone: '111' } });
-    expect(prisma.customer.create).toHaveBeenCalledWith({
-      data: { organizationId: ORG, name: 'Explicit', phone: '111', email: 'e@x.com', assignedToId: 'exec-1' }
-    });
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadId: 'l1',
+        customer: { name: 'Explicit', phone: '111', email: 'e@x.com' }
+      }),
+      ORG, USER, 'ADMIN'
+    );
   });
 });
 
@@ -135,7 +146,7 @@ describe('BookingService.createBooking (lead sync)', () => {
 
     await BookingService.createBooking({ customerId: 'cust-1', propertyId: 'p1', amount: 100, leadId: 'l1' }, ORG, USER, 'ADMIN');
 
-    expect(tx.lead.update).not.toHaveBeenCalled();
+    expect(tx.lead.update).not.toHaveBeenCalledWith({ where: { id: 'l1' }, data: { status: 'BOOKED' } });
     expect(tx.leadActivity.create).toHaveBeenCalledTimes(1);
   });
 
@@ -152,17 +163,15 @@ describe('BookingService.createBooking (lead sync)', () => {
     });
   });
 
-  it('does not advance a lead from another organization', async () => {
+  it('rejects when the lead belongs to another organization', async () => {
     const tx = txForBooking(null, 'l1');
     tx.lead.findFirst.mockResolvedValue(null);
     runTx(tx);
 
-    await BookingService.createBooking({ customerId: 'cust-1', propertyId: 'p1', amount: 100, leadId: 'l1' }, ORG, USER, 'ADMIN');
-
-    expect(tx.lead.update).not.toHaveBeenCalled();
-    expect(tx.booking.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ leadId: 'l1' })
-    });
+    await expect(BookingService.createBooking({ customerId: 'cust-1', propertyId: 'p1', amount: 100, leadId: 'l1' }, ORG, USER, 'ADMIN'))
+      .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+    expect(tx.booking.create).not.toHaveBeenCalled();
+    expect(tx.property.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects when the property was concurrently taken by another user', async () => {
@@ -184,10 +193,11 @@ describe('BookingService.cancelBooking (lead write-back)', () => {
       booking: {
         findFirst: jest.fn().mockResolvedValue({ id: 'b1', paymentStatus: 'PENDING', propertyId: 'p1', leadId: bookingLeadId, assignedToId: USER }),
         update: jest.fn().mockResolvedValue({ id: 'b1', paymentStatus: 'CANCELLED' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn()
       },
-      property: { update: jest.fn(), findFirst: jest.fn(), updateMany: jest.fn() },
+      property: { update: jest.fn(), findFirst: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       lead: { findFirst: jest.fn().mockResolvedValue(lead), update: jest.fn() },
       quotation: { findFirst: jest.fn().mockResolvedValue(activeQuotation) }
     });
@@ -206,7 +216,9 @@ describe('BookingService.cancelBooking (lead write-back)', () => {
         metadata: { from: 'BOOKED', to: 'QUOTATION', reason: 'booking cancelled', bookingId: 'b1' }
       })
     }));
-    expect(tx.property.update).toHaveBeenCalledWith(expect.objectContaining({
+    // Release is guarded: only RESERVED inventory may return to AVAILABLE
+    expect(tx.property.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'p1', status: 'RESERVED' }),
       data: expect.objectContaining({ status: 'AVAILABLE' })
     }));
   });

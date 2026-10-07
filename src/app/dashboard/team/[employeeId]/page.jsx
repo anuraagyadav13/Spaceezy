@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { fetchUserProfile } from "../../../../lib/api/users";
-import { ArrowLeft, Calendar, FileText } from "lucide-react";
+import { fetchUserProfile, updateUser } from "../../../../lib/api/users";
+import { ArrowLeft, Calendar, FileText, Gauge } from "lucide-react";
 import Image from "next/image";
 import { showToast } from "../../../../lib/toast";
+import { PermissionGate } from "../../../../features/auth/components/PermissionGate";
 
 const VISIT_STYLES = {
     Scheduled: "bg-purple-100 text-purple-700",
@@ -22,12 +23,15 @@ export default function DashboardEmployeeDetailPage({ params }) {
     const [employee, setEmployee] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const id = resolvedParams.employeeId;
+    const loadProfile = (id) => {
         fetchUserProfile(id)
             .then(data => setEmployee(data))
             .catch(err => showToast("Failed to load employee profile", "error"))
             .finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        loadProfile(resolvedParams.employeeId);
     }, [resolvedParams.employeeId]);
 
     if (loading) return <div className="p-8 text-gray-400 font-medium">Loading employee details...</div>;
@@ -69,6 +73,17 @@ export default function DashboardEmployeeDetailPage({ params }) {
                 <div className="bg-white rounded-2xl p-4 shadow-sm"><p className="text-xs text-gray-500 mb-1">Bookings</p><h3 className="text-xl font-normal text-gray-900">{bookings.length}</h3></div>
             </div>
 
+            <PermissionGate permission="employee:update">
+                <div className="px-4 sm:px-8 mb-6">
+                    <LeadClaimSettings
+                        key={String(employee.selfClaimLimit ?? "")}
+                        employeeId={resolvedParams.employeeId}
+                        profile={employee}
+                        onSaved={() => loadProfile(resolvedParams.employeeId)}
+                    />
+                </div>
+            </PermissionGate>
+
             <div className="px-4 sm:px-8 grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <div className="bg-white rounded-[24px] p-6 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
@@ -98,8 +113,8 @@ export default function DashboardEmployeeDetailPage({ params }) {
                         {bookings.map((b) => (
                             <div key={b.id} className="flex items-center justify-between text-sm">
                                 <div>
-                                    <p className="font-medium text-gray-800">{b.clientName}</p>
-                                    <p className="text-xs text-gray-400">{b.property} · {b.amount}</p>
+                                    <p className="font-medium text-gray-800">{b.customer?.name || "Unknown customer"}</p>
+                                    <p className="text-xs text-gray-400">{b.property?.title || "—"} · {b.amount}</p>
                                 </div>
                                 <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${PAYMENT_STYLES[b.paymentStatus] || PAYMENT_STYLES.Pending}`}>{b.paymentStatus}</span>
                             </div>
@@ -125,6 +140,90 @@ export default function DashboardEmployeeDetailPage({ params }) {
                             </div>
                         ))}
                         {followups.length === 0 && <p className="text-sm text-gray-400">No follow-ups logged yet.</p>}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function LeadClaimSettings({ employeeId, profile, onSaved }) {
+    const [limitValue, setLimitValue] = useState(() => String(profile.selfClaimLimit ?? ""));
+    const [saving, setSaving] = useState(false);
+    const claimed = profile.selfClaimedActive ?? 0;
+    const limit = profile.selfClaimLimit ?? 0;
+    const remaining = profile.selfClaimRemaining ?? Math.max(0, limit - claimed);
+
+    const handleSave = async () => {
+        const parsed = limitValue.trim() === "" ? null : Number(limitValue);
+        if (limitValue.trim() !== "" && (!Number.isInteger(parsed) || parsed < 0 || parsed > 1000)) {
+            showToast("Claim limit must be a whole number between 0 and 1000", "error");
+            return;
+        }
+
+        setSaving(true);
+        try {
+            await updateUser({ id: employeeId, selfClaimLimit: parsed });
+            if (parsed !== null && claimed > parsed) {
+                showToast("Limit reduced below current usage. No existing leads were removed.", "success");
+            } else {
+                showToast("Claim limit saved", "success");
+            }
+            onSaved();
+        } catch (err) {
+            showToast(err?.message || "Failed to save claim limit", "error");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-4">
+                <Gauge size={16} className="text-purple-500" />
+                <h3 className="font-medium text-[15px] text-gray-900">Lead Claim Settings</h3>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-4">
+                <div>
+                    <label htmlFor="self-claim-limit" className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Self-Claim Limit
+                    </label>
+                    <input
+                        id="self-claim-limit"
+                        type="number"
+                        min="0"
+                        max="1000"
+                        step="1"
+                        value={limitValue}
+                        onChange={(e) => setLimitValue(e.target.value)}
+                        placeholder="e.g. 20"
+                        className="w-40 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:border-purple-500"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">Max active self-claimed leads. Leave empty to disable claiming.</p>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-5 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 disabled:opacity-60 shadow-sm"
+                >
+                    {saving ? "Saving..." : "Save"}
+                </button>
+
+                <div className="flex gap-4 ml-auto text-sm">
+                    <div className="text-center">
+                        <p className="text-[11px] font-bold text-gray-400 uppercase">Limit</p>
+                        <p className="font-bold text-gray-900">{limit}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-[11px] font-bold text-gray-400 uppercase">Self-Claimed</p>
+                        <p className="font-bold text-gray-900">{claimed}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-[11px] font-bold text-gray-400 uppercase">Remaining</p>
+                        <p className="font-bold text-purple-700">{remaining}</p>
                     </div>
                 </div>
             </div>

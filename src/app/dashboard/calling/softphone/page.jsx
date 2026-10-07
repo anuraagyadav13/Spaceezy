@@ -1,54 +1,71 @@
 "use client";
-import { useState, useEffect } from "react";
-import { 
-    Phone, PhoneCall, PhoneOff, Mic, MicOff, Volume2, 
-    User, Clock, Play, Pause, AlertCircle, ShieldCheck, CheckCircle2
-} from "lucide-react";
+import { useState } from "react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { PhoneCall, Search, ExternalLink, PhoneOff, AlertCircle } from "lucide-react";
 import { fetchLeads } from "../../../../lib/api/leads";
+import { useTelephonyStatus, useInitiateCall, useCalls } from "../../../../features/communication/hooks/useCommunication";
+import CallPanel from "../../../../features/communication/components/CallPanel";
+import CallOutcomePopup from "../../../../features/communication/components/CallOutcomePopup";
+import { showToast } from "../../../../lib/toast";
 
 export default function BrowserSoftphonePage() {
-    const [agentStatus, setAgentStatus] = useState("Available"); // Available, On Call, After Call Work
-    const [callState, setCallState] = useState("idle"); // idle, ringing, connected, ended
-    const [phoneNumber, setPhoneNumber] = useState("+91 98765 43210");
-    const [muted, setMuted] = useState(false);
-    const [callDuration, setCallDuration] = useState(0);
-    const [selectedOutcome, setSelectedOutcome] = useState("Site Visit Scheduled");
+    const { data: status, isLoading: statusLoading } = useTelephonyStatus();
+    const initiateCall = useInitiateCall();
+    const [search, setSearch] = useState("");
+    const [searchInput, setSearchInput] = useState("");
+    const [selectedLeadId, setSelectedLeadId] = useState(null);
+    const [activeCall, setActiveCall] = useState(null);
+    const [outcomeCall, setOutcomeCall] = useState(null);
 
-    const [leads, setLeads] = useState([]);
-    const [activeLead, setActiveLead] = useState({ name: "Sapphire Holloway", phone: "+91 98765 43210", project: "Alpha Residency" });
+    const { data: leadsData, isLoading: leadsLoading } = useQuery({
+        queryKey: ["leads", "softphone", search],
+        queryFn: () => fetchLeads({ limit: 10, ...(search ? { search } : {}) }),
+        retry: 1
+    });
 
-    useEffect(() => {
-        const loadLeads = async () => {
-            try {
-                const data = await fetchLeads({ limit: 10 });
-                const fetchedLeads = data.leads || data || [];
-                setLeads(fetchedLeads);
-                if (fetchedLeads.length > 0) {
-                    setActiveLead(fetchedLeads[0]);
-                }
-            } catch (error) {
-                console.error("Failed to fetch leads", error);
-            }
-        };
-        loadLeads();
-    }, []);
+    const { data: recentCalls } = useCalls({ limit: 10 });
 
-    const handleStartCall = () => {
-        setCallState("ringing");
-        setTimeout(() => {
-            setCallState("connected");
-            setAgentStatus("On Call");
-        }, 2000);
+    const leads = leadsData?.leads || [];
+    const selectedLead = leads.find((l) => l.id === selectedLeadId) || null;
+
+    const handleSearch = (event) => {
+        event.preventDefault();
+        setSearch(searchInput.trim());
     };
 
-    const handleEndCall = () => {
-        setCallState("ended");
-        setAgentStatus("After Call Work");
+    const handleStartCall = async () => {
+        if (!selectedLead) {
+            showToast("Select a lead to call first", "error");
+            return;
+        }
+        if (!status?.configured) {
+            showToast(
+                "Telephony not configured. Ask your administrator to configure a telephony provider.",
+                "error"
+            );
+            return;
+        }
+        try {
+            const call = await initiateCall.mutateAsync({ leadId: selectedLead.id });
+            setActiveCall(call);
+        } catch (err) {
+            const map = {
+                TELEPHONY_NOT_CONFIGURED:
+                    "Telephony not configured. Ask your administrator to configure a telephony provider.",
+                TELEPHONY_PROVIDER_ERROR: "The telephony provider is unreachable. Please try again."
+            };
+            showToast(map[err?.code] || err?.message || "Failed to start the call", "error");
+        }
     };
 
-    const handleSaveWrapup = () => {
-        setCallState("idle");
-        setAgentStatus("Available");
+    const handleCallEnded = (updated) => {
+        setActiveCall(null);
+        if (updated && (updated.status === "COMPLETED" || updated.status === "MISSED")) {
+            setOutcomeCall(updated);
+        } else if (updated?.status === "FAILED") {
+            showToast("The call failed before connecting", "error");
+        }
     };
 
     return (
@@ -56,154 +73,164 @@ export default function BrowserSoftphonePage() {
             {/* Header */}
             <div className="bg-white border-b border-gray-100 p-4 sm:px-8 py-5 shrink-0 flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-xl font-bold text-gray-900">Browser Softphone & Agent Control</h1>
-                    <p className="text-xs text-gray-500 mt-0.5">Telephony integration interface for human sales executives.</p>
+                    <h1 className="text-xl font-bold text-gray-900">Browser Softphone</h1>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        Calls are placed through the business telephony provider — never from a personal number.
+                    </p>
                 </div>
-
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-gray-500">Agent Availability:</span>
-                    <select 
-                        value={agentStatus}
-                        onChange={e => setAgentStatus(e.target.value)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-colors ${
-                            agentStatus === "Available" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                            agentStatus === "On Call" ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"
-                        }`}
-                    >
-                        <option value="Available">Available (Ready for Inbound/Outbound)</option>
-                        <option value="On Call">On Call (Busy)</option>
-                        <option value="After Call Work">After Call Work (Wrap-up)</option>
-                        <option value="Offline">Offline / Lunch Break</option>
-                    </select>
+                <div className="flex items-center gap-2">
+                    {statusLoading ? (
+                        <span className="text-xs text-gray-400">Checking telephony...</span>
+                    ) : status?.configured ? (
+                        <span className={`text-[11px] font-black uppercase px-3 py-1.5 rounded-full border ${status.simulated ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
+                            {status.provider} {status.simulated ? "· simulated line" : "· live"}
+                            {status.businessNumber ? ` · ${status.businessNumber}` : ""}
+                        </span>
+                    ) : (
+                        <span className="text-[11px] font-black uppercase px-3 py-1.5 rounded-full border bg-red-50 text-red-700 border-red-200">
+                            Telephony not configured
+                        </span>
+                    )}
                 </div>
             </div>
 
-            {/* Softphone Workspace Layout */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar">
                 <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
-                    
-                    {/* SOFTPHONE DIALER DIALOG */}
-                    <div className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-200 shadow-xl flex flex-col items-center text-center space-y-6">
-                        <div className="w-16 h-16 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shadow-inner">
-                            <PhoneCall size={32} />
-                        </div>
-
-                        <div>
-                            <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 bg-purple-50 px-3 py-1 rounded-full border border-purple-100">
-                                Simulated Telephony Line
-                            </span>
-                            <h2 className="text-2xl font-black text-gray-900 mt-3">{phoneNumber}</h2>
-                            <p className="text-xs text-gray-400 mt-1">Lead: <span className="font-bold text-gray-800">{activeLead.name}</span></p>
-                        </div>
-
-                        {/* Call Status Display */}
-                        {callState === "ringing" && (
-                            <div className="bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2 rounded-xl text-xs font-bold animate-pulse">
-                                Ringing lead endpoint...
+                    {/* Dialer / lead picker */}
+                    <div className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-200 shadow-xl flex flex-col space-y-5">
+                        {!status?.configured ? (
+                            <div className="text-center py-8">
+                                <span className="mx-auto w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center">
+                                    <AlertCircle size={26} />
+                                </span>
+                                <h2 className="text-lg font-bold text-gray-900 mt-4">Telephony not configured</h2>
+                                <p className="text-sm text-gray-500 mt-2">
+                                    Calls cannot be placed until a telephony provider is connected. The CRM will not
+                                    simulate calls or fake call status.
+                                </p>
                             </div>
-                        )}
+                        ) : (
+                            <>
+                                <form onSubmit={handleSearch} className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={searchInput}
+                                        onChange={(e) => setSearchInput(e.target.value)}
+                                        placeholder="Search leads by name or phone"
+                                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-purple-500"
+                                    />
+                                    <button
+                                        type="submit"
+                                        className="px-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                        aria-label="Search leads"
+                                    >
+                                        <Search size={16} />
+                                    </button>
+                                </form>
 
-                        {callState === "connected" && (
-                            <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Live Call Connected (01:42)
+                                <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+                                    {leadsLoading && <p className="text-sm text-gray-400">Loading leads...</p>}
+                                    {!leadsLoading && leads.length === 0 && (
+                                        <p className="text-sm text-gray-500">No leads found.</p>
+                                    )}
+                                    {leads.map((lead) => (
+                                        <button
+                                            key={lead.id}
+                                            onClick={() => setSelectedLeadId(lead.id)}
+                                            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                                                selectedLead?.id === lead.id
+                                                    ? "border-emerald-400 bg-emerald-50"
+                                                    : "border-gray-200 bg-white hover:bg-gray-50"
+                                            }`}
+                                        >
+                                            <p className="text-sm font-bold text-gray-900">{lead.name}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {lead.phone}
+                                                {lead.status ? ` · ${String(lead.status).toLowerCase()}` : ""}
+                                                {lead.piiMasked ? " · masked" : ""}
+                                            </p>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Calling as</p>
+                                        <p className="text-sm font-bold text-gray-900">
+                                            {selectedLead ? selectedLead.name : "No lead selected"}
+                                        </p>
+                                        <p className="text-xs text-gray-500">{selectedLead?.phone || "—"}</p>
+                                    </div>
+                                    <button
+                                        onClick={handleStartCall}
+                                        disabled={!selectedLead || initiateCall.isPending}
+                                        className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg hover:bg-emerald-700 transition-all disabled:cursor-not-allowed disabled:opacity-40"
+                                        aria-label="Start call"
+                                    >
+                                        <PhoneCall size={26} />
+                                    </button>
+                                </div>
+
+                                {activeCall && (
+                                    <CallPanel call={activeCall} lead={selectedLead} onEnded={handleCallEnded} />
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                    {/* Recent calls + lead link */}
+                    <div className="space-y-6">
+                        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Recent Calls</h3>
+                                <Link href="/dashboard/calling/history" className="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1">
+                                    Full history <ExternalLink size={12} />
+                                </Link>
                             </div>
-                        )}
-
-                        {/* Dialpad Keys */}
-                        <div className="grid grid-cols-3 gap-3 w-64 my-4">
-                            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"].map(key => (
-                                <button 
-                                    key={key}
-                                    onClick={() => setPhoneNumber(prev => prev + key)}
-                                    className="h-12 rounded-2xl bg-gray-50 border border-gray-100 font-bold text-gray-800 text-lg hover:bg-gray-100 active:scale-95 transition-all"
-                                >
-                                    {key}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Call Controls */}
-                        <div className="flex items-center gap-4 pt-2">
-                            {callState === "idle" ? (
-                                <button 
-                                    onClick={handleStartCall}
-                                    className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg hover:bg-emerald-600 transition-all hover:scale-105"
-                                >
-                                    <Phone size={28} />
-                                </button>
+                            {(recentCalls?.calls || []).length === 0 ? (
+                                <p className="text-sm text-gray-500">No calls yet.</p>
                             ) : (
-                                <>
-                                    <button 
-                                        onClick={() => setMuted(!muted)}
-                                        className={`w-12 h-12 rounded-full flex items-center justify-center border transition-all ${muted ? "bg-red-50 text-red-600 border-red-200" : "bg-gray-100 text-gray-700"}`}
-                                    >
-                                        {muted ? <MicOff size={20} /> : <Mic size={20} />}
-                                    </button>
-                                    <button 
-                                        onClick={handleEndCall}
-                                        className="w-16 h-16 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg hover:bg-red-700 transition-all hover:scale-105"
-                                    >
-                                        <PhoneOff size={28} />
-                                    </button>
-                                </>
+                                <ul className="space-y-3">
+                                    {recentCalls.calls.map((call) => (
+                                        <li key={call.id} className="flex items-center justify-between gap-3 text-sm">
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-gray-900 truncate">
+                                                    {call.lead?.name || "Unknown lead"}
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    {new Date(call.createdAt).toLocaleString()}
+                                                    {call.duration ? ` · ${call.duration}s` : ""}
+                                                </p>
+                                            </div>
+                                            <span className={`shrink-0 text-[10px] font-black uppercase px-2 py-1 rounded-md ${call.status === "COMPLETED" ? "bg-emerald-50 text-emerald-700" : call.status === "FAILED" || call.status === "MISSED" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>
+                                                {call.disposition ? String(call.disposition).replace(/_/g, " ") : call.status}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
                             )}
                         </div>
-                    </div>
 
-                    {/* CALL WRAPUP & LEAD SUMMARY */}
-                    <div className="space-y-6">
-                        {/* Active Lead Summary */}
-                        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4">
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Connected Lead Identity</h3>
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-lg">
-                                    {activeLead.name[0]}
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-gray-900 text-base">{activeLead.name}</h4>
-                                    <p className="text-xs text-gray-500">Interested in {activeLead.project || "Alpha Residency"}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* After Call Work Form */}
-                        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4">
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">After Call Work (ACW) Outcome</h3>
-                            
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Call Disposition / Outcome</label>
-                                <select 
-                                    value={selectedOutcome}
-                                    onChange={e => setSelectedOutcome(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-800"
-                                >
-                                    <option>Site Visit Scheduled</option>
-                                    <option>Follow-up Call Requested</option>
-                                    <option>Not Interested / Disqualified</option>
-                                    <option>Wrong Number / Busy</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Call Summary Notes</label>
-                                <textarea 
-                                    rows="3"
-                                    placeholder="Enter call notes here..."
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs font-medium resize-none focus:outline-none focus:border-purple-500"
-                                />
-                            </div>
-
-                            <button 
-                                onClick={handleSaveWrapup}
-                                className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl text-xs font-bold hover:opacity-95 shadow-sm"
-                            >
-                                Submit ACW & Mark Ready
-                            </button>
+                        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm text-xs text-gray-500 space-y-2">
+                            <p className="flex items-center gap-2 font-bold text-gray-700 text-xs uppercase tracking-wider">
+                                <PhoneOff size={14} /> How calls work
+                            </p>
+                            <p>
+                                The CRM asks the connected telephony provider to place the call from the business
+                                number. Phone numbers are masked for roles without PII access, call events stream back
+                                through signed webhooks, and every outcome is recorded on the lead timeline.
+                            </p>
                         </div>
                     </div>
-
                 </div>
             </div>
+
+            <CallOutcomePopup
+                call={outcomeCall}
+                lead={outcomeCall?.leadId === selectedLead?.id ? selectedLead : null}
+                isOpen={Boolean(outcomeCall)}
+                onClose={() => setOutcomeCall(null)}
+            />
         </div>
     );
 }

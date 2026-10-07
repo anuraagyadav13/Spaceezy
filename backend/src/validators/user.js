@@ -28,7 +28,8 @@ const updateUserSchema = {
         email: z.string().email('Invalid email address').optional(),
         phone: z.string().optional(),
         role: z.enum(['SUPER_ADMIN', 'ADMIN', 'SALES_MANAGER', 'SALES_EXECUTIVE', 'CHANNEL_PARTNER']).optional(),
-        status: z.enum(['ACTIVE', 'INACTIVE']).optional()
+        status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+        selfClaimLimit: z.number().int().min(0, 'selfClaimLimit must be 0 or greater').max(1000, 'selfClaimLimit cannot exceed 1000').nullable().optional()
     })
 };
 

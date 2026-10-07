@@ -4,11 +4,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
-    Loader2, AlertCircle, Save, ArrowLeft, Home, KeyRound
+    Loader2, AlertCircle, Save, ArrowLeft, Home, KeyRound,
+    Share2, Globe, GlobeLock, ExternalLink
 } from "lucide-react";
 import { fetchPropertyById, updateProperty } from "../../../../../lib/api/properties";
 import { fetchConfigurations } from "../../../../../lib/api/configurations";
 import { PermissionGate } from "../../../../../features/auth/components/PermissionGate";
+import SharePropertyModal from "../../../../../components/shared/SharePropertyModal";
 import { showToast } from "../../../../../lib/toast";
 import { formatCurrency } from "../../../../../features/pipeline/helpers";
 
@@ -39,6 +41,7 @@ export default function UnitEditPage() {
     const unitId = params?.id;
     const queryClient = useQueryClient();
     const [statusError, setStatusError] = useState("");
+    const [shareOpen, setShareOpen] = useState(false);
 
     const { data: unit, isPending, isError, error, refetch } = useQuery({
         queryKey: ["property", unitId],
@@ -83,6 +86,16 @@ export default function UnitEditPage() {
             setStatusError(err?.message || "Status change failed");
             showToast(err?.message || "Status change failed", "error");
         }
+    });
+
+    // Publish/unpublish the unit on the public website (default: draft).
+    const togglePublish = useMutation({
+        mutationFn: (isPublic) => updateProperty({ id: unitId, isPublic }),
+        onSuccess: (data) => {
+            showToast(data?.isPublic ? "Unit published to the public website" : "Unit set back to draft");
+            invalidate();
+        },
+        onError: (err) => showToast(err?.message || "Could not change publication", "error")
     });
 
     if (isPending) {
@@ -279,8 +292,62 @@ export default function UnitEditPage() {
                             <div />
                         </PermissionGate>
                     </div>
+
+                    {/* Public website publication + sharing */}
+                    <div className="mt-8 border-t border-gray-100 pt-5">
+                        <h2 className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <Globe size={13} /> Public Website
+                        </h2>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <PermissionGate permission="inventory:update">
+                                <button
+                                    onClick={() => togglePublish.mutate(!unit.isPublic)}
+                                    disabled={togglePublish.isPending}
+                                    className={`px-4 py-2 rounded-xl text-xs font-black inline-flex items-center gap-1.5 disabled:opacity-50 ${
+                                        unit.isPublic
+                                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                            : "bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200"
+                                    }`}
+                                >
+                                    {unit.isPublic ? <Globe size={13} /> : <GlobeLock size={13} />}
+                                    {unit.isPublic ? "Published" : "Draft"}
+                                </button>
+                            </PermissionGate>
+                            <span className="text-xs text-gray-400">
+                                {unit.isPublic
+                                    ? "Anyone with the public link can view this unit."
+                                    : "Hidden from the public website — only your team can see it."}
+                            </span>
+                            {unit.isPublic && unit.publicToken && (
+                                <a
+                                    href={`/properties/${unit.publicToken}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs font-bold text-purple-600 hover:underline inline-flex items-center gap-1"
+                                >
+                                    <ExternalLink size={12} /> View public page
+                                </a>
+                            )}
+                        </div>
+                        <div className="mt-4">
+                            <PermissionGate permission="whatsapp:create">
+                                <button
+                                    onClick={() => setShareOpen(true)}
+                                    className="px-4 py-2 rounded-xl text-xs font-black bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 inline-flex items-center gap-1.5"
+                                >
+                                    <Share2 size={13} /> Share on WhatsApp
+                                </button>
+                            </PermissionGate>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <SharePropertyModal
+                isOpen={shareOpen}
+                onClose={() => setShareOpen(false)}
+                propertyId={unitId}
+            />
         </div>
     );
 }

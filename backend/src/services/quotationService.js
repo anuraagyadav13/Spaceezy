@@ -2,18 +2,38 @@ const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 
 const EARLIER_STAGES = ['NEW', 'CONTACTED', 'FOLLOW_UP', 'SITE_VISIT', 'INTERESTED', 'QUALIFIED', 'NEGOTIATION'];
+const ALLOWED_STATUSES = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'];
+const STATUS_TRANSITIONS = {
+    DRAFT: ['SENT', 'REJECTED'],
+    SENT: ['ACCEPTED', 'REJECTED', 'EXPIRED'],
+    ACCEPTED: [],
+    REJECTED: [],
+    EXPIRED: []
+};
+
+const BASE_INCLUDE = {
+    lead: { select: { id: true, name: true, phone: true, status: true, assignedToId: true, projectId: true } },
+    project: { select: { id: true, name: true } },
+    property: { select: { id: true, title: true, unitNumber: true, price: true, status: true } },
+    createdBy: { select: { id: true, name: true } }
+};
+
+function isRestricted(role) {
+    return role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER';
+}
 
 class QuotationService {
     static async getQuotations(organizationId, query, role, userId) {
-        const { page = 1, limit = 20, leadId, status, sort = 'desc' } = query;
+        const { page = 1, limit = 20, leadId, projectId, status, sort = 'desc' } = query;
         const skip = (page - 1) * limit;
 
         const where = { organizationId };
 
-        if (role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') {
+        if (isRestricted(role)) {
             where.lead = { assignedToId: userId };
         }
         if (leadId) where.leadId = leadId;
+        if (projectId) where.projectId = projectId;
         if (status) where.status = status;
 
         const [quotations, total] = await Promise.all([
@@ -22,12 +42,7 @@ class QuotationService {
                 skip: parseInt(skip),
                 take: parseInt(limit),
                 orderBy: { createdAt: sort === 'asc' ? 'asc' : 'desc' },
-                include: {
-                    lead: { select: { id: true, name: true, phone: true, status: true } },
-                    project: { select: { id: true, name: true } },
-                    property: { select: { id: true, title: true, unitNumber: true } },
-                    createdBy: { select: { id: true, name: true } }
-                }
+                include: BASE_INCLUDE
             }),
             prisma.quotation.count({ where })
         ]);
@@ -38,28 +53,56 @@ class QuotationService {
     static async getQuotationById(id, organizationId) {
         const quotation = await prisma.quotation.findFirst({
             where: { id, organizationId },
-            include: {
-                lead: { select: { id: true, name: true, phone: true, status: true } },
-                project: { select: { id: true, name: true } },
-                property: { select: { id: true, title: true, unitNumber: true } },
-                createdBy: { select: { id: true, name: true } }
-            }
+            include: BASE_INCLUDE
         });
         if (!quotation) throw new AppError('Quotation not found', 404, 'NOT_FOUND');
         return quotation;
     }
 
-    static async createQuotation(data, organizationId, userId) {
+    static async validateInventoryRefs(data, organizationId, lead, db = prisma) {
+        const project = await db.project.findFirst({ where: { id: data.projectId, organizationId } });
+        if (!project) throw new AppError('Project not found', 404, 'NOT_FOUND');
+
+        if (lead && lead.projectId && lead.projectId !== data.projectId) {
+            throw new AppError('Quotation project does not match the lead project', 400, 'CROSS_PROJECT_REFERENCE');
+        }
+
+        if (data.propertyId) {
+            const property = await db.property.findFirst({ where: { id: data.propertyId, organizationId } });
+            if (!property) throw new AppError('Property not found', 404, 'NOT_FOUND');
+
+            if (property.projectId !== data.projectId) {
+                throw new AppError('Property does not belong to the specified project', 400, 'CROSS_PROJECT_REFERENCE');
+            }
+            if (property.status === 'SOLD') {
+                throw new AppError('A quotation cannot be created for a sold unit', 409, 'UNIT_SOLD');
+            }
+
+            const listPrice = Number(property.price);
+            if (listPrice > 0) {
+                if (data.totalAmount < listPrice * 0.1) {
+                    throw new AppError(`Quotation amount is too low for this unit (list price ${listPrice})`, 400, 'PRICE_OUT_OF_RANGE');
+                }
+                if (data.totalAmount > listPrice * 10) {
+                    throw new AppError(`Quotation amount is too high for this unit (list price ${listPrice})`, 400, 'PRICE_OUT_OF_RANGE');
+                }
+            }
+
+            return { project, property };
+        }
+
+        return { project, property: null };
+    }
+
+    static async createQuotation(data, organizationId, userId, role) {
         const lead = await prisma.lead.findFirst({ where: { id: data.leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-        const project = await prisma.project.findFirst({ where: { id: data.projectId, organizationId } });
-        if (!project) throw new AppError('Project not found', 404, 'NOT_FOUND');
-
-        if (data.propertyId) {
-            const property = await prisma.property.findFirst({ where: { id: data.propertyId, organizationId } });
-            if (!property) throw new AppError('Property not found', 404, 'NOT_FOUND');
+        if (isRestricted(role) && lead.assignedToId !== userId) {
+            throw new AppError('You can only create quotations for leads assigned to you', 403, 'FORBIDDEN');
         }
+
+        await QuotationService.validateInventoryRefs(data, organizationId, lead);
 
         return await prisma.$transaction(async (tx) => {
             const quotation = await tx.quotation.create({
@@ -76,7 +119,8 @@ class QuotationService {
                 },
                 include: {
                     lead: { select: { id: true, name: true } },
-                    project: { select: { id: true, name: true } }
+                    project: { select: { id: true, name: true } },
+                    property: { select: { id: true, title: true, unitNumber: true } }
                 }
             });
 
@@ -99,33 +143,59 @@ class QuotationService {
         });
     }
 
-    static async updateQuotationStatus(id, status, organizationId, userId) {
-        const allowed = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'];
-        if (!allowed.includes(status)) throw new AppError('Invalid quotation status', 422, 'VALIDATION_ERROR');
+    static async updateQuotationStatus(id, status, organizationId, userId, role, notes) {
+        if (status && !ALLOWED_STATUSES.includes(status)) {
+            throw new AppError('Invalid quotation status', 422, 'VALIDATION_ERROR');
+        }
+        if (!status && notes === undefined) {
+            throw new AppError('Provide a status or notes to update', 422, 'VALIDATION_ERROR');
+        }
 
         return await prisma.$transaction(async (tx) => {
-            const quotation = await tx.quotation.findFirst({ where: { id, organizationId } });
+            const quotation = await tx.quotation.findFirst({
+                where: { id, organizationId },
+                include: { lead: { select: { id: true, assignedToId: true } } }
+            });
             if (!quotation) throw new AppError('Quotation not found', 404, 'NOT_FOUND');
+
+            if (isRestricted(role) && quotation.lead?.assignedToId !== userId) {
+                throw new AppError('You can only update quotations for leads assigned to you', 403, 'FORBIDDEN');
+            }
+
+            if (status && status !== quotation.status) {
+                const allowedNext = STATUS_TRANSITIONS[quotation.status] || [];
+                if (!allowedNext.includes(status)) {
+                    throw new AppError(
+                        `A ${quotation.status} quotation cannot move to ${status}`,
+                        409, 'INVALID_STATUS_TRANSITION'
+                    );
+                }
+            }
 
             const updated = await tx.quotation.update({
                 where: { id },
-                data: { status }
-            });
-
-            await tx.leadActivity.create({
                 data: {
-                    organizationId,
-                    leadId: quotation.leadId,
-                    type: 'NOTE',
-                    description: `Quotation ${status.toLowerCase()}`,
-                    performedById: userId,
-                    metadata: { quotationId: quotation.id, status }
+                    ...(status ? { status } : {}),
+                    ...(notes !== undefined ? { notes } : {})
                 }
             });
 
-            if (status === 'SENT') {
-                const lead = await tx.lead.findFirst({ where: { id: quotation.leadId } });
-                if (lead) await QuotationService.advanceLeadToQuotation(tx, lead, userId, organizationId);
+            if (status && status !== quotation.status) {
+                await tx.leadActivity.create({
+                    data: {
+                        organizationId,
+                        leadId: quotation.leadId,
+                        type: 'NOTE',
+                        description: `Quotation ${status.toLowerCase()}`,
+                        performedById: userId,
+                        metadata: { quotationId: quotation.id, status }
+                    }
+                });
+
+                if (status === 'SENT') {
+                    const lead = await tx.lead.findFirst({ where: { id: quotation.leadId } });
+                    if (lead) await QuotationService.advanceLeadToQuotation(tx, lead, userId, organizationId);
+                }
             }
 
             return updated;

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, X, CalendarRange, FolderOpen, Radio, UserCog, Layers } from "lucide-react";
 import { fetchProjects } from "../../../lib/api/projects";
 import { fetchUsers } from "../../../lib/api/users";
+import { usePermissions } from "../../auth/hooks/usePermissions";
 import { SOURCE_OPTIONS, DATE_PRESETS } from "../helpers";
 
 const selectClass =
@@ -18,6 +19,8 @@ function FilterLabel({ icon: Icon, children }) {
 }
 
 export default function PipelineFilters({ filters, onChange, stageOptions, dataSources }) {
+    const { hasPermission } = usePermissions();
+    const canViewEmployees = hasPermission("employee:view");
     const [searchValue, setSearchValue] = useState(filters.search || "");
     const [lastUrlSearch, setLastUrlSearch] = useState(filters.search || "");
 
@@ -46,7 +49,8 @@ export default function PipelineFilters({ filters, onChange, stageOptions, dataS
         queryKey: ["users", "filter-options"],
         queryFn: () => fetchUsers({ limit: 200 }),
         staleTime: 5 * 60 * 1000,
-        retry: 1
+        retry: 1,
+        enabled: canViewEmployees
     });
 
     const projectList = Array.isArray(projects) ? projects : [];
@@ -120,20 +124,22 @@ export default function PipelineFilters({ filters, onChange, stageOptions, dataS
                     </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <FilterLabel icon={UserCog}>Assigned to</FilterLabel>
-                        <select
-                            value={filters.assignedTo}
-                            onChange={(e) => onChange({ assignedTo: e.target.value })}
-                            className={selectClass}
-                        >
-                            <option value="">Everyone</option>
-                            {userList.map((user) => (
-                                <option key={user.id} value={user.id}>{user.name}</option>
-                            ))}
-                        </select>
-                    </div>
+                <div className={`grid gap-3 ${canViewEmployees ? "grid-cols-2" : "grid-cols-1"}`}>
+                    {canViewEmployees && (
+                        <div>
+                            <FilterLabel icon={UserCog}>Assigned to</FilterLabel>
+                            <select
+                                value={filters.assignedTo}
+                                onChange={(e) => onChange({ assignedTo: e.target.value })}
+                                className={selectClass}
+                            >
+                                <option value="">Everyone</option>
+                                {userList.map((user) => (
+                                    <option key={user.id} value={user.id}>{user.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     <div>
                         <FilterLabel icon={Layers}>Stage</FilterLabel>
                         <select

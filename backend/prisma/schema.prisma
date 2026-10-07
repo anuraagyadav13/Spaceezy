@@ -31,6 +31,10 @@ model Organization {
   tasks      Task[]
   calls      Call[]
   quotations Quotation[]
+  whatsappConversations WhatsAppConversation[]
+  whatsappMessages      WhatsAppMessage[]
+  whatsappTemplates     WhatsAppTemplate[]
+  auditLogs   AuditLog[]
 }
 
 enum UserRole {
@@ -58,6 +62,9 @@ model User {
   role         UserRole   @default(SALES_EXECUTIVE)
   status       UserStatus @default(ACTIVE)
 
+  // Max active self-claimed leads for SALES_EXECUTIVE. Null = claiming not configured (0).
+  selfClaimLimit Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -71,6 +78,7 @@ model User {
   assignedTasks      Task[]         @relation("AssignedTasks")
   calls              Call[]         @relation("UserCalls")
   createdQuotations  Quotation[]    @relation("CreatedQuotations")
+  sentWhatsAppMessages WhatsAppMessage[]
 
   @@unique([organizationId, email])
 }
@@ -99,6 +107,76 @@ enum LeadStatus {
   QUOTATION
 }
 
+// Canonical location hierarchy (system-wide master; one source of truth shared by
+// Lead requirements and Project/Property locations). IDs are used internally,
+// names are display values.
+model LocationState {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  districts       LocationDistrict[]
+  projects        Project[]
+  leadPreferences LeadPreferredLocation[]
+
+  @@index([name])
+}
+
+model LocationDistrict {
+  id      String @id @default(uuid())
+  stateId String
+  state   LocationState @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  name    String
+
+  createdAt DateTime @default(now())
+
+  regions          LocationRegion[]
+  projects         Project[]
+  leadPreferences  LeadPreferredLocation[]
+
+  @@unique([stateId, name])
+  @@index([stateId])
+}
+
+model LocationRegion {
+  id         String @id @default(uuid())
+  districtId String
+  district   LocationDistrict @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  name       String
+
+  createdAt DateTime @default(now())
+
+  projects         Project[]
+  leadPreferences  LeadPreferredLocation[]
+
+  @@unique([districtId, name])
+  @@index([districtId])
+}
+
+// One row per preferred location on a lead. Each row is a hierarchical selection:
+// state is always set; district/region optional (state-only or district-only
+// preference matches everything inside it during property matching).
+model LeadPreferredLocation {
+  id     String @id @default(uuid())
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  stateId    String
+  state      LocationState @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  districtId String?
+  district   LocationDistrict? @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  regionId   String?
+  region     LocationRegion? @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+  @@index([stateId])
+  @@index([districtId])
+  @@index([regionId])
+}
+
 model Lead {
   id             String       @id @default(uuid())
   organizationId String
@@ -115,6 +193,14 @@ model Lead {
   status LeadStatus @default(NEW)
 
   budget Decimal? @db.Decimal(14, 2)
+
+  // Customer requirement (distinct from the interested project/property refs below).
+  // budgetMin/budgetMax are the authoritative numeric requirement; `budget` above is
+  // kept in sync (= budgetMax ?? budgetMin) for legacy display/filters.
+  budgetMin Decimal? @db.Decimal(14, 2)
+  budgetMax Decimal? @db.Decimal(14, 2)
+  propertyType String? // 'Residential' | 'Commercial'
+  configurations String[] @default([]) // canonical configuration labels, e.g. ["2 BHK", "3 BHK"]
 
   assignedToId String?
   assignedTo   User?   @relation("AssignedLeads", fields: [assignedToId], references: [id])
@@ -146,6 +232,9 @@ model Lead {
   quotations Quotation[]
   interests  LeadInterest[]
   bookings   Booking[]
+  preferredLocations LeadPreferredLocation[]
+  whatsappConversations WhatsAppConversation[]
+  whatsappMessages      WhatsAppMessage[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -162,6 +251,10 @@ enum ActivityType {
   ASSIGNMENT
   FOLLOW_UP
   SITE_VISIT
+  WHATSAPP
+  TASK
+  QUOTATION
+  BOOKING
 }
 
 model LeadActivity {
@@ -213,7 +306,23 @@ model Project {
   description      String?
   shortDescription String?
 
+  // Public website (unauthenticated). publicSlug is URL-safe
+  // (name-slug + short random suffix, unique). isPublic publishes the project
+  // and its units to the public APIs/pages (default: draft / not published).
+  publicSlug String? @unique
+  isPublic   Boolean @default(false)
+
   // Location
+  // Canonical hierarchy FKs (authoritative for property matching). The legacy
+  // free-text columns below stay for display/backward compatibility and are
+  // denormalized from the canonical names when the FKs are written.
+  stateId     String?
+  locationState   LocationState?   @relation(fields: [stateId], references: [id])
+  districtId  String?
+  locationDistrict LocationDistrict? @relation(fields: [districtId], references: [id])
+  regionId    String?
+  locationRegion   LocationRegion?   @relation(fields: [regionId], references: [id])
+
   address   String
   locality  String?
   city      String?
@@ -262,6 +371,7 @@ model Project {
   leads          Lead[]
   bookings       Booking[]
   quotations     Quotation[]
+  siteVisits     SiteVisit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -333,10 +443,17 @@ model Property {
   images        String[]
   amenities     String[]
 
+  // Public share (unauthenticated public website + WhatsApp sharing).
+  // publicToken is an opaque 32-hex token — internal unit IDs never appear in
+  // public URLs. isPublic gates the public page (default: not published).
+  publicToken String? @unique
+  isPublic    Boolean @default(false)
+
   leads        Lead[]
   bookings     Booking[]
   interestedBy LeadInterest[]
   quotations   Quotation[]
+  siteVisits   SiteVisit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -366,6 +483,8 @@ model Customer {
   assignedTo   User?   @relation("AssignedCustomers", fields: [assignedToId], references: [id])
 
   bookings Booking[]
+  calls    Call[]
+  whatsappConversations WhatsAppConversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -401,6 +520,9 @@ model Booking {
   leadId String?
   lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
+  quotationId String?   @unique
+  quotation   Quotation? @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+
   assignedToId String?
   assignedTo   User?   @relation("AssignedBookings", fields: [assignedToId], references: [id])
 
@@ -431,6 +553,12 @@ model SiteVisit {
   phone        String?
   propertyName String?
 
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
   date   DateTime // Stored in UTC
   time   String // Time string like "11:30 AM" or stored as part of date
   status SiteVisitStatus @default(SCHEDULED)
@@ -443,6 +571,8 @@ model SiteVisit {
 
   @@index([organizationId])
   @@index([organizationId, status, date])
+  @@index([projectId])
+  @@index([propertyId])
 }
 
 enum TaskType {
@@ -451,6 +581,13 @@ enum TaskType {
   CALL
   SITE_VISIT
   OTHER
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 enum TaskStatus {
@@ -468,7 +605,14 @@ model Task {
   description String?
   type        TaskType   @default(FOLLOW_UP)
   status      TaskStatus @default(PENDING)
+  priority    TaskPriority @default(MEDIUM)
   dueDate     DateTime // Stored in UTC
+  completedAt DateTime?
+  rescheduledAt     DateTime?
+  rescheduleReason  String?
+  sourceCallId String?
+  sourceCall   Call?   @relation(fields: [sourceCallId], references: [id], onDelete: SetNull)
+  createdById  String?
 
   leadId String?
   lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -482,6 +626,7 @@ model Task {
   @@index([organizationId])
   @@index([organizationId, status, dueDate])
   @@index([leadId])
+  @@index([organizationId, assignedToId, status, dueDate])
 }
 
 enum CallDirection {
@@ -498,6 +643,19 @@ enum CallStatus {
   FAILED
 }
 
+enum CallOutcome {
+  INTERESTED
+  NOT_INTERESTED
+  CALL_BACK
+  FOLLOW_UP_REQUIRED
+  NO_ANSWER
+  BUSY
+  WRONG_NUMBER
+  SITE_VISIT_INTERESTED
+  QUOTATION_INTERESTED
+  OTHER
+}
+
 model Call {
   id             String       @id @default(uuid())
   organizationId String
@@ -509,8 +667,17 @@ model Call {
   fromNumber String
   toNumber   String
 
+  provider   String  @default("none")
+  disposition CallOutcome?
+  notes      String?
+  startedAt  DateTime?
+  endedAt    DateTime?
+
   leadId String?
   lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   userId String?
   user   User?   @relation("UserCalls", fields: [userId], references: [id], onDelete: SetNull)
@@ -524,9 +691,12 @@ model Call {
   updatedAt DateTime @updatedAt
 
   events CallEvent[]
+  tasks  Task[]
 
   @@index([organizationId])
   @@index([vendorCallId])
+  @@index([organizationId, leadId, createdAt])
+  @@index([organizationId, userId, createdAt])
 }
 
 model CallEvent {
@@ -571,6 +741,8 @@ model Quotation {
   createdById String
   createdBy   User   @relation("CreatedQuotations", fields: [createdById], references: [id])
 
+  bookings Booking[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -590,4 +762,117 @@ model LeadInterest {
   createdAt DateTime @default(now())
 
   @@unique([leadId, propertyId])
+}
+
+
+enum WhatsAppDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum WhatsAppMessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model WhatsAppConversation {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  provider          String  @default("none")
+  providerContactId String?
+  status            String  @default("ACTIVE") // ACTIVE | CLOSED
+  lastMessageAt     DateTime?
+  unreadCount       Int     @default(0)
+
+  messages WhatsAppMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, provider, providerContactId])
+  @@index([organizationId, lastMessageAt])
+  @@index([organizationId, leadId])
+}
+
+model WhatsAppMessage {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  conversationId String
+  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  direction WhatsAppDirection
+  status    WhatsAppMessageStatus @default(QUEUED)
+
+  body     String
+  templateName String?
+  variables    Json?
+
+  providerMessageId String?
+
+  sentById String?
+  sentBy   User?   @relation(fields: [sentById], references: [id], onDelete: SetNull)
+
+  error String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, providerMessageId])
+  @@index([organizationId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([leadId, createdAt])
+}
+
+model WhatsAppTemplate {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name              String
+  providerTemplateId String?
+  language          String  @default("en")
+  category          String  @default("UTILITY") // MARKETING | UTILITY | AUTHENTICATION
+  variables         Json?   // array of variable names, e.g. ["lead_name", "project_name"]
+  active            Boolean @default(true)
+
+  createdById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, active])
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  actorId   String?
+  action    String // e.g. call.initiated, pii.viewed, recording.accessed, whatsapp.sent
+  entityType String?
+  entityId   String?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action])
 }

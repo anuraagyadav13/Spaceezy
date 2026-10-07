@@ -11,6 +11,7 @@ import {
 import { createProject } from "../../../../../lib/api/projects";
 import { showToast } from "../../../../../lib/toast";
 import { AmenitiesSelector } from "../../../../../components/AmenitiesSelector";
+import LocationSelector from "../../../../../components/shared/LocationSelector";
 
 /* ───────────────────────── constants ───────────────────────── */
 
@@ -103,9 +104,9 @@ export default function AddProjectPage() {
         developer: "",
         // Location
         address: "",
-        locality: "",
-        city: "",
-        state: "",
+        stateId: "",
+        districtId: "",
+        regionId: "",
         pincode: "",
         landmark: "",
         mapUrl: "",
@@ -201,6 +202,11 @@ export default function AddProjectPage() {
             setCurrentStep(0);
             return;
         }
+        if ((form.districtId || form.regionId) && !form.stateId) {
+            showToast("Select a state before choosing a district or area", "error");
+            setCurrentStep(1);
+            return;
+        }
 
         setSaving(true);
         try {
@@ -212,9 +218,9 @@ export default function AddProjectPage() {
                 status: form.status,
                 developer: form.developer || undefined,
                 address: form.address?.trim() || undefined,
-                locality: form.locality || undefined,
-                city: form.city || undefined,
-                state: form.state || undefined,
+                stateId: form.stateId || undefined,
+                districtId: form.districtId || undefined,
+                regionId: form.regionId || undefined,
                 pincode: form.pincode || undefined,
                 landmark: form.landmark || undefined,
                 mapUrl: form.mapUrl || undefined,
@@ -363,33 +369,6 @@ export default function AddProjectPage() {
                         />
                     </div>
                     <div>
-                        <Label>Locality / Area</Label>
-                        <Input
-                            icon={Navigation}
-                            value={form.locality}
-                            onChange={(e) => updateField("locality", e.target.value)}
-                            placeholder="e.g. Baner"
-                        />
-                    </div>
-                    <div>
-                        <Label>City</Label>
-                        <Input
-                            icon={Building2}
-                            value={form.city}
-                            onChange={(e) => updateField("city", e.target.value)}
-                            placeholder="e.g. Pune"
-                        />
-                    </div>
-                    <div>
-                        <Label>State</Label>
-                        <Input
-                            icon={Globe}
-                            value={form.state}
-                            onChange={(e) => updateField("state", e.target.value)}
-                            placeholder="e.g. Maharashtra"
-                        />
-                    </div>
-                    <div>
                         <Label>Pincode</Label>
                         <Input
                             icon={Hash}
@@ -407,7 +386,7 @@ export default function AddProjectPage() {
                             placeholder="e.g. Near Phoenix Mall"
                         />
                     </div>
-                    <div>
+                    <div className="lg:col-span-2">
                         <Label>Google Maps URL</Label>
                         <Input
                             icon={Link2}
@@ -416,6 +395,21 @@ export default function AddProjectPage() {
                             placeholder="Paste Google Maps link"
                         />
                     </div>
+                </div>
+            </div>
+
+            <div>
+                <SectionTitle icon={Globe}>Location (State / District / Area)</SectionTitle>
+                <div className="rounded-[18px] border border-[#e7e0ee] bg-[#f7f5f9] p-6">
+                    <LocationSelector
+                        value={{ stateId: form.stateId, districtId: form.districtId, regionId: form.regionId }}
+                        onChange={(next) => setForm((prev) => ({ ...prev, ...next }))}
+                        disabled={saving}
+                    />
+                    <p className="mt-3 text-xs text-gray-500">
+                        Chosen from the shared location master (State → District → Area). The district, city and
+                        locality names are stored from this master — State is required for a district or area.
+                    </p>
                 </div>
             </div>
 

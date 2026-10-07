@@ -1,6 +1,9 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 
+const MAX_AMOUNT = 999999999999;
+const ACTIVE_BOOKING_STATUSES = ['PENDING', 'PARTIAL', 'COMPLETED'];
+
 class BookingService {
     static async getBookings(organizationId, query, role, userId) {
         const { page = 1, limit = 20, paymentStatus, search, sort = 'desc' } = query;
@@ -31,9 +34,11 @@ class BookingService {
                 orderBy: { bookingDate: sort === 'asc' ? 'asc' : 'desc' },
                 include: {
                     customer: { select: { id: true, name: true, phone: true } },
-                    property: { select: { id: true, title: true, unitNumber: true } },
+                    property: { select: { id: true, title: true, unitNumber: true, status: true } },
                     project: { select: { id: true, name: true } },
-                    assignedTo: { select: { id: true, name: true } }
+                    assignedTo: { select: { id: true, name: true } },
+                    lead: { select: { id: true, name: true, status: true } },
+                    quotation: { select: { id: true, status: true, totalAmount: true } }
                 }
             }),
             prisma.booking.count({ where })
@@ -49,33 +54,144 @@ class BookingService {
                 customer: true,
                 property: { include: { project: { select: { name: true } } } },
                 project: { select: { id: true, name: true } },
-                assignedTo: { select: { id: true, name: true } }
+                assignedTo: { select: { id: true, name: true } },
+                lead: { select: { id: true, name: true, status: true } },
+                quotation: { select: { id: true, status: true, totalAmount: true, validUntil: true } }
             }
         });
         if (!booking) throw new AppError('Booking not found', 404, 'NOT_FOUND');
         return booking;
     }
 
-    static async createBooking(data, organizationId, userId, userRole) {
-        return await prisma.$transaction(async (tx) => {
-            // 1. Tenant Isolation Checks
+    static assertOwnership(booking, userRole, userId) {
+        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && booking.assignedToId !== userId) {
+            throw new AppError('You do not have permission to modify this booking', 403, 'FORBIDDEN');
+        }
+    }
+
+    static validateAmount(amount) {
+        const value = Number(amount);
+        if (amount === undefined || amount === null || amount === '' || !Number.isFinite(value) || value <= 0 || value > MAX_AMOUNT) {
+            throw new AppError('Amount must be a positive number within the supported range', 400, 'BAD_REQUEST');
+        }
+        return value;
+    }
+
+    /**
+     * Resolves the customer for a booking inside the transaction.
+     * Priority: explicit customerId > explicit customer payload > lead details.
+     * Payloads are matched by phone (existing business rule) and created when missing,
+     * so one customer can be linked from many leads without duplication.
+     */
+    static async resolveCustomer(tx, data, lead, organizationId, userId) {
+        if (data.customerId) {
             const customer = await tx.customer.findFirst({
                 where: { id: data.customerId, organizationId }
             });
             if (!customer) throw new AppError('Customer not found in your organization', 404, 'NOT_FOUND');
+            return customer;
+        }
 
+        const source = data.customer && data.customer.phone ? data.customer : lead;
+        const phone = source && source.phone ? String(source.phone).trim() : '';
+        if (!phone) {
+            throw new AppError('customerId or customer phone is required', 400, 'BAD_REQUEST');
+        }
+        const name = (source && source.name) ? String(source.name).trim() : '';
+        if (!name) {
+            throw new AppError('Customer name is required', 400, 'BAD_REQUEST');
+        }
+        const email = (data.customer && data.customer.email !== undefined)
+            ? data.customer.email
+            : (lead && lead.email) || null;
+
+        let customer = await tx.customer.findFirst({ where: { organizationId, phone } });
+        if (!customer) {
+            customer = await tx.customer.create({
+                data: {
+                    organizationId,
+                    name,
+                    phone,
+                    email,
+                    assignedToId: (lead && lead.assignedToId) || userId
+                }
+            });
+        }
+        return customer;
+    }
+
+    /**
+     * Validates lead + quotation + unit scope inside the transaction and
+     * returns the authoritative booking amount.
+     */
+    static async validateScope(tx, data, property, organizationId, userId, userRole) {
+        let lead = null;
+        let amount = data.amount;
+
+        if (data.leadId) {
+            lead = await tx.lead.findFirst({ where: { id: data.leadId, organizationId } });
+            if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+            if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
+                throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
+            }
+            if (lead.projectId && property.projectId && lead.projectId !== property.projectId) {
+                throw new AppError('Lead, quotation and unit must belong to the same project', 400, 'CROSS_PROJECT_REFERENCE');
+            }
+            const activeBooking = await tx.booking.findFirst({
+                where: { leadId: lead.id, organizationId, paymentStatus: { in: ACTIVE_BOOKING_STATUSES } }
+            });
+            if (activeBooking) {
+                throw new AppError('This lead already has an active booking', 409, 'DUPLICATE_BOOKING');
+            }
+        }
+
+        if (data.quotationId) {
+            if (!data.leadId) {
+                throw new AppError('quotationId can only be used when booking from a lead', 400, 'BAD_REQUEST');
+            }
+            const quotation = await tx.quotation.findFirst({
+                where: { id: data.quotationId, organizationId }
+            });
+            if (!quotation) throw new AppError('Quotation not found', 404, 'NOT_FOUND');
+            if (quotation.leadId !== data.leadId) {
+                throw new AppError('Quotation does not belong to this lead', 400, 'QUOTATION_LEAD_MISMATCH');
+            }
+            if (quotation.status !== 'ACCEPTED') {
+                throw new AppError('Quotation must be accepted before it can be converted to a booking', 409, 'QUOTATION_NOT_ACCEPTED');
+            }
+            if (quotation.propertyId && quotation.propertyId !== property.id) {
+                throw new AppError('Quotation unit does not match the booking unit', 400, 'UNIT_MISMATCH');
+            }
+            if (!quotation.propertyId && quotation.projectId !== property.projectId) {
+                throw new AppError('Quotation project does not match the booking unit project', 400, 'CROSS_PROJECT_REFERENCE');
+            }
+
+            const quotationAmount = Number(quotation.totalAmount);
+            if (data.amount !== undefined && data.amount !== null && Number(data.amount) !== quotationAmount) {
+                throw new AppError('Booking amount must match the accepted quotation total', 400, 'AMOUNT_MISMATCH');
+            }
+            amount = quotationAmount;
+        }
+
+        return { lead, amount: BookingService.validateAmount(amount) };
+    }
+
+    static async createBooking(data, organizationId, userId, userRole) {
+        return await prisma.$transaction(async (tx) => {
             const property = await tx.property.findFirst({
                 where: { id: data.propertyId, organizationId }
             });
             if (!property) throw new AppError('Property not found in your organization', 404, 'NOT_FOUND');
 
-            // 2. Concurrency Check (Optimistic Locking)
+            const { lead, amount } = await BookingService.validateScope(tx, data, property, organizationId, userId, userRole);
+            const customer = await BookingService.resolveCustomer(tx, data, lead, organizationId, userId);
+
+            // Concurrency check (optimistic locking)
             if (property.status !== 'AVAILABLE') {
                 throw new AppError('Property is no longer available', 409, 'CONFLICT');
             }
 
-            // Lock property via versioning
-            const updatedProperty = await tx.property.updateMany({
+            const locked = await tx.property.updateMany({
                 where: {
                     id: data.propertyId,
                     version: property.version,
@@ -87,29 +203,45 @@ class BookingService {
                 }
             });
 
-            if (updatedProperty.count === 0) {
-                // Another transaction got there first and incremented the version
+            if (locked.count === 0) {
                 throw new AppError('Property was booked by another user. Please try another unit.', 409, 'CONFLICT_CONCURRENCY');
             }
 
-            // 3. Create Booking
-            const booking = await tx.booking.create({
-                data: {
-                    organizationId,
-                    customerId: data.customerId,
-                    propertyId: data.propertyId,
-                    projectId: property.projectId,
-                    amount: data.amount,
-                    paymentStatus: data.paymentStatus || 'PENDING',
-                    assignedToId: userId,
-                    leadId: data.leadId || null
+            let booking;
+            try {
+                booking = await tx.booking.create({
+                    data: {
+                        organizationId,
+                        customerId: customer.id,
+                        propertyId: data.propertyId,
+                        projectId: property.projectId,
+                        amount,
+                        paymentStatus: data.paymentStatus || 'PENDING',
+                        assignedToId: userId,
+                        leadId: data.leadId || null,
+                        quotationId: data.quotationId || null
+                    }
+                });
+            } catch (error) {
+                if (error && error.code === 'P2002') {
+                    throw new AppError('This quotation has already been converted to a booking', 409, 'DUPLICATE_BOOKING');
                 }
-            });
+                throw error;
+            }
 
-            // 4. If created from a lead, sync the lead to BOOKED
-            if (data.leadId) {
-                const lead = await tx.lead.findFirst({ where: { id: data.leadId, organizationId } });
-                if (lead && lead.status !== 'BOOKED') {
+            if (lead) {
+                // Backfill empty inventory references for provenance
+                if (!lead.projectId || !lead.propertyId) {
+                    await tx.lead.update({
+                        where: { id: lead.id },
+                        data: {
+                            ...( !lead.projectId ? { projectId: property.projectId } : {} ),
+                            ...( !lead.propertyId ? { propertyId: data.propertyId } : {} )
+                        }
+                    });
+                }
+
+                if (lead.status !== 'BOOKED') {
                     await tx.lead.update({ where: { id: lead.id }, data: { status: 'BOOKED' } });
                     await tx.leadActivity.create({
                         data: {
@@ -122,14 +254,15 @@ class BookingService {
                         }
                     });
                 }
+
                 await tx.leadActivity.create({
                     data: {
                         organizationId,
-                        leadId: data.leadId,
+                        leadId: lead.id,
                         type: 'NOTE',
                         description: `Booking confirmed for ${customer.name}`,
                         performedById: userId,
-                        metadata: { bookingId: booking.id, amount: data.amount, propertyId: data.propertyId }
+                        metadata: { bookingId: booking.id, amount, propertyId: data.propertyId }
                     }
                 });
             }
@@ -146,58 +279,47 @@ class BookingService {
             throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
         }
 
-        const phone = (data.customer && data.customer.phone) || lead.phone;
-        const name = (data.customer && data.customer.name) || lead.name;
-        const email = (data.customer && data.customer.email) || lead.email || null;
-
-        let customer = await prisma.customer.findFirst({ where: { organizationId, phone } });
-        if (!customer) {
-            customer = await prisma.customer.create({
-                data: {
-                    organizationId,
-                    name,
-                    phone,
-                    email,
-                    assignedToId: lead.assignedToId || userId
-                }
-            });
-        }
-
+        // The full conversion (customer resolution, quotation validation,
+        // inventory lock, booking creation and lead write-back) runs in one
+        // transaction inside createBooking.
         return await BookingService.createBooking({
-            customerId: customer.id,
             propertyId: data.propertyId,
             amount: data.amount,
             paymentStatus: data.paymentStatus,
-            leadId
+            leadId,
+            quotationId: data.quotationId,
+            ...( data.customer && data.customer.phone ? { customer: data.customer } : {} )
         }, organizationId, userId, userRole);
     }
 
     static async cancelBooking(bookingId, organizationId, userId, userRole) {
         return await prisma.$transaction(async (tx) => {
-            // Find booking with tenant isolation
             const booking = await tx.booking.findFirst({
                 where: { id: bookingId, organizationId }
             });
 
             if (!booking) throw new AppError('Booking not found', 404, 'NOT_FOUND');
 
+            BookingService.assertOwnership(booking, userRole, userId);
+
             if (booking.paymentStatus === 'CANCELLED') {
-                return booking; // Idempotent
+                return booking; // Idempotent: repeated cancellation is a no-op
             }
 
-            // Access control
-            if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && booking.assignedToId !== userId) {
-                throw new AppError('You do not have permission to modify this booking', 403, 'FORBIDDEN');
+            if (booking.paymentStatus === 'COMPLETED') {
+                throw new AppError('A fully paid booking cannot be cancelled. Use the refund workflow.', 409, 'PAYMENT_COMPLETED');
             }
 
-            // 1. Update booking
-            const updatedBooking = await tx.booking.update({
-                where: { id: bookingId },
+            // Atomic claim: only one cancellation can transition the booking
+            const claimed = await tx.booking.updateMany({
+                where: { id: bookingId, organizationId, paymentStatus: { in: ['PENDING', 'PARTIAL'] } },
                 data: { paymentStatus: 'CANCELLED' }
             });
+            if (claimed.count === 0) {
+                // A concurrent cancellation won the race; stay idempotent
+                return { ...booking, paymentStatus: 'CANCELLED' };
+            }
 
-            // 2. Check if property needs to be released
-            // (Only release if there are NO OTHER active bookings for this property)
             const activeBookings = await tx.booking.count({
                 where: {
                     propertyId: booking.propertyId,
@@ -206,16 +328,13 @@ class BookingService {
             });
 
             if (activeBookings === 0 && booking.propertyId) {
-                await tx.property.update({
-                    where: { id: booking.propertyId },
-                    data: {
-                        status: 'AVAILABLE',
-                        version: { increment: 1 }
-                    }
+                // Release only RESERVED inventory. NEVER release SOLD units.
+                await tx.property.updateMany({
+                    where: { id: booking.propertyId, organizationId, status: 'RESERVED' },
+                    data: { status: 'AVAILABLE', version: { increment: 1 } }
                 });
             }
 
-            // 5. If this booking came from a lead, write the lead back to an active stage
             if (booking.leadId) {
                 const lead = await tx.lead.findFirst({ where: { id: booking.leadId } });
                 if (lead && lead.status === 'BOOKED') {
@@ -237,7 +356,7 @@ class BookingService {
                 }
             }
 
-            return updatedBooking;
+            return { ...booking, paymentStatus: 'CANCELLED' };
         });
     }
 
@@ -248,29 +367,65 @@ class BookingService {
             });
 
             if (!booking) throw new AppError('Booking not found', 404, 'NOT_FOUND');
-            if (booking.paymentStatus === 'CANCELLED') throw new AppError('Cannot complete a cancelled booking', 400, 'BAD_REQUEST');
 
-            // Access control
-            if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && booking.assignedToId !== userId) {
-                throw new AppError('You do not have permission to modify this booking', 403, 'FORBIDDEN');
+            BookingService.assertOwnership(booking, userRole, userId);
+
+            if (booking.paymentStatus === 'CANCELLED') {
+                throw new AppError('Cannot complete a cancelled booking', 409, 'ALREADY_CANCELLED');
+            }
+            if (booking.paymentStatus === 'COMPLETED') {
+                throw new AppError('Payment is already completed for this booking', 409, 'ALREADY_COMPLETED');
             }
 
-            const updatedBooking = await tx.booking.update({
-                where: { id: bookingId },
+            const completed = await tx.booking.updateMany({
+                where: { id: bookingId, organizationId, paymentStatus: { in: ['PENDING', 'PARTIAL'] } },
                 data: { paymentStatus: 'COMPLETED' }
             });
+            if (completed.count === 0) {
+                throw new AppError('Payment status was updated concurrently by another user', 409, 'CONFLICT_CONCURRENCY');
+            }
 
             if (booking.propertyId) {
-                await tx.property.update({
-                    where: { id: booking.propertyId },
-                    data: {
-                        status: 'SOLD',
-                        version: { increment: 1 }
-                    }
+                // Close out inventory: RESERVED -> SOLD only (manual close-outs may already be SOLD)
+                await tx.property.updateMany({
+                    where: { id: booking.propertyId, organizationId, status: 'RESERVED' },
+                    data: { status: 'SOLD', version: { increment: 1 } }
                 });
             }
 
-            return updatedBooking;
+            return { ...booking, paymentStatus: 'COMPLETED' };
+        });
+    }
+
+    static async updatePaymentStatus(bookingId, paymentStatus, organizationId, userId, userRole) {
+        return await prisma.$transaction(async (tx) => {
+            const booking = await tx.booking.findFirst({
+                where: { id: bookingId, organizationId }
+            });
+
+            if (!booking) throw new AppError('Booking not found', 404, 'NOT_FOUND');
+
+            BookingService.assertOwnership(booking, userRole, userId);
+
+            if (booking.paymentStatus === 'CANCELLED') {
+                throw new AppError('Cannot change payment status of a cancelled booking', 409, 'ALREADY_CANCELLED');
+            }
+            if (booking.paymentStatus === 'COMPLETED') {
+                throw new AppError('Cannot demote a completed payment. Cancel the booking instead.', 409, 'PAYMENT_COMPLETED');
+            }
+            if (booking.paymentStatus === paymentStatus) {
+                return booking;
+            }
+
+            const updated = await tx.booking.updateMany({
+                where: { id: bookingId, organizationId, paymentStatus: { in: ['PENDING', 'PARTIAL'] } },
+                data: { paymentStatus }
+            });
+            if (updated.count === 0) {
+                throw new AppError('Payment status was updated concurrently by another user', 409, 'CONFLICT_CONCURRENCY');
+            }
+
+            return { ...booking, paymentStatus };
         });
     }
 }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
     Loader2, AlertCircle, Building2, Layers, Plus, Trash2, Pencil, Save,
-    Search, ArrowLeft, Archive, CheckCircle2, Home
+    Search, ArrowLeft, Archive, CheckCircle2, Home, Globe, GlobeLock, ExternalLink
 } from "lucide-react";
 import { fetchProjectById, updateProject, deleteProject } from "../../../../../lib/api/projects";
 import {
@@ -15,6 +15,7 @@ import { updateProperty } from "../../../../../lib/api/properties";
 import { PermissionGate } from "../../../../../features/auth/components/PermissionGate";
 import { showToast } from "../../../../../lib/toast";
 import { formatCurrency } from "../../../../../features/pipeline/helpers";
+import LocationSelector from "../../../../../components/shared/LocationSelector";
 
 const inputClass =
     "w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all";
@@ -63,6 +64,7 @@ export default function ProjectDetailPage() {
     const [unitSearch, setUnitSearch] = useState("");
     const [unitStatus, setUnitStatus] = useState("");
     const [configForm, setConfigForm] = useState({ name: "", bhk: "", areaSaleable: "", basePrice: "" });
+    const [locationSel, setLocationSel] = useState({ stateId: "", districtId: "", regionId: "" });
 
     const {
         data: project,
@@ -109,6 +111,20 @@ export default function ProjectDetailPage() {
             router.push("/dashboard/inventory");
         },
         onError: (err) => showToast(err?.message || "Failed to archive project", "error")
+    });
+
+    // Publish/unpublish the project on the public website (default: draft).
+    const togglePublish = useMutation({
+        mutationFn: (isPublic) => updateProject({ id: projectId, isPublic }),
+        onSuccess: (data) => {
+            showToast(
+                data?.isPublic
+                    ? "Project published to the public website"
+                    : "Project set back to draft — its public page now returns 404"
+            );
+            invalidate();
+        },
+        onError: (err) => showToast(err?.message || "Could not change publication", "error")
     });
 
     const addConfig = useMutation({
@@ -209,7 +225,14 @@ export default function ProjectDetailPage() {
                         </PermissionGate>
                         <PermissionGate permission="project:update">
                             <button
-                                onClick={() => setEditing((v) => !v)}
+                                onClick={() => {
+                                    setLocationSel({
+                                        stateId: project?.stateId || "",
+                                        districtId: project?.districtId || "",
+                                        regionId: project?.regionId || "",
+                                    });
+                                    setEditing((v) => !v);
+                                }}
                                 className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-bold inline-flex items-center gap-1.5"
                             >
                                 <Pencil size={14} /> {editing ? "Close Editor" : "Edit Project"}
@@ -243,11 +266,37 @@ export default function ProjectDetailPage() {
                                     {[project.locality, project.city, project.state].filter(Boolean).join(", ") || project.address}
                                     {project.developer ? ` · ${project.developer}` : ""}
                                 </p>
+                                {project.isPublic && project.publicSlug && (
+                                    <a
+                                        href={`/projects/${project.publicSlug}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-xs font-bold text-purple-600 hover:underline inline-flex items-center gap-1 mt-1"
+                                    >
+                                        <ExternalLink size={12} /> View public page
+                                    </a>
+                                )}
                             </div>
                         </div>
-                        <span className={`text-[11px] font-black px-3 py-1 rounded-full ${STATUS_BADGES[project.status] || "bg-gray-100 text-gray-700"}`}>
-                            {String(project.status || "").replace(/_/g, " ")}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <PermissionGate permission="project:update">
+                                <button
+                                    onClick={() => togglePublish.mutate(!project.isPublic)}
+                                    disabled={togglePublish.isPending}
+                                    className={`text-[11px] font-black px-3 py-1 rounded-full inline-flex items-center gap-1.5 disabled:opacity-50 ${
+                                        project.isPublic
+                                            ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                                            : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+                                    }`}
+                                >
+                                    {project.isPublic ? <Globe size={12} /> : <GlobeLock size={12} />}
+                                    {project.isPublic ? "Published" : "Draft"}
+                                </button>
+                            </PermissionGate>
+                            <span className={`text-[11px] font-black px-3 py-1 rounded-full ${STATUS_BADGES[project.status] || "bg-gray-100 text-gray-700"}`}>
+                                {String(project.status || "").replace(/_/g, " ")}
+                            </span>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mb-4">
@@ -268,14 +317,19 @@ export default function ProjectDetailPage() {
                         <form
                             onSubmit={(e) => {
                                 e.preventDefault();
+                                if ((locationSel.districtId || locationSel.regionId) && !locationSel.stateId) {
+                                    showToast("Select a state before choosing a district or area", "error");
+                                    return;
+                                }
                                 const fd = new FormData(e.currentTarget);
                                 saveProject.mutate({
                                     name: fd.get("name"),
                                     status: fd.get("status"),
                                     projectType: fd.get("projectType"),
                                     developer: fd.get("developer") || undefined,
-                                    city: fd.get("city") || undefined,
-                                    locality: fd.get("locality") || undefined,
+                                    stateId: locationSel.stateId || undefined,
+                                    districtId: locationSel.districtId || undefined,
+                                    regionId: locationSel.regionId || undefined,
                                     startingPrice: fd.get("startingPrice") ? Number(fd.get("startingPrice")) : undefined,
                                     totalUnits: fd.get("totalUnits") ? Number(fd.get("totalUnits")) : undefined,
                                     description: fd.get("description") || undefined,
@@ -299,8 +353,14 @@ export default function ProjectDetailPage() {
                                 </select>
                             </div>
                             <div><label className={labelClass}>Developer</label><input name="developer" defaultValue={project.developer || ""} className={inputClass} /></div>
-                            <div><label className={labelClass}>City</label><input name="city" defaultValue={project.city || ""} className={inputClass} /></div>
-                            <div><label className={labelClass}>Locality</label><input name="locality" defaultValue={project.locality || ""} className={inputClass} /></div>
+                            <div className="sm:col-span-2">
+                                <label className={labelClass}>Location (State / District / Area)</label>
+                                <LocationSelector
+                                    value={locationSel}
+                                    onChange={setLocationSel}
+                                    disabled={saveProject.isPending}
+                                />
+                            </div>
                             <div><label className={labelClass}>Starting Price (₹)</label><input name="startingPrice" type="number" min="0" defaultValue={project.startingPrice ?? ""} className={inputClass} /></div>
                             <div><label className={labelClass}>Total Units</label><input name="totalUnits" type="number" min="0" defaultValue={project.totalUnits ?? ""} className={inputClass} /></div>
                             <div className="sm:col-span-2 lg:col-span-3">

@@ -1,81 +1,53 @@
 "use client";
-import { useEffect, useState } from "react";
-import { fetchBookings, createBooking, updatePaymentStatus } from "../../../lib/api/bookings";
-import { fetchUsers } from "../../../lib/api/users";
+import Link from "next/link";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchBookings, updatePaymentStatus } from "../../../lib/api/bookings";
 import { showToast } from "../../../lib/toast";
-import Modal from "../../../components/shared/Modal";
 import { PermissionGate } from "../../../features/auth/components/PermissionGate";
+import { formatCurrency } from "../../../features/pipeline/helpers";
 
 const PAYMENT_STYLES = {
-    Paid: "bg-emerald-100 text-emerald-700",
-    COMPLETED: "bg-emerald-100 text-emerald-700",
-    Partial: "bg-orange-100 text-orange-600",
-    PARTIAL: "bg-orange-100 text-orange-600",
-    Pending: "bg-gray-100 text-gray-500",
     PENDING: "bg-gray-100 text-gray-500",
+    PARTIAL: "bg-orange-100 text-orange-600",
+    COMPLETED: "bg-emerald-100 text-emerald-700",
     CANCELLED: "bg-red-100 text-red-600"
 };
-const PAYMENT_ORDER = ["PENDING", "PARTIAL", "COMPLETED"];
+
+// Server-enforced transitions: PENDING <-> PARTIAL -> COMPLETED.
+// COMPLETED and CANCELLED are terminal for this control.
+const NEXT_STATUS = {
+    PENDING: "PARTIAL",
+    PARTIAL: "COMPLETED"
+};
 
 export default function DashboardBookingsPage() {
-    const [bookings, setBookings] = useState([]);
-    const [employees, setEmployees] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [form, setForm] = useState({ clientName: "", property: "", unit: "", amount: "", bookingDate: "", assignedTo: "" });
+    const queryClient = useQueryClient();
 
-    const loadData = async () => {
-        try {
-            const [bookRes, empData] = await Promise.all([
-                fetchBookings(),
-                fetchUsers()
-            ]);
-            const bookList = bookRes.bookings || bookRes || [];
-            setBookings(bookList);
-            const empList = empData || [];
-            setEmployees(empList);
-            if (empList.length && !form.assignedTo) setForm((f) => ({ ...f, assignedTo: empList[0].id }));
-        } catch (err) {
-            showToast(`Failed to load data: ${err.message}`, "error");
-        }
-    };
+    const { data, isLoading, isError, error, refetch } = useQuery({
+        queryKey: ["bookings"],
+        queryFn: () => fetchBookings({ limit: 100 }),
+        retry: 1
+    });
 
-    useEffect(() => {
-        loadData();
-    }, []);
+    const paymentMutation = useMutation({
+        mutationFn: ({ id, paymentStatus }) => updatePaymentStatus(id, paymentStatus),
+        onSuccess: () => showToast("Payment status updated"),
+        onError: (err) => showToast(err.message || "Failed to update payment status", "error"),
+        onSettled: () =>
+            queryClient.invalidateQueries({
+                predicate: (q) =>
+                    ["bookings", "properties", "inventory", "leads", "pipeline", "customers"].some((key) =>
+                        q.queryKey[0] === key
+                    )
+            })
+    });
 
-    const employeeName = (id) => employees.find((e) => e.id === id)?.name || "Unassigned";
+    const bookings = Array.isArray(data) ? data : data?.bookings || [];
 
-    const handleAdd = async (e) => {
-        e.preventDefault();
-        try {
-            // Note: form needs to be aligned with backend API expecting customerId and propertyId.
-            // For now, this requires a Customer and Property selection rather than just strings.
-            // As a mock migration step for the UI form:
-            await createBooking({ 
-                customerId: "00000000-0000-0000-0000-000000000000", // Needs a real picker
-                propertyId: "00000000-0000-0000-0000-000000000000", // Needs a real picker
-                amount: parseFloat(form.amount.replace(/[^0-9.]/g, '') || 0), 
-                paymentStatus: "PENDING" 
-            });
-            showToast(`Booking added`);
-            loadData();
-            setIsModalOpen(false);
-            setForm({ clientName: "", property: "", unit: "", amount: "", bookingDate: "", assignedTo: employees[0]?.id || "" });
-        } catch (err) {
-            showToast(`Failed to add booking: ${err.message}`, "error");
-        }
-    };
-
-    const cyclePayment = async (booking) => {
-        const current = booking.paymentStatus;
-        const next = PAYMENT_ORDER[(PAYMENT_ORDER.indexOf(current) + 1) % PAYMENT_ORDER.length];
-        try {
-            await updatePaymentStatus(booking.id, next);
-            showToast(`Payment status updated to ${next}`);
-            loadData();
-        } catch (err) {
-            showToast(`Failed to update status: ${err.message}`, "error");
-        }
+    const cyclePayment = (booking) => {
+        const next = NEXT_STATUS[booking.paymentStatus];
+        if (!next) return;
+        paymentMutation.mutate({ id: booking.id, paymentStatus: next });
     };
 
     return (
@@ -86,64 +58,94 @@ export default function DashboardBookingsPage() {
                     <p className="text-sm text-gray-500 mt-1">Confirmed sales and their payment status. Click a status to update it.</p>
                 </div>
                 <PermissionGate permission="booking:create">
-                    <button onClick={() => setIsModalOpen(true)} className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity shadow-sm shadow-purple-200">
-                        + Add Booking
-                    </button>
+                    <Link
+                        href="/dashboard/bookings/wizard"
+                        className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity shadow-sm shadow-purple-200"
+                    >
+                        + New Booking
+                    </Link>
                 </PermissionGate>
             </div>
 
             <div className="px-4 sm:px-8 pb-8">
-                <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                    <div className="hidden md:grid grid-cols-6 gap-4 px-6 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
-                        <span className="col-span-2">Client</span>
-                        <span>Property / Unit</span>
-                        <span>Amount</span>
-                        <span>Sales Exec</span>
-                        <span className="text-right">Payment</span>
+                {isLoading && (
+                    <div className="bg-white rounded-2xl shadow-sm p-6 space-y-3">
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
+                        ))}
                     </div>
-                    {bookings.map((b) => (
-                        <div key={b.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 md:gap-4 px-6 py-4 border-b border-gray-50 last:border-0 items-center">
-                            <div className="md:col-span-2">
-                                <p className="text-sm font-bold text-gray-900">{b.clientName}</p>
-                                <p className="text-xs text-gray-400">{b.bookingDate}</p>
-                            </div>
-                            <p className="text-sm text-gray-700">{b.property} · {b.unit}</p>
-                            <p className="text-sm font-bold text-emerald-600">{b.amount}</p>
-                            <p className="text-sm text-gray-500">{employeeName(b.assignedTo)}</p>
-                            <div className="md:text-right">
-                                <PermissionGate permission="booking:approve" fallback={
-                                    <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full ${PAYMENT_STYLES[b.paymentStatus]}`}>
-                                        {b.paymentStatus}
-                                    </span>
-                                }>
-                                    <button onClick={() => cyclePayment(b)} className={`text-[11px] font-bold px-3 py-1.5 rounded-full transition-transform hover:scale-105 ${PAYMENT_STYLES[b.paymentStatus]}`}>
-                                        {b.paymentStatus}
-                                    </button>
-                                </PermissionGate>
-                            </div>
-                        </div>
-                    ))}
-                    {bookings.length === 0 && <p className="text-sm text-gray-400 px-6 py-8">No bookings yet.</p>}
-                </div>
-            </div>
+                )}
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add Booking">
-                <form onSubmit={handleAdd} className="flex flex-col gap-4">
-                    <input required placeholder="Client Name" value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
-                    <div className="grid grid-cols-2 gap-4">
-                        <input required placeholder="Property" value={form.property} onChange={(e) => setForm({ ...form, property: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
-                        <input required placeholder="Unit No." value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                {isError && (
+                    <div className="bg-red-50 border border-red-100 rounded-2xl p-6 text-center">
+                        <p className="text-sm font-bold text-red-600 mb-2">Failed to load bookings</p>
+                        <p className="text-xs text-red-500 mb-3">{error?.message || "Unknown error"}</p>
+                        <button onClick={() => refetch()} className="text-xs font-bold text-red-600 underline">
+                            Retry
+                        </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <input required placeholder="Amount (e.g., ₹1.4 Cr)" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
-                        <input required type="date" value={form.bookingDate} onChange={(e) => setForm({ ...form, bookingDate: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                )}
+
+                {!isLoading && !isError && (
+                    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                        <div className="hidden md:grid grid-cols-6 gap-4 px-6 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
+                            <span className="col-span-2">Client</span>
+                            <span>Property / Unit</span>
+                            <span>Amount</span>
+                            <span>Sales Exec</span>
+                            <span className="text-right">Payment</span>
+                        </div>
+                        {bookings.map((b) => {
+                            const nextStatus = NEXT_STATUS[b.paymentStatus];
+                            return (
+                                <div key={b.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 md:gap-4 px-6 py-4 border-b border-gray-50 last:border-0 items-center">
+                                    <div className="md:col-span-2">
+                                        <p className="text-sm font-bold text-gray-900">{b.customer?.name || "Unknown customer"}</p>
+                                        <p className="text-xs text-gray-400">
+                                            {b.bookingDate ? new Date(b.bookingDate).toLocaleDateString() : "—"}
+                                            {b.lead?.name ? ` · Lead: ${b.lead.name}` : ""}
+                                        </p>
+                                    </div>
+                                    <p className="text-sm text-gray-700">
+                                        {b.project?.name || "—"} · {b.property ? (b.property.unitNumber || b.property.title) : "No unit"}
+                                    </p>
+                                    <p className="text-sm font-bold text-emerald-600">{formatCurrency(b.amount)}</p>
+                                    <p className="text-sm text-gray-500">{b.assignedTo?.name || "Unassigned"}</p>
+                                    <div className="md:text-right">
+                                        <PermissionGate permission="booking:update" fallback={
+                                            <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full ${PAYMENT_STYLES[b.paymentStatus] || ""}`}>
+                                                {b.paymentStatus}
+                                            </span>
+                                        }>
+                                            {nextStatus && !paymentMutation.isPending ? (
+                                                <button
+                                                    onClick={() => cyclePayment(b)}
+                                                    className={`text-[11px] font-bold px-3 py-1.5 rounded-full transition-transform hover:scale-105 ${PAYMENT_STYLES[b.paymentStatus] || ""}`}
+                                                    title={`Update to ${nextStatus}`}
+                                                >
+                                                    {b.paymentStatus}
+                                                </button>
+                                            ) : (
+                                                <span className={`text-[11px] font-bold px-3 py-1.5 rounded-full ${PAYMENT_STYLES[b.paymentStatus] || ""}`}>
+                                                    {b.paymentStatus}
+                                                </span>
+                                            )}
+                                        </PermissionGate>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {bookings.length === 0 && (
+                            <div className="px-6 py-10 text-center">
+                                <p className="text-sm font-bold text-gray-700">No bookings yet</p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    Convert an accepted quotation or use the booking wizard to reserve a unit.
+                                </p>
+                            </div>
+                        )}
                     </div>
-                    <select value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm">
-                        {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
-                    </select>
-                    <button type="submit" className="mt-2 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors">Save Booking</button>
-                </form>
-            </Modal>
+                )}
+            </div>
         </div>
     );
 }

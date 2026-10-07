@@ -20,8 +20,10 @@ const errorHandler = (err, req, res, next) => {
     console.error('ERROR 💥:', err.message);
     if (err.stack) console.error(err.stack);
 
-    // Handle Prisma-specific errors
-    if (err.code && err.code.startsWith('P')) {
+    // Handle Prisma-specific errors (operational AppErrors may also have
+    // codes starting with "P", e.g. PAYMENT_COMPLETED, and must not be
+    // mistaken for Prisma error codes like P2002)
+    if (err.code && err.code.startsWith('P') && !err.isOperational) {
         let message = err.message;
         let statusCode = 400;
 

@@ -4,35 +4,58 @@ import { useQuery } from "@tanstack/react-query";
 import Modal from "../../../../components/shared/Modal";
 import { useConvertLeadToBooking } from "../../hooks/useLeadMutations";
 import { fetchProperties } from "../../../../lib/api/properties";
+import { fetchQuotations } from "../../../../lib/api/quotations";
 import { formatCurrency } from "../../helpers";
 
 const inputClass =
     "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all";
 
 export default function ConvertLeadToBookingModal({ lead, isOpen, onClose }) {
-    const [propertyId, setPropertyId] = useState("");
-    const [amount, setAmount] = useState("");
+    const [manualPropertyId, setManualPropertyId] = useState("");
+    const [manualAmount, setManualAmount] = useState("");
     const convert = useConvertLeadToBooking();
 
+    const { data: quotations, isPending: quotationsPending } = useQuery({
+        queryKey: ["quotations", "lead-conversion", lead?.id],
+        queryFn: () => fetchQuotations({ leadId: lead.id, limit: 10 }),
+        enabled: isOpen && Boolean(lead?.id),
+        retry: 1
+    });
+
+    const acceptedQuotation = Array.isArray(quotations)
+        ? quotations.find((q) => q.status === "ACCEPTED")
+        : null;
+
     const { data: properties, isPending } = useQuery({
-        queryKey: ["properties", "available", "booking-conversion"],
-        queryFn: () => fetchProperties(null, { status: "AVAILABLE", limit: 200 }),
+        queryKey: ["properties", "available", "booking-conversion", lead?.projectId || "all"],
+        queryFn: () =>
+            fetchProperties(lead?.projectId || null, { status: "AVAILABLE", limit: 200 }),
         staleTime: 60 * 1000,
         retry: 1,
-        enabled: isOpen
+        enabled: isOpen && Boolean(lead)
     });
 
     if (!lead) return null;
 
+    // Quotation-derived values are the source of truth while an accepted
+    // quotation exists (server revalidates all of it) — derived during
+    // render, no effect needed.
+    const propertyId = acceptedQuotation?.propertyId || manualPropertyId;
+    const amount = acceptedQuotation?.totalAmount
+        ? String(Number(acceptedQuotation.totalAmount))
+        : manualAmount;
+
     const propertyList = Array.isArray(properties) ? properties : [];
     const amountValue = Number(amount);
-    const canSubmit = propertyId && amountValue > 0;
+    const lockedByQuotation = Boolean(acceptedQuotation && acceptedQuotation.propertyId);
+    const canSubmit = Boolean(propertyId) && (Boolean(acceptedQuotation) || amountValue > 0);
 
     const handlePropertyChange = (value) => {
-        setPropertyId(value);
+        if (lockedByQuotation) return;
+        setManualPropertyId(value);
         const selected = propertyList.find((p) => p.id === value);
-        if (selected && selected.price) {
-            setAmount(String(selected.price));
+        if (selected && selected.price && !acceptedQuotation) {
+            setManualAmount(String(selected.price));
         }
     };
 
@@ -40,17 +63,28 @@ export default function ConvertLeadToBookingModal({ lead, isOpen, onClose }) {
         event.preventDefault();
         if (!canSubmit) return;
         convert.mutate(
-            {
-                id: lead.id,
-                propertyId,
-                amount: amountValue,
-                paymentStatus: "PENDING"
-            },
+            acceptedQuotation
+                ? {
+                      id: lead.id,
+                      propertyId,
+                      quotationId: acceptedQuotation.id,
+                      paymentStatus: "PENDING"
+                  }
+                : {
+                      id: lead.id,
+                      propertyId,
+                      amount: amountValue,
+                      paymentStatus: "PENDING"
+                  },
             {
                 onSuccess: () => onClose()
             }
         );
     };
+
+    const quotationUnitLabel = acceptedQuotation?.property
+        ? `${acceptedQuotation.property.title}${acceptedQuotation.property.unitNumber ? ` • Unit ${acceptedQuotation.property.unitNumber}` : ""}`
+        : "any available unit in the quoted project";
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Convert to Booking" maxWidth="max-w-lg">
@@ -61,15 +95,30 @@ export default function ConvertLeadToBookingModal({ lead, isOpen, onClose }) {
                 This creates a real booking from this lead and reserves the unit. The lead moves to Booking automatically.
             </p>
 
+            {acceptedQuotation && (
+                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 mb-4 font-medium">
+                    Accepted quotation found: {formatCurrency(acceptedQuotation.totalAmount)} for {quotationUnitLabel}.
+                    The booking will link to it and the server will use the quotation total as the booking amount.
+                </div>
+            )}
+
+            {!acceptedQuotation && !quotationsPending && Array.isArray(quotations) && quotations.length > 0 && (
+                <div className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 mb-4">
+                    Quotations exist for this lead but none is ACCEPTED yet. Booking proceeds with the manual amount below.
+                </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Available unit *</label>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
+                        {acceptedQuotation ? "Quoted unit *" : lead.projectId ? "Available unit in lead's project *" : "Available unit *"}
+                    </label>
                     <select
                         required
                         value={propertyId}
                         onChange={(e) => handlePropertyChange(e.target.value)}
                         className={inputClass}
-                        disabled={isPending}
+                        disabled={isPending || lockedByQuotation}
                     >
                         <option value="">
                             {isPending ? "Loading available units..." : "Select a unit"}
@@ -82,8 +131,11 @@ export default function ConvertLeadToBookingModal({ lead, isOpen, onClose }) {
                                 {property.price ? ` — ${formatCurrency(property.price)}` : ""}
                             </option>
                         ))}
+                        {lockedByQuotation && !propertyList.some((p) => p.id === propertyId) && (
+                            <option value={propertyId}>{quotationUnitLabel}</option>
+                        )}
                     </select>
-                    {!isPending && propertyList.length === 0 && (
+                    {!isPending && propertyList.length === 0 && !lockedByQuotation && (
                         <p className="text-xs text-red-500 mt-1 font-semibold">
                             No available units found. Add or free up inventory first.
                         </p>
@@ -91,15 +143,18 @@ export default function ConvertLeadToBookingModal({ lead, isOpen, onClose }) {
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Booking amount (₹) *</label>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
+                        {acceptedQuotation ? "Quotation total (server enforced) *" : "Booking amount (₹) *"}
+                    </label>
                     <input
                         type="number"
                         required
                         min="1"
                         value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        onChange={(e) => setManualAmount(e.target.value)}
                         placeholder="e.g. 1500000"
-                        className={inputClass}
+                        readOnly={Boolean(acceptedQuotation)}
+                        className={`${inputClass} ${acceptedQuotation ? "bg-gray-100 text-gray-600 font-bold cursor-not-allowed" : ""}`}
                     />
                     {amountValue > 0 && <p className="text-xs text-gray-500 mt-1 font-semibold">{formatCurrency(amountValue)}</p>}
                 </div>

@@ -1,0 +1,180 @@
+
+> backend@1.0.0 start
+> node server.js
+
+◇ injected env (8) from .env
+◇ injected env (0) from .env
+Server running on port 8000
+ERROR 💥: Not logged in
+Error: Not logged in
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\middleware\auth.js:10:25
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\utils\errors.js:14:25
+    at Layer.handleRequest (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\layer.js:152:17)
+    at next (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\route.js:157:13)
+    at Route.dispatch (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\route.js:117:3)
+    at handle (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:435:11)
+    at Layer.handleRequest (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\layer.js:152:17)
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:295:15
+    at processParams (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:582:12)
+    at next (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:291:5)
+ERROR 💥: Not logged in
+Error: Not logged in
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\middleware\auth.js:10:25
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\utils\errors.js:14:25
+    at Layer.handleRequest (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\layer.js:152:17)
+    at next (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\route.js:157:13)
+    at Route.dispatch (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\route.js:117:3)
+    at handle (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:435:11)
+    at Layer.handleRequest (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\layer.js:152:17)
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:295:15
+    at processParams (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:582:12)
+    at next (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:291:5)
+ERROR 💥: Not logged in
+Error: Not logged in
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\middleware\auth.js:10:25
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\utils\errors.js:14:25
+    at Layer.handleRequest (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\layer.js:152:17)
+    at next (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\route.js:157:13)
+    at Route.dispatch (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\route.js:117:3)
+    at handle (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:435:11)
+    at Layer.handleRequest (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\lib\layer.js:152:17)
+    at C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:295:15
+    at processParams (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:582:12)
+    at next (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\router\index.js:291:5)
+ERROR 💥: Project not found
+Error: Project not found
+    at PROJECT_NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:19:33)
+    at PublicService.getProjectBySlug (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:192:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:40:21
+ERROR 💥: Project not found
+Error: Project not found
+    at PROJECT_NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:19:33)
+    at PublicService.getProjectBySlug (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:192:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:40:21
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:356:47)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:385:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:385:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Property is not published on the public website. Publish the project and the unit before sharing.
+Error: Property is not published on the public website. Publish the project and the unit before sharing.
+    at LeadService.buildPropertyShare (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\leadService.js:1179:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\leads.js:103:19
+ERROR 💥: Lead not found
+Error: Lead not found
+    at LeadService.buildPropertyShare (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\leadService.js:1148:26)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\leads.js:103:19
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:385:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Project not found
+Error: Project not found
+    at PROJECT_NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:19:33)
+    at PublicService.getProjectBySlug (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:192:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:40:21
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:385:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Project not found
+Error: Project not found
+    at PROJECT_NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:19:33)
+    at PublicService.getProjectBySlug (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:192:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:40:21
+ERROR 💥: Project not found
+Error: Project not found
+    at PROJECT_NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:19:33)
+    at PublicService.getProjectBySlug (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:192:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:40:21
+ERROR 💥: Project not found
+Error: Project not found
+    at PROJECT_NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:19:33)
+    at PublicService.getProjectBySlug (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:192:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:40:21
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:356:47)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:385:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:385:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Property is not published on the public website. Publish the project and the unit before sharing.
+Error: Property is not published on the public website. Publish the project and the unit before sharing.
+    at LeadService.buildPropertyShare (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\leadService.js:1179:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\leads.js:103:19
+ERROR 💥: Lead not found
+Error: Lead not found
+    at LeadService.buildPropertyShare (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\leadService.js:1148:26)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\leads.js:103:19
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:385:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Project not found
+Error: Project not found
+    at PROJECT_NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:19:33)
+    at PublicService.getProjectBySlug (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:192:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:40:21
+ERROR 💥: Property not found
+Error: Property not found
+    at NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:18:25)
+    at PublicService.getPropertyByToken (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:385:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:58:22
+ERROR 💥: Project not found
+Error: Project not found
+    at PROJECT_NOT_FOUND (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:19:33)
+    at PublicService.getProjectBySlug (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\publicService.js:192:29)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\public.js:40:21
+ERROR 💥: Site visit project does not match the lead project
+Error: Site visit project does not match the lead project
+    at SiteVisitService.resolveRefs (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\siteVisitService.js:43:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\leadService.js:239:34
+    at async Proxy._transactionWithCallback (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\node_modules\@prisma\client\runtime\client.js:99:4868)
+    at async LeadService.transitionStage (C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\services\leadService.js:211:16)
+    at async C:\Users\anute\Desktop\SpaceEzy\Spaceezy\backend\src\controllers\leads.js:244:20
+^C^C

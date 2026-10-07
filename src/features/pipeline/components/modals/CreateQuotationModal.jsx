@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Modal from "../../../../components/shared/Modal";
 import { useCreateQuotation } from "../../hooks/useLeadMutations";
 import { fetchProjects } from "../../../../lib/api/projects";
+import { fetchProperties } from "../../../../lib/api/properties";
 import { formatCurrency } from "../../helpers";
 
 const inputClass =
@@ -11,7 +12,9 @@ const inputClass =
 
 export default function CreateQuotationModal({ lead, isOpen, onClose }) {
     const [projectId, setProjectId] = useState("");
+    const [propertyId, setPropertyId] = useState("");
     const [totalAmount, setTotalAmount] = useState(lead?.budget ? String(lead.budget) : "");
+    const [amountTouched, setAmountTouched] = useState(Boolean(lead?.budget));
     const [notes, setNotes] = useState("");
     const createQuotation = useCreateQuotation();
 
@@ -23,18 +26,31 @@ export default function CreateQuotationModal({ lead, isOpen, onClose }) {
         enabled: isOpen
     });
 
+    const effectiveProjectId = projectId || lead?.projectId || "";
+
+    const { data: units, isLoading: unitsLoading } = useQuery({
+        queryKey: ["properties", "for-project", effectiveProjectId, "quotation"],
+        queryFn: () => fetchProperties(effectiveProjectId, { limit: 200 }),
+        enabled: isOpen && Boolean(effectiveProjectId),
+        staleTime: 60 * 1000,
+        retry: 1
+    });
+
     if (!lead) return null;
 
     const projectList = Array.isArray(projects) ? projects : [];
+    const unitList = Array.isArray(units) ? units : [];
+    const selectedUnit = unitList.find((unit) => unit.id === propertyId);
     const amount = Number(totalAmount);
-    const canSubmit = projectId && amount > 0;
+    const canSubmit = effectiveProjectId && amount > 0;
 
     const submit = (status) => {
         if (!canSubmit) return;
         createQuotation.mutate(
             {
                 leadId: lead.id,
-                projectId,
+                projectId: effectiveProjectId,
+                ...(propertyId ? { propertyId } : {}),
                 totalAmount: amount,
                 status,
                 notes: notes.trim() || undefined
@@ -49,7 +65,7 @@ export default function CreateQuotationModal({ lead, isOpen, onClose }) {
         <Modal isOpen={isOpen} onClose={onClose} title="Create Quotation" maxWidth="max-w-lg">
             <p className="text-sm text-gray-500 mb-5">
                 Prepare a quotation for <span className="font-bold text-gray-900">{lead.name}</span>.
-                {lead.project ? ` Currently interested in ${lead.project}.` : ""}
+                {lead.project?.name ? ` Currently interested in ${lead.project.name}.` : ""}
             </p>
 
             <form
@@ -63,8 +79,8 @@ export default function CreateQuotationModal({ lead, isOpen, onClose }) {
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Project *</label>
                     <select
                         required
-                        value={projectId}
-                        onChange={(e) => setProjectId(e.target.value)}
+                        value={effectiveProjectId}
+                        onChange={(e) => { setProjectId(e.target.value); setPropertyId(""); }}
                         className={inputClass}
                     >
                         <option value="">Select a project</option>
@@ -75,13 +91,41 @@ export default function CreateQuotationModal({ lead, isOpen, onClose }) {
                 </div>
 
                 <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Unit (optional)</label>
+                    <select
+                        value={propertyId}
+                        onChange={(e) => {
+                            const id = e.target.value;
+                            setPropertyId(id);
+                            const unit = unitList.find((u) => u.id === id);
+                            if (unit?.price && !amountTouched) {
+                                setTotalAmount(String(unit.price));
+                            }
+                        }}
+                        disabled={!effectiveProjectId || unitsLoading}
+                        className={`${inputClass} disabled:opacity-60`}
+                    >
+                        <option value="">{!effectiveProjectId ? "Select a project first" : unitsLoading ? "Loading units..." : "Whole project quotation"}</option>
+                        {unitList.map((unit) => (
+                            <option key={unit.id} value={unit.id} disabled={unit.status === "SOLD"}>
+                                {unit.unitNumber ? `Unit ${unit.unitNumber}` : unit.title}
+                                {unit.status === "SOLD" ? " (SOLD)" : unit.price ? ` — ₹${Number(unit.price).toLocaleString("en-IN")}` : ""}
+                            </option>
+                        ))}
+                    </select>
+                    {selectedUnit?.price && (
+                        <p className="text-xs text-gray-500 mt-1 font-semibold">List price {formatCurrency(Number(selectedUnit.price))}</p>
+                    )}
+                </div>
+
+                <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Quotation amount (₹) *</label>
                     <input
                         type="number"
                         required
                         min="1"
                         value={totalAmount}
-                        onChange={(e) => setTotalAmount(e.target.value)}
+                        onChange={(e) => { setTotalAmount(e.target.value); setAmountTouched(true); }}
                         placeholder="e.g. 8500000"
                         className={inputClass}
                     />

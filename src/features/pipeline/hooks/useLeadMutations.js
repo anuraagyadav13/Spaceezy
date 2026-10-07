@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { transitionLeadStage, logLeadContact, scheduleLeadFollowUp, createLeadBooking, bulkAssignLeads } from "../../../lib/api/leads";
-import { createQuotation } from "../../../lib/api/quotations";
+import { createQuotation, updateQuotationStatus } from "../../../lib/api/quotations";
 import { showToast } from "../../../lib/toast";
 
 const toErrorMessage = (error) => {
@@ -13,7 +13,7 @@ const invalidateAll = (queryClient, keys) => {
     keys.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
 };
 
-const CORE_KEYS = ["pipeline", "leads", "lead", "activities"];
+const CORE_KEYS = ["pipeline", "leads", "lead", "activities", "siteVisits", "timeline", "agenda", "needs-attention"];
 
 export const useTransitionLeadStage = () => {
     const queryClient = useQueryClient();
@@ -74,6 +74,16 @@ export const useCreateQuotation = () => {
         mutationFn: (data) => createQuotation(data),
         onSuccess: (_data, vars) =>
             showToast(vars?.status === "DRAFT" ? "Quotation saved as draft" : "Quotation sent"),
+        onError: (error) => showToast(toErrorMessage(error), "error"),
+        onSettled: () => invalidateAll(queryClient, [...CORE_KEYS, "quotations", "tasks", "follow-ups"])
+    });
+};
+
+export const useUpdateQuotationStatus = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, status, notes }) => updateQuotationStatus({ id, status, notes }),
+        onSuccess: () => showToast("Quotation status updated"),
         onError: (error) => showToast(toErrorMessage(error), "error"),
         onSettled: () => invalidateAll(queryClient, [...CORE_KEYS, "quotations", "tasks", "follow-ups"])
     });

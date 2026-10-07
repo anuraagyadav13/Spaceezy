@@ -52,6 +52,9 @@ const tolerantJsonParser = (req, res, next) => {
     req.on('end', () => {
         const rawBody = Buffer.concat(chunks).toString('utf8');
 
+        // Keep the exact raw bytes for webhook signature verification.
+        req.rawBody = rawBody;
+
         if (!rawBody.trim()) {
             req.body = {};
             return next();
@@ -104,6 +107,11 @@ const customerRoutes = require('./routes/customers');
 const taskRoutes = require('./routes/tasks');
 const bookingRoutes = require('./routes/bookings');
 const quotationRoutes = require('./routes/quotations');
+const callRoutes = require('./routes/calls');
+const whatsappRoutes = require('./routes/whatsapp');
+const activityRoutes = require('./routes/activities');
+const locationRoutes = require('./routes/locations');
+const webhookRoutes = require('./controllers/webhooks');
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/leads', leadRoutes);
@@ -116,6 +124,15 @@ app.use('/api/v1/customers', customerRoutes);
 app.use('/api/v1/tasks', taskRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
 app.use('/api/v1/quotations', quotationRoutes);
+app.use('/api/v1/calls', callRoutes);
+app.use('/api/v1/whatsapp', whatsappRoutes);
+app.use('/api/v1/activities', activityRoutes);
+app.use('/api/v1/locations', locationRoutes);
+
+// Provider webhooks (authenticated by HMAC signature, not by session)
+app.get('/api/v1/webhooks/whatsapp', webhookRoutes.whatsappWebhookVerify);
+app.post('/api/v1/webhooks/telephony/:provider', webhookRoutes.telephonyWebhook);
+app.post('/api/v1/webhooks/whatsapp/:provider', webhookRoutes.whatsappWebhook);
 
 // Error handling
 app.use(notFoundHandler);

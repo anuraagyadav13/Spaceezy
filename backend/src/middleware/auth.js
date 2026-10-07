@@ -50,83 +50,99 @@ const requireRole = (roles) => {
     };
 };
 
+const ROLE_PERMISSIONS = {
+    SUPER_ADMIN: [
+        'lead:view', 'lead:create', 'lead:update', 'lead:delete',
+        'lead:assign', 'lead:merge',
+        'employee:view', 'employee:create', 'employee:update', 'employee:delete',
+        'inventory:view', 'inventory:create', 'inventory:update',
+        'booking:view', 'booking:create', 'booking:update', 'booking:approve',
+        'payment:view', 'payment:create',
+        'commission:view', 'commission:approve',
+        'site_visit:view', 'site_visit:create', 'site_visit:update', 'site_visit:delete',
+        'customer:view', 'customer:create', 'customer:update', 'customer:delete',
+        'task:view', 'task:create', 'task:update', 'task:delete',
+        'project:view', 'project:create', 'project:update', 'project:delete',
+        'quotation:view', 'quotation:create', 'quotation:update',
+        'call:view', 'call:create', 'call:update',
+        'whatsapp:view', 'whatsapp:create', 'whatsapp:manage',
+        'recording:view', 'pii:view',
+    ],
+    ADMIN: [
+        'lead:view', 'lead:create', 'lead:update',
+        'lead:assign', 'lead:merge',
+        'employee:view', 'employee:update',
+        'inventory:view', 'inventory:create', 'inventory:update',
+        'booking:view', 'booking:create', 'booking:update',
+        'payment:view',
+        'commission:view',
+        'site_visit:view', 'site_visit:create', 'site_visit:update', 'site_visit:delete',
+        'customer:view', 'customer:create', 'customer:update',
+        'task:view', 'task:create', 'task:update', 'task:delete',
+        'project:view', 'project:create', 'project:update',
+        'quotation:view', 'quotation:create', 'quotation:update',
+        'call:view', 'call:create', 'call:update',
+        'whatsapp:view', 'whatsapp:create', 'whatsapp:manage',
+        'recording:view', 'pii:view',
+    ],
+    SALES_MANAGER: [
+        'lead:view', 'lead:create', 'lead:update',
+        'lead:assign', 'lead:merge',
+        'booking:view', 'booking:create', 'booking:update',
+        'inventory:view',
+        'site_visit:view', 'site_visit:create', 'site_visit:update',
+        'customer:view', 'customer:create', 'customer:update',
+        'task:view', 'task:create', 'task:update', 'task:delete',
+        'project:view',
+        'employee:view',
+        'quotation:view', 'quotation:create', 'quotation:update',
+        'call:view', 'call:create', 'call:update',
+        'whatsapp:view', 'whatsapp:create', 'whatsapp:manage',
+        'recording:view',
+    ],
+    SALES_EXECUTIVE: [
+        'lead:view', 'lead:create', 'lead:update',
+        'booking:view', 'booking:create',
+        'inventory:view',
+        'site_visit:view', 'site_visit:create', 'site_visit:update',
+        'customer:view', 'customer:create', 'customer:update',
+        'task:view', 'task:create', 'task:update',
+        'project:view',
+        'quotation:view', 'quotation:create', 'quotation:update',
+        'call:view', 'call:create', 'call:update',
+        'whatsapp:view', 'whatsapp:create',
+    ],
+    CHANNEL_PARTNER: [
+        'lead:view', 'lead:create',
+        'site_visit:view',
+        'task:view',
+        'project:view',
+        'inventory:view',
+        'quotation:view',
+    ],
+};
+
 const requirePermission = (permission) => {
     return (req, res, next) => {
-        // Here we map roles to permissions as defined in the requirements
-        const rolePermissions = {
-            SUPER_ADMIN: [
-                'lead:view', 'lead:create', 'lead:update', 'lead:delete',
-                'lead:assign', 'lead:merge',
-                'employee:view', 'employee:create', 'employee:update', 'employee:delete',
-                'inventory:view', 'inventory:create', 'inventory:update',
-                'booking:view', 'booking:create', 'booking:update', 'booking:approve',
-                'payment:view', 'payment:create',
-                'commission:view', 'commission:approve',
-                'site_visit:view', 'site_visit:create', 'site_visit:update', 'site_visit:delete',
-                'customer:view', 'customer:create', 'customer:update', 'customer:delete',
-                'task:view', 'task:create', 'task:update', 'task:delete',
-                'project:view', 'project:create', 'project:update', 'project:delete',
-                'quotation:view', 'quotation:create', 'quotation:update',
-            ],
-            ADMIN: [
-                'lead:view', 'lead:create', 'lead:update',
-                'lead:assign', 'lead:merge',
-                'employee:view',
-                'inventory:view', 'inventory:create', 'inventory:update',
-                'booking:view', 'booking:create', 'booking:update',
-                'payment:view',
-                'commission:view',
-                'site_visit:view', 'site_visit:create', 'site_visit:update', 'site_visit:delete',
-                'customer:view', 'customer:create', 'customer:update',
-                'task:view', 'task:create', 'task:update', 'task:delete',
-                'project:view', 'project:create', 'project:update',
-                'quotation:view', 'quotation:create', 'quotation:update',
-            ],
-            SALES_MANAGER: [
-                'lead:view', 'lead:create', 'lead:update',
-                'lead:assign', 'lead:merge',
-                'booking:view', 'booking:create', 'booking:update',
-                'inventory:view',
-                'site_visit:view', 'site_visit:create', 'site_visit:update',
-                'customer:view', 'customer:create', 'customer:update',
-                'task:view', 'task:create', 'task:update',
-                'project:view',
-                'employee:view',
-                'quotation:view', 'quotation:create', 'quotation:update',
-            ],
-            SALES_EXECUTIVE: [
-                'lead:view', 'lead:create', 'lead:update',
-                'booking:view', 'booking:create',
-                'inventory:view',
-                'site_visit:view', 'site_visit:create', 'site_visit:update',
-                'customer:view', 'customer:create', 'customer:update',
-                'task:view', 'task:create', 'task:update',
-                'project:view',
-                'quotation:view', 'quotation:create', 'quotation:update',
-            ],
-            CHANNEL_PARTNER: [
-                'lead:view', 'lead:create',
-                'site_visit:view',
-                'task:view',
-                'project:view',
-                'inventory:view',
-                'quotation:view',
-            ],
-        };
-        
         const userRole = req.auth.role;
-        const permissions = rolePermissions[userRole] || [];
-        
+        const permissions = ROLE_PERMISSIONS[userRole] || [];
+
         if (!permissions.includes(permission)) {
             return next(new AppError(`You lack the required permission: ${permission}`, 403, 'FORBIDDEN'));
         }
-        
+
         next();
     };
+};
+
+const hasPermission = (role, permission) => {
+    return (ROLE_PERMISSIONS[role] || []).includes(permission);
 };
 
 module.exports = {
     requireAuth,
     requireRole,
-    requirePermission
+    requirePermission,
+    hasPermission,
+    ROLE_PERMISSIONS
 };

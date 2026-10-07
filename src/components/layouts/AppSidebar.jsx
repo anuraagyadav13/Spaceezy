@@ -115,6 +115,7 @@ const NAVIGATION_GROUPS = [
             { label: "Roles & Permissions", href: "/dashboard/admin/roles" },
             { label: "Workflow Rules", href: "/dashboard/admin/workflows" },
             { label: "Integrations", href: "/dashboard/admin/integrations" },
+            { label: "Location Management", href: "/dashboard/admin/locations" },
             { label: "Audit Logs", href: "/dashboard/admin/audit" }
         ]
     }

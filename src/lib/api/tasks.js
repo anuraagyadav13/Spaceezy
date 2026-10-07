@@ -36,3 +36,13 @@ export const fetchOverdueTasks = async () => {
     const response = await apiClient.get('/tasks/overdue');
     return response;
 };
+
+export const updateTaskStatus = async ({ id, status }) => {
+    const response = await apiClient.patch(`/tasks/${id}/status`, { status });
+    return response;
+};
+
+export const rescheduleTask = async ({ id, dueDate, reason }) => {
+    const response = await apiClient.patch(`/tasks/${id}/reschedule`, { dueDate, reason });
+    return response;
+};

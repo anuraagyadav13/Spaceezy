@@ -72,7 +72,7 @@ const updatePaymentStatus = asyncHandler(async (req, res) => {
     } else if (paymentStatus === 'COMPLETED') {
         booking = await BookingService.completePayment(id, organizationId, userId, role);
     } else {
-        throw new AppError('Invalid payment status transition', 400, 'BAD_REQUEST');
+        booking = await BookingService.updatePaymentStatus(id, paymentStatus, organizationId, userId, role);
     }
 
     res.status(200).json({

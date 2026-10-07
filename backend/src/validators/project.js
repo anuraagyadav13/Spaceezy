@@ -48,10 +48,13 @@ const createProjectSchema = {
         description: z.string().optional(),
         shortDescription: z.string().optional(),
 
-        // Location
+        // Location (canonical hierarchy FKs + legacy free-text display columns)
         locality: z.string().optional(),
         city: z.string().optional(),
         state: z.string().optional(),
+        stateId: z.string().uuid().nullish(),
+        districtId: z.string().uuid().nullish(),
+        regionId: z.string().uuid().nullish(),
         pincode: z.string().optional(),
         latitude: z.number().optional(),
         longitude: z.number().optional(),
@@ -90,6 +93,9 @@ const createProjectSchema = {
         images: z.array(z.string()).optional(),
         documents: z.array(documentItemSchema).optional(),
         connectivity: z.array(connectivityItemSchema).optional(),
+
+        // Public website publication
+        isPublic: z.boolean().optional(),
     })
 };
 
@@ -107,6 +113,9 @@ const updateProjectSchema = {
         locality: z.string().optional(),
         city: z.string().optional(),
         state: z.string().optional(),
+        stateId: z.string().uuid().nullish(),
+        districtId: z.string().uuid().nullish(),
+        regionId: z.string().uuid().nullish(),
         pincode: z.string().optional(),
         latitude: z.number().optional(),
         longitude: z.number().optional(),
@@ -141,6 +150,7 @@ const updateProjectSchema = {
         images: z.array(z.string()).optional(),
         documents: z.array(documentItemSchema).optional(),
         connectivity: z.array(connectivityItemSchema).optional(),
+        isPublic: z.boolean().optional(),
     })
 };
 

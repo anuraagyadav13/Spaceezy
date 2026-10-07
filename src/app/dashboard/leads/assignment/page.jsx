@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { fetchLeads, bulkAssignLeads } from "../../../../lib/api/leads";
 import { fetchUsers } from "../../../../lib/api/users";
 import { showToast } from "../../../../lib/toast";
+import { PermissionGate } from "../../../../features/auth/components/PermissionGate";
 import { Users, ArrowRightLeft, CheckCircle2 } from "lucide-react";
 
-export default function LeadAssignmentPage() {
+function LeadAssignmentContent() {
     const [leads, setLeads] = useState([]);
     const [employees, setEmployees] = useState([]);
     const [selectedEmployee, setSelectedEmployee] = useState("");
@@ -116,5 +117,21 @@ export default function LeadAssignmentPage() {
                 </table>
             </div>
         </div>
+    );
+}
+
+export default function LeadAssignmentPage() {
+    return (
+        <PermissionGate
+            permission="lead:assign"
+            fallback={
+                <div className="p-8 text-center text-gray-500">
+                    <p className="font-bold text-gray-700 mb-1">Access restricted</p>
+                    <p className="text-sm">You do not have permission to bulk-assign leads. Contact your administrator.</p>
+                </div>
+            }
+        >
+            <LeadAssignmentContent />
+        </PermissionGate>
     );
 }

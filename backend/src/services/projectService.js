@@ -1,5 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const LocationService = require('./locationService');
+const { generatePublicSlug } = require('../utils/publicLink');
 
 class ProjectService {
     // Writable Project scalar fields (mass-assignment protection: arbitrary
@@ -7,12 +9,14 @@ class ProjectService {
     static WRITABLE_FIELDS = [
         'name', 'projectType', 'status', 'developer', 'description', 'shortDescription',
         'address', 'locality', 'city', 'state', 'pincode', 'latitude', 'longitude',
+        'stateId', 'districtId', 'regionId',
         'mapUrl', 'landmark', 'totalLandArea', 'landAreaUnit', 'totalTowers',
         'totalFloors', 'totalUnits', 'availableUnits', 'launchDate',
         'expectedCompletionDate', 'possessionDate', 'reraRegistered', 'reraNumber',
         'reraAuthority', 'startingPrice', 'maximumPrice', 'pricePerSqFt', 'priceUnit',
         'maintenanceCharges', 'plcCharges', 'parkingCharges', 'clubCharges',
-        'otherCharges', 'amenities', 'images', 'documents', 'connectivity'
+        'otherCharges', 'amenities', 'images', 'documents', 'connectivity',
+        'isPublic'
     ];
 
     /**
@@ -64,6 +68,49 @@ class ProjectService {
         });
 
         return payload;
+    }
+
+    /**
+     * Validates canonical location FKs (state -> district -> region) against the
+     * location master and denormalizes their names into the legacy free-text
+     * columns (state/city/locality) so existing displays and text-based matching
+     * keep working off the same single source of truth.
+     */
+    static async applyCanonicalLocation(payload) {
+        const has = (field) => Object.prototype.hasOwnProperty.call(payload, field);
+        const hasState = has('stateId');
+        const hasDistrict = has('districtId');
+        const hasRegion = has('regionId');
+        if (!hasState && !hasDistrict && !hasRegion) return;
+
+        const stateId = hasState ? payload.stateId : null;
+
+        if (!stateId) {
+            if (payload.districtId || payload.regionId) {
+                throw new AppError('stateId is required when districtId or regionId is provided', 400, 'INVALID_LOCATION');
+            }
+            if (hasState) payload.stateId = null;
+            if (hasDistrict) payload.districtId = null;
+            if (hasRegion) payload.regionId = null;
+            return;
+        }
+
+        const [row] = await LocationService.validateSelections([{
+            stateId,
+            districtId: hasDistrict ? (payload.districtId || null) : null,
+            regionId: hasRegion ? (payload.regionId || null) : null
+        }]);
+
+        payload.stateId = row.stateId;
+        if (hasDistrict) payload.districtId = row.districtId;
+        // A region always belongs to a district: re-selection is required when
+        // the district changes without a new regionId.
+        if (hasDistrict && !hasRegion) payload.regionId = null;
+        if (hasRegion) payload.regionId = row.regionId;
+
+        payload.state = row.stateName;
+        if (hasDistrict) payload.city = row.districtName;
+        if (hasRegion) payload.locality = row.regionName;
     }
 
     static async getProjects(organizationId, query) {
@@ -258,25 +305,36 @@ class ProjectService {
             payload.address = payload.name || 'TBD';
         }
 
-        try {
-            return await prisma.project.create({
-                data: {
-                    ...payload,
-                    organizationId
-                }
-            });
-        } catch (err) {
-            console.error('=== PROJECT CREATE ERROR ===');
-            console.error('Prisma error:', err.message);
-            console.error('Error code:', err.code);
-            console.error('Meta:', err.meta);
-            console.error('Payload sent:', JSON.stringify({ ...payload, organizationId }, null, 2));
-            throw new AppError(
-                `Failed to create project: ${err.message}`,
-                400,
-                'CREATE_FAILED'
-            );
+        await ProjectService.applyCanonicalLocation(payload);
+
+        // URL-safe public slug (name + short random suffix, unique). Retry on
+        // the unlikely collision instead of failing the create.
+        for (let attempt = 0; attempt < 4; attempt++) {
+            try {
+                return await prisma.project.create({
+                    data: {
+                        ...payload,
+                        organizationId,
+                        publicSlug: payload.publicSlug || generatePublicSlug(payload.name)
+                    }
+                });
+            } catch (err) {
+                const target = err.code === 'P2002' ? String((err.meta && err.meta.target) || '') : '';
+                if (err.code === 'P2002' && target.includes('publicSlug')) continue;
+                console.error('=== PROJECT CREATE ERROR ===');
+                console.error('Prisma error:', err.message);
+                console.error('Error code:', err.code);
+                console.error('Meta:', err.meta);
+                console.error('Payload sent:', JSON.stringify({ ...payload, organizationId }, null, 2));
+                throw new AppError(
+                    `Failed to create project: ${err.message}`,
+                    400,
+                    'CREATE_FAILED'
+                );
+            }
         }
+        // Unreachable in practice; keeps the contract explicit.
+        throw new AppError('Could not allocate a unique public slug, please retry', 503, 'SERVICE_UNAVAILABLE');
     }
 
     static async updateProject(id, data, organizationId) {
@@ -284,6 +342,7 @@ class ProjectService {
         if (!existing) throw new AppError('Project not found', 404, 'NOT_FOUND');
 
         const payload = ProjectService.normalizePayload(data);
+        await ProjectService.applyCanonicalLocation(payload);
 
         return await prisma.project.update({
             where: { id },

@@ -47,7 +47,7 @@ const STAGE_MODAL = {
 
 const ACTION_PERMISSION = {
     contact: "lead:update",
-    assign: "lead:update",
+    assign: "lead:assign",
     followUp: "task:create",
     siteVisit: "lead:update",
     quotation: "quotation:create",

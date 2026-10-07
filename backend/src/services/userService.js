@@ -1,6 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const argon2 = require('argon2');
+const LeadService = require('./leadService');
 
 class UserService {
     static async getUsers(organizationId, query) {
@@ -32,6 +33,7 @@ class UserService {
                     phone: true,
                     role: true,
                     status: true,
+                    selfClaimLimit: true,
                     createdAt: true
                 }
             }),
@@ -51,6 +53,7 @@ class UserService {
                 phone: true,
                 role: true,
                 status: true,
+                selfClaimLimit: true,
                 createdAt: true
             }
         });
@@ -110,7 +113,8 @@ class UserService {
                 email: true,
                 phone: true,
                 role: true,
-                status: true
+                status: true,
+                selfClaimLimit: true
             }
         });
 
@@ -141,11 +145,15 @@ class UserService {
                 phone: true,
                 role: true,
                 status: true,
+                selfClaimLimit: true,
                 createdAt: true
             }
         });
 
         if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+
+        const claimLimit = user.selfClaimLimit ?? 0;
+        const selfClaimedActive = await LeadService.countActiveSelfClaims(prisma, id);
 
         const [leads, clients, siteVisits, bookings, followups] = await Promise.all([
             prisma.lead.findMany({
@@ -168,7 +176,14 @@ class UserService {
             }),
             prisma.booking.findMany({
                 where: { assignedToId: id, organizationId },
-                select: { id: true, clientName: true, property: true, amount: true, paymentStatus: true },
+                select: {
+                    id: true,
+                    amount: true,
+                    paymentStatus: true,
+                    bookingDate: true,
+                    customer: { select: { name: true } },
+                    property: { select: { title: true } }
+                },
                 take: 20,
                 orderBy: { createdAt: 'desc' }
             }),
@@ -182,6 +197,9 @@ class UserService {
 
         return {
             ...user,
+            selfClaimLimit: claimLimit,
+            selfClaimedActive,
+            selfClaimRemaining: Math.max(0, claimLimit - selfClaimedActive),
             leads,
             clients,
             siteVisits,
