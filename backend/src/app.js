@@ -8,6 +8,24 @@ dotenv.config();
 
 const app = express();
 
+// Production hardening -------------------------------------------------------
+// Never advertise the framework.
+app.disable('x-powered-by');
+
+// Behind Nginx, trust exactly one proxy hop so req.ip (rate limiting) and
+// req.protocol reflect the real client, not Nginx's loopback address.
+// Override with TRUST_PROXY=<hop count|subnet|'false'> only if topology changes.
+const trustProxy = process.env.TRUST_PROXY;
+app.set('trust proxy', trustProxy === undefined || trustProxy === '' || trustProxy === 'true'
+    ? 'loopback'
+    : (trustProxy === 'false' ? false : trustProxy));
+
+// Explicit CORS allow-list (comma-separated). Never '*' for credentialed APIs.
+const corsOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:3000')
+    .split(',')
+    .map((o) => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
 const normalizeLegacyJsonBody = (rawBody) => {
     if (!rawBody || !rawBody.trim()) return {};
 
@@ -73,27 +91,48 @@ const tolerantJsonParser = (req, res, next) => {
 };
 
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin(origin, callback) {
+        // Non-browser callers (server-to-server, curl, health checks) send no Origin.
+        if (!origin) return callback(null, true);
+        const normalized = origin.replace(/\/+$/, '');
+        callback(null, corsOrigins.includes(normalized));
+    },
     credentials: true,
 }));
 
 app.use(tolerantJsonParser);
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
-// Health check endpoint
-app.get('/api/v1/health', (req, res) => {
-    // Until PostgreSQL is configured, do not falsely report connected
-    const dbStatus = process.env.DATABASE_URL ? 'configured' : 'not_configured';
-    
+// Health check (safe: status booleans only, never connection strings/secrets).
+// /health is an alias for infrastructure probes (Docker, uptime monitors).
+const healthHandler = async (req, res) => {
+    let database = 'not_configured';
+    if (process.env.DATABASE_URL) {
+        database = 'down';
+        try {
+            const prisma = require('./db/prisma');
+            await Promise.race([
+                prisma.$queryRaw`SELECT 1`,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('health timeout')), 2500)),
+            ]);
+            database = 'up';
+        } catch {
+            database = 'down';
+        }
+    }
+
     res.json({
         success: true,
         data: {
             status: 'ok',
-            database: dbStatus
-        }
+            database,
+        },
     });
-});
+};
+
+app.get('/api/v1/health', healthHandler);
+app.get('/health', healthHandler);
 
 // Setup routes
 const authRoutes = require('./routes/auth');
@@ -111,6 +150,7 @@ const callRoutes = require('./routes/calls');
 const whatsappRoutes = require('./routes/whatsapp');
 const activityRoutes = require('./routes/activities');
 const locationRoutes = require('./routes/locations');
+const uploadRoutes = require('./routes/uploads');
 const webhookRoutes = require('./controllers/webhooks');
 
 app.use('/api/v1/auth', authRoutes);
@@ -128,6 +168,7 @@ app.use('/api/v1/calls', callRoutes);
 app.use('/api/v1/whatsapp', whatsappRoutes);
 app.use('/api/v1/activities', activityRoutes);
 app.use('/api/v1/locations', locationRoutes);
+app.use('/api/v1/uploads', uploadRoutes);
 
 // Provider webhooks (authenticated by HMAC signature, not by session)
 app.get('/api/v1/webhooks/whatsapp', webhookRoutes.whatsappWebhookVerify);

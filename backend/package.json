@@ -17,6 +17,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1147.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "argon2": "^0.45.1",
@@ -26,12 +27,12 @@
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.0",
     "pg": "^8.23.1",
+    "prisma": "^7.10.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "jest": "^30.5.2",
     "nodemon": "^3.1.14",
-    "prisma": "^7.10.0",
     "supertest": "^7.3.0"
   }
 }

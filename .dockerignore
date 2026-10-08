@@ -1,0 +1,25 @@
+# Build context hygiene — keep the frontend image small and reproducible.
+.git
+.gitignore
+.next
+node_modules
+**/node_modules
+backend
+docker-compose*.yml
+nginx
+docs
+*.log
+.tmp-*.log
+.env
+.env.*
+!.env.example
+coverage
+**/coverage
+.code-review-graph
+.freebuff
+eslint-report.json
+eslint.json
+lint_results.txt
+AGENTS.md
+CLAUDE.md
+.mcp.json

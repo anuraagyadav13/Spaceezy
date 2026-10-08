@@ -9,6 +9,7 @@ import {
     Store, Combine
 } from "lucide-react";
 import { createProject } from "../../../../../lib/api/projects";
+import { uploadImageFile, isStorageNotConfigured } from "../../../../../lib/api/uploads";
 import { showToast } from "../../../../../lib/toast";
 import { AmenitiesSelector } from "../../../../../components/AmenitiesSelector";
 import LocationSelector from "../../../../../components/shared/LocationSelector";
@@ -171,10 +172,25 @@ export default function AddProjectPage() {
         }));
 
     /* ──── image helpers ──── */
-    const handleImageUpload = (e) => {
-        const files = Array.from(e.target.files);
+    const handleImageUpload = async (e) => {
+        const input = e.target;
+        const files = Array.from(input.files);
         if (!files.length) return;
-        const urls = files.map((f) => URL.createObjectURL(f));
+        input.value = "";
+        const urls = [];
+        for (const file of files) {
+            try {
+                urls.push(await uploadImageFile(file));
+            } catch (err) {
+                if (isStorageNotConfigured(err)) {
+                    // Local development without S3: keep the transient preview.
+                    urls.push(URL.createObjectURL(file));
+                } else {
+                    showToast(`Image upload failed: ${err?.message || "unknown error"}`, "error");
+                }
+            }
+        }
+        if (!urls.length) return;
         setForm((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
     };
 

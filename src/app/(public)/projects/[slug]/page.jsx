@@ -5,7 +5,7 @@ import {
     MapPin, Building, CheckCircle2, FileText, Calendar, Home, LayoutGrid, ImageOff
 } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 // Public project page by canonical slug (no internal IDs in URLs).
 // ISR (60s): published marketing content can lag admin edits by at most a

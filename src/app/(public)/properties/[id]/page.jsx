@@ -3,7 +3,7 @@ import Link from "next/link";
 import { formatPrice } from "../../../../utils/format";
 import { MapPin, Maximize, Compass, ArrowLeft, Building2, ImageOff } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 // Public property page by opaque share token (never an internal unit ID).
 // Fetched server-side so crawlers get full HTML + OG metadata.

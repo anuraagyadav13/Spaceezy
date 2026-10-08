@@ -49,7 +49,9 @@ const login = asyncHandler(async (req, res, next) => {
     // Set cookie
     res.cookie(cookieName, token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        // COOKIE_SECURE=false exists only for HTTP local smoke tests of the
+        // production image; never set it in a real deployment.
+        secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false',
         sameSite: 'lax',
         expires: expiresAt
     });

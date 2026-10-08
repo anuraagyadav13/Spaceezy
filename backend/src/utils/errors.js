@@ -59,11 +59,13 @@ const errorHandler = (err, req, res, next) => {
         });
     }
 
-    // Unhandled errors — still return the actual message for debugging
+    // Unhandled errors — never leak internals (stack traces, connection
+    // strings, provider payloads) to clients in production.
     const statusCode = err.statusCode || 500;
+    const isProd = process.env.NODE_ENV === 'production';
     res.status(statusCode).json({
         success: false,
-        message: err.message || 'Something went wrong',
+        message: isProd ? 'Something went wrong' : (err.message || 'Something went wrong'),
         code: err.code || 'INTERNAL_ERROR',
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
     });

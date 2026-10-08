@@ -7,6 +7,7 @@ import { Check, ChevronRight, Eye, Plus, UploadCloud, X } from "lucide-react";
 import { fetchProjects } from "../../../../../lib/api/projects";
 import { fetchConfigurations } from "../../../../../lib/api/configurations";
 import { createProperty } from "../../../../../lib/api/properties";
+import { uploadImageFile, isStorageNotConfigured } from "../../../../../lib/api/uploads";
 import { showToast } from "../../../../../lib/toast";
 import { AmenitiesSelector } from "../../../../../components/AmenitiesSelector";
 import { configurationsFor } from "../../../../../lib/propertyRequirement";
@@ -156,13 +157,26 @@ export default function QuickAddWizard() {
         loadConfigs();
     }, [formData.projectId]);
 
-    const handleImageUpload = (e) => {
-        const files = Array.from(e.target.files);
+    const handleImageUpload = async (e) => {
+        const input = e.target;
+        const files = Array.from(input.files);
         if (!files.length) return;
-        
-        // For demonstration, create object URLs. In a real app, you'd upload to a server.
-        const newImages = files.map(file => URL.createObjectURL(file));
-        
+        input.value = "";
+        const newImages = [];
+        for (const file of files) {
+            try {
+                newImages.push(await uploadImageFile(file));
+            } catch (err) {
+                if (isStorageNotConfigured(err)) {
+                    // Local development without S3: keep the transient preview.
+                    newImages.push(URL.createObjectURL(file));
+                } else {
+                    showToast(`Image upload failed: ${err?.message || "unknown error"}`, "error");
+                }
+            }
+        }
+        if (!newImages.length) return;
+
         setFormData(prev => ({
             ...prev,
             images: [...(prev.images || []), ...newImages]

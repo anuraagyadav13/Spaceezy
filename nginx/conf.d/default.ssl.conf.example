@@ -1,0 +1,99 @@
+# SpaceEzy Nginx — HTTPS (port 443) + HTTP→HTTPS redirect.
+#
+# ENABLE ME:
+#   1. Place certs in ./nginx/certs/fullchain.pem and ./nginx/certs/privkey.pem
+#      (Cloudflare Origin CA cert — free, see docs/AWS_DEPLOYMENT.md §SSL).
+#   2. Rename this file to default.ssl.conf
+#   3. Move default.conf aside (mv default.conf default.conf.disabled)
+#      so :80 is not declared twice with different behaviour.
+#   4. Uncomment "443:443" in docker-compose.production.yml and reload.
+#
+# NOTE: certificates issued by Let's Encrypt are trusted everywhere;
+# Cloudflare Origin CA certs are trusted by Cloudflare itself (set Cloudflare
+# TLS mode to "Full (strict)").
+
+map $http_cf_connecting_ip $client_ip_ssl {
+    default $http_cf_connecting_ip;
+    ""      $remote_addr;
+}
+
+map $http_x_forwarded_proto $forwarded_proto_ssl {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+
+upstream spaceezy_next_ssl {
+    server next:3000;
+    keepalive 16;
+}
+
+upstream spaceezy_api_ssl {
+    server express:8000;
+    keepalive 8;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name _;
+    server_tokens off;
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    client_max_body_size 8m;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location /api/ {
+        proxy_pass http://spaceezy_api_ssl;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $client_ip_ssl;
+        proxy_set_header X-Forwarded-For $client_ip_ssl;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto_ssl;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    location = /api {
+        return 301 /api/;
+    }
+
+    location = /health {
+        proxy_pass http://spaceezy_api_ssl;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $client_ip_ssl;
+        proxy_set_header Connection "";
+    }
+
+    location / {
+        proxy_pass http://spaceezy_next_ssl;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $client_ip_ssl;
+        proxy_set_header X-Forwarded-For $client_ip_ssl;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto_ssl;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        proxy_buffering off;
+    }
+}
