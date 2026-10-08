@@ -38,7 +38,7 @@ apiClient.interceptors.response.use(
     (error) => {
         if (error.response?.status === 401) {
             logout();
-            if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+            if (typeof window !== "undefined" && window.location.pathname.startsWith("/dashboard")) {
                 window.location.href = window.location.origin + "/login";
             }
         }
