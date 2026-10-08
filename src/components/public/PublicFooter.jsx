@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export function PublicFooter() {
     return (
@@ -6,8 +7,13 @@ export function PublicFooter() {
             <div className="container mx-auto px-6 md:px-12">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
                     <div className="md:col-span-1">
-                        <Link href="/" className="font-bold text-2xl tracking-tighter text-white mb-6 block">
-                            SPACEezy<span className="text-purple-500">.</span>
+                        <Link href="/" className="flex items-center gap-3 mb-6">
+                            <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white/10">
+                                <Image src="/images/logo.jpg" alt="SpaceEzy logo" fill sizes="44px" className="object-cover" />
+                            </span>
+                            <span className="font-bold text-2xl tracking-tighter text-white">
+                                Spaceezy<span className="text-purple-500">.</span>
+                            </span>
                         </Link>
                         <p className="text-sm text-gray-400 leading-relaxed mb-6">
                             Redefining real estate discovery. We connect you with premium properties and visionary projects designed for modern living.
@@ -36,9 +42,9 @@ export function PublicFooter() {
                     <div>
                         <h4 className="text-white font-bold mb-6">Contact</h4>
                         <ul className="flex flex-col gap-3 text-sm text-gray-400">
-                            <li>hello@spaceezy.com</li>
-                            <li>+91 98765 43210</li>
-                            <li className="mt-2">SpaceEzy Tower, Sector 125<br />Noida, UP 201313</li>
+                            <li><a href="mailto:admin@spaceezy.com" className="hover:text-purple-400 transition-colors">admin@spaceezy.com</a></li>
+                            <li><a href="tel:+917827267897" className="hover:text-purple-400 transition-colors">+91 78272 67897</a></li>
+                            <li className="mt-2">Office No. 04, 1st Floor, Wave Galleria<br />Sector-3, Wave City, Ghaziabad 201002</li>
                         </ul>
                     </div>
                 </div>

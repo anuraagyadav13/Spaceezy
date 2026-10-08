@@ -1,5 +1,6 @@
 import { PublicHeader } from "../../components/public/PublicHeader";
 import { PublicFooter } from "../../components/public/PublicFooter";
+import { WhatsAppButton } from "../../components/public/WhatsAppButton";
 
 export const metadata = {
     title: "SpaceEzy | Premium Real Estate",
@@ -14,6 +15,7 @@ export default function PublicLayout({ children }) {
                 {children}
             </main>
             <PublicFooter />
+            <WhatsAppButton />
         </div>
     );
 }

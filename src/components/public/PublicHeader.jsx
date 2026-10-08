@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import Image from "next/image";
 
 export function PublicHeader() {
     const pathname = usePathname();
@@ -33,8 +34,13 @@ export function PublicHeader() {
     return (
         <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${isSolid ? "bg-white/90 backdrop-blur-md shadow-sm py-4" : "bg-transparent py-6"}`}>
             <div className="container mx-auto px-6 md:px-12 flex justify-between items-center">
-                <Link href="/" className={`font-bold text-2xl tracking-tighter transition-colors ${isSolid ? "text-gray-900" : "text-white drop-shadow-md"}`}>
-                    SPACEezy<span className="text-purple-500">.</span>
+                <Link href="/" className="flex items-center gap-2.5">
+                    <span className="relative h-10 w-10 md:h-11 md:w-11 shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white/50">
+                        <Image src="/images/logo.jpg" alt="SpaceEzy logo" fill sizes="44px" className="object-cover" priority />
+                    </span>
+                    <span className={`font-bold text-2xl tracking-tighter transition-colors ${isSolid ? "text-gray-900" : "text-white drop-shadow-md"}`}>
+                        Spaceezy<span className="text-purple-500">.</span>
+                    </span>
                 </Link>
                 
                 <nav className="hidden md:flex gap-8 items-center">
@@ -60,8 +66,11 @@ export function PublicHeader() {
             {mobileMenuOpen && (
                 <div className="fixed inset-0 z-[60] bg-white flex flex-col">
                     <div className="flex justify-between items-center p-6">
-                        <Link href="/" className="font-bold text-2xl tracking-tighter text-gray-900" onClick={() => setMobileMenuOpen(false)}>
-                            SPACEezy<span className="text-purple-500">.</span>
+                        <Link href="/" className="flex items-center gap-2.5" onClick={() => setMobileMenuOpen(false)}>
+                            <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-purple-100">
+                                <Image src="/images/logo.jpg" alt="SpaceEzy logo" fill sizes="40px" className="object-cover" />
+                            </span>
+                            <span className="font-bold text-2xl tracking-tighter text-gray-900">Spaceezy<span className="text-purple-500">.</span></span>
                         </Link>
                         <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-gray-900 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
                             <X size={24} />

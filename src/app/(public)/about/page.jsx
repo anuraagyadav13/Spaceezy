@@ -39,6 +39,34 @@ export default function AboutPage() {
                     </motion.div>
                 </div>
 
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center mb-24"
+                >
+                    <div className="relative h-[440px] rounded-[40px] overflow-hidden order-1">
+                        <Image src="/images/founder.jpg" alt="Kamal, Founder of SpaceEzy" fill className="object-cover" />
+                    </div>
+                    <div className="order-2">
+                        <span className="text-purple-600 font-bold tracking-wider uppercase text-sm mb-2 block">Founder&apos;s Message</span>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-6">A promise from our founder.</h2>
+                        <p className="text-lg text-gray-600 mb-5 leading-relaxed">
+                            &ldquo;Building SpaceEzy has been a promise to every family that trusts us with one of the biggest decisions of their lives.
+                            Real estate has long been complicated — opaque pricing, scattered inventory, and slow communication. We started SpaceEzy
+                            to change that: one transparent platform where builders, brokers, and buyers meet on the same page.&rdquo;
+                        </p>
+                        <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+                            &ldquo;To every customer reading this — thank you. We will keep listening, keep improving, and keep earning your trust,
+                            one home at a time.&rdquo;
+                        </p>
+                        <div>
+                            <p className="text-xl font-bold text-gray-900">Kamal</p>
+                            <p className="text-purple-600 font-semibold">Founder &amp; CEO, SpaceEzy</p>
+                        </div>
+                    </div>
+                </motion.div>
+
                 <div className="bg-gray-50 rounded-[40px] p-12 md:p-20 text-center">
                     <h2 className="text-3xl font-bold text-gray-900 mb-4">Our Values</h2>
                     <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-16">The principles that guide everything we do.</p>
