@@ -1,3 +1,10 @@
+export const metadata = {
+    title: "Terms of Service | SpaceEzy",
+    description: "Terms of service for using the SpaceEzy real estate platform and enquiry services.",
+    alternates: { canonical: "/terms" },
+    robots: { index: true, follow: true },
+};
+
 export default function Terms() {
     return (
         <div className="bg-white min-h-screen pt-32 pb-24">

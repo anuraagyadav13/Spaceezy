@@ -3,16 +3,22 @@ import SearchClient from "./SearchClient";
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export const metadata = {
-    title: "Property Search | Spaceezy",
+    title: "Property Search | Find Flats, Plots & Projects | SpaceEzy",
     description:
-        "Search live real estate projects and properties by keyword, location, project, configuration and budget — results straight from the Spaceezy CRM.",
+        "Search live real estate projects and properties by keyword, location, project, configuration and budget — results straight from the SpaceEzy CRM.",
     alternates: { canonical: "/search" },
     openGraph: {
-        title: "Property Search | Spaceezy",
+        title: "Property Search | Find Flats, Plots & Projects | SpaceEzy",
         description:
             "Search live real estate projects and properties by keyword, location, project, configuration and budget.",
         url: "/search",
         type: "website",
+        images: [{ url: "/images/og-default.jpg" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "Property Search | Find Flats, Plots & Projects | SpaceEzy",
+        description: "Search live projects and properties by keyword, location and budget.",
     },
 };
 

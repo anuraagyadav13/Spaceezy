@@ -4,8 +4,28 @@ import { formatPrice } from "../../../../utils/format";
 import {
     MapPin, Building, CheckCircle2, FileText, Calendar, Home, LayoutGrid, ImageOff
 } from "lucide-react";
+import { JsonLd } from "../../../../components/seo/JsonLd";
+import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/seo/Breadcrumbs";
+import { PropertyCard, ProjectCard } from "../../../../components/seo/Cards";
+import { LANDING_BY_PLACE } from "../../../../lib/seo/landingPages";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+async function getJsonList(path, params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+    });
+    const qs = query.toString();
+    try {
+        const res = await fetch(`${API_BASE}${path}${qs ? `?${qs}` : ""}`, { next: { revalidate: 60 } });
+        if (!res.ok) return null;
+        const payload = await res.json();
+        return payload && payload.success ? payload.data : null;
+    } catch {
+        return null;
+    }
+}
 
 // Public project page by canonical slug (no internal IDs in URLs).
 // ISR (60s): published marketing content can lag admin edits by at most a
@@ -74,6 +94,55 @@ export default async function ProjectDetailPage({ params }) {
         ? `${formatPrice(project.startingPrice)}${project.maximumPrice != null && project.maximumPrice !== project.startingPrice ? ` – ${formatPrice(project.maximumPrice)}` : ""}`
         : "On request";
 
+    const [unitsData, allProjectsData] = await Promise.all([
+        getJsonList("/public/properties", { projectSlug: slug, limit: 50 }),
+        getJsonList("/public/projects", { limit: 50 }),
+    ]);
+    const units = (unitsData && unitsData.items) || [];
+    const relatedProjects = ((allProjectsData && allProjectsData.items) || [])
+        .filter((p) => p.slug !== project.slug && project.location?.district && p.location?.district === project.location.district)
+        .slice(0, 3);
+
+    const placeLinks = [];
+    const addPlace = (name) => {
+        const s = name && LANDING_BY_PLACE[name];
+        if (s && !placeLinks.some((l) => l.slug === s)) placeLinks.push({ slug: s, name });
+    };
+    addPlace(project.location?.region);
+    addPlace(project.location?.district);
+
+    const faqs = [];
+    if (project.configurations && project.configurations.length) {
+        faqs.push({
+            q: `What configurations are available at ${project.name}?`,
+            a: `${project.name} offers ${project.configurations.map((c) => c.name).join(", ")}. Live unit availability is shown in the Available Units section.`,
+        });
+    }
+    if (project.startingPrice != null) {
+        faqs.push({
+            q: `What is the price of ${project.name}?`,
+            a: `${project.startingPrice != null ? `Prices start at ${priceRange}` : "Pricing is on request"}. Check live availability above or enquire for current quotes.`,
+        });
+    }
+    if (project.locationLabel) {
+        faqs.push({
+            q: `Where is ${project.name} located?`,
+            a: `${project.locationLabel}${project.address ? ` — ${project.address}` : ""}.`,
+        });
+    }
+    if (project.rera && project.rera.number) {
+        faqs.push({
+            q: `Is ${project.name} RERA registered?`,
+            a: `Yes — RERA registration ${project.rera.number}${project.rera.authority ? ` from ${project.rera.authority}` : ""}.`,
+        });
+    }
+
+    const breadcrumbs = [
+        { name: "Home", href: "/" },
+        { name: "Projects", href: "/projects" },
+        { name: project.name, href: null },
+    ];
+
     return (
         <div className="bg-white min-h-screen pb-32">
             {/* HERO */}
@@ -94,7 +163,24 @@ export default async function ProjectDetailPage({ params }) {
                     <p className="text-lg md:text-xl text-gray-200 flex items-center gap-2">
                         <MapPin size={20} /> {project.locationLabel || project.address}
                     </p>
+                    {placeLinks.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-4">
+                            {placeLinks.map((l) => (
+                                <Link
+                                    key={l.slug}
+                                    href={`/${l.slug}`}
+                                    className="bg-white/15 hover:bg-white/30 backdrop-blur-md text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/25 transition-colors"
+                                >
+                                    Properties in {l.name}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </div>
+            </div>
+
+            <div className="container mx-auto px-6 md:px-12 pt-8">
+                <Breadcrumbs items={breadcrumbs} />
             </div>
 
             <div className="container mx-auto px-6 md:px-12 mt-12 grid grid-cols-1 lg:grid-cols-3 gap-12">
@@ -148,6 +234,17 @@ export default async function ProjectDetailPage({ params }) {
                         </div>
                     </section>
 
+                    {units.length > 0 && (
+                        <section>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Available Units</h2>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {units.slice(0, 12).map((unit) => (
+                                    <PropertyCard key={unit.token} property={unit} />
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
                     <section>
                         <h2 className="text-2xl font-bold text-gray-900 mb-6">Premium Amenities</h2>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -176,6 +273,33 @@ export default async function ProjectDetailPage({ params }) {
                             )}
                         </div>
                     </section>
+
+                    {relatedProjects.length > 0 && (
+                        <section>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                                More projects in {project.location?.district}
+                            </h2>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {relatedProjects.map((p) => (
+                                    <ProjectCard key={p.slug} project={p} />
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {faqs.length > 0 && (
+                        <section>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Frequently asked questions</h2>
+                            <div className="flex flex-col gap-4">
+                                {faqs.map((f) => (
+                                    <div key={f.q} className="border border-gray-100 rounded-2xl p-6">
+                                        <h3 className="font-bold text-gray-900 mb-2">{f.q}</h3>
+                                        <p className="text-gray-600 leading-relaxed">{f.a}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
                 </div>
 
                 {/* RIGHT SIDEBAR */}
@@ -229,6 +353,21 @@ export default async function ProjectDetailPage({ params }) {
                     </div>
                 </div>
             </div>
+
+            <JsonLd data={breadcrumbJsonLd(breadcrumbs)} />
+            {faqs.length > 0 && (
+                <JsonLd
+                    data={{
+                        "@context": "https://schema.org",
+                        "@type": "FAQPage",
+                        mainEntity: faqs.map((f) => ({
+                            "@type": "Question",
+                            name: f.q,
+                            acceptedAnswer: { "@type": "Answer", text: f.a },
+                        })),
+                    }}
+                />
+            )}
         </div>
     );
 }

@@ -3,16 +3,22 @@ import ProjectsClient from "./ProjectsClient";
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export const metadata = {
-    title: "Discover Projects | Spaceezy",
+    title: "Real Estate Projects | New & Under-Construction Homes | SpaceEzy",
     description:
-        "Browse premium real estate projects with live pricing, configurations and availability. Filter by location, property type and budget.",
+        "Browse real estate projects with live pricing, configurations and availability. Filter by location, property type and budget.",
     alternates: { canonical: "/projects" },
     openGraph: {
-        title: "Discover Projects | Spaceezy",
+        title: "Real Estate Projects | New & Under-Construction Homes | SpaceEzy",
         description:
-            "Browse premium real estate projects with live pricing, configurations and availability.",
+            "Browse real estate projects with live pricing, configurations and availability.",
         url: "/projects",
         type: "website",
+        images: [{ url: "/images/og-default.jpg" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "Real Estate Projects | New & Under-Construction Homes | SpaceEzy",
+        description: "Browse real estate projects with live pricing, configurations and availability.",
     },
 };
 

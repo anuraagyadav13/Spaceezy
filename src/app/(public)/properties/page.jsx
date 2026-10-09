@@ -3,16 +3,22 @@ import PropertiesClient from "./PropertiesClient";
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export const metadata = {
-    title: "Available Properties | Spaceezy",
+    title: "Properties for Sale & Rent | Live Listings | SpaceEzy",
     description:
         "Discover ready-to-move and available properties with live pricing, area and availability status. Filter by configuration, budget and unit availability.",
     alternates: { canonical: "/properties" },
     openGraph: {
-        title: "Available Properties | Spaceezy",
+        title: "Properties for Sale & Rent | Live Listings | SpaceEzy",
         description:
             "Discover ready-to-move and available properties with live pricing, area and availability status.",
         url: "/properties",
         type: "website",
+        images: [{ url: "/images/og-default.jpg" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "Properties for Sale & Rent | Live Listings | SpaceEzy",
+        description: "Discover ready-to-move and available properties with live pricing and availability.",
     },
 };
 

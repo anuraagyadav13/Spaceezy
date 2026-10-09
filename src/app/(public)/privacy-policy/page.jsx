@@ -1,3 +1,10 @@
+export const metadata = {
+    title: "Privacy Policy | SpaceEzy",
+    description: "How SpaceEzy collects, uses and protects your personal information across our website and services.",
+    alternates: { canonical: "/privacy-policy" },
+    robots: { index: true, follow: true },
+};
+
 export default function PrivacyPolicy() {
     return (
         <div className="bg-white min-h-screen pt-32 pb-24">

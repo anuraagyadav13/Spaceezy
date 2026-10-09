@@ -21,10 +21,15 @@ export function PublicFooter() {
                     </div>
                     
                     <div>
-                        <h4 className="text-white font-bold mb-6">Explore</h4>
+                        <h4 className="text-white font-bold mb-6">Properties</h4>
                         <ul className="flex flex-col gap-3 text-sm">
+                            <li><Link href="/properties" className="hover:text-purple-400 transition-colors">All Properties</Link></li>
+                            <li><Link href="/properties-in-ghaziabad" className="hover:text-purple-400 transition-colors">Properties in Ghaziabad</Link></li>
+                            <li><Link href="/properties-in-wave-city" className="hover:text-purple-400 transition-colors">Properties in Wave City</Link></li>
+                            <li><Link href="/flats-for-sale" className="hover:text-purple-400 transition-colors">Flats for Sale</Link></li>
+                            <li><Link href="/plots-for-sale" className="hover:text-purple-400 transition-colors">Plots for Sale</Link></li>
+                            <li><Link href="/commercial-properties" className="hover:text-purple-400 transition-colors">Commercial Properties</Link></li>
                             <li><Link href="/projects" className="hover:text-purple-400 transition-colors">Projects</Link></li>
-                            <li><Link href="/properties" className="hover:text-purple-400 transition-colors">Properties</Link></li>
                             <li><Link href="/search" className="hover:text-purple-400 transition-colors">Property Search</Link></li>
                         </ul>
                     </div>
@@ -32,8 +37,8 @@ export function PublicFooter() {
                     <div>
                         <h4 className="text-white font-bold mb-6">Company</h4>
                         <ul className="flex flex-col gap-3 text-sm">
-                            <li><Link href="/about" className="hover:text-purple-400 transition-colors">About Us</Link></li>
-                            <li><Link href="/contact" className="hover:text-purple-400 transition-colors">Contact</Link></li>
+                            <li><Link href="/about" className="hover:text-purple-400 transition-colors">About SpaceEzy</Link></li>
+                            <li><Link href="/contact" className="hover:text-purple-400 transition-colors">Contact SpaceEzy</Link></li>
                             <li><Link href="/privacy-policy" className="hover:text-purple-400 transition-colors">Privacy Policy</Link></li>
                             <li><Link href="/terms" className="hover:text-purple-400 transition-colors">Terms of Service</Link></li>
                         </ul>

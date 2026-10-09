@@ -1,18 +1,31 @@
 import HomeContent from "./HomeClient";
+import { JsonLd } from "../../components/seo/JsonLd";
+import { realEstateAgentJsonLd } from "../../lib/seo/site";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+const HOME_TITLE = "SpaceEzy – Real Estate Properties in Ghaziabad | Buy & Sell Property";
+const HOME_DESCRIPTION =
+    "SpaceEzy lists real estate properties in Ghaziabad — flats, plots, homes and commercial spaces across Wave City and top localities. Browse live inventory with zero brokerage.";
+
+// Regenerate with live CRM data at most every 60s.
+export const revalidate = 60;
+
 export const metadata = {
-    title: "Spaceezy — Find your next property",
-    description:
-        "Discover premium real estate projects and ready-to-move properties curated by Spaceezy. Search by location, configuration and budget with zero brokerage.",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
     alternates: { canonical: "/" },
     openGraph: {
-        title: "Spaceezy — Find your next property",
-        description:
-            "Discover premium real estate projects and ready-to-move properties curated by Spaceezy.",
+        title: HOME_TITLE,
+        description: HOME_DESCRIPTION,
         url: "/",
         type: "website",
+        images: [{ url: "/images/og-default.jpg" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: HOME_TITLE,
+        description: HOME_DESCRIPTION,
     },
 };
 
@@ -42,10 +55,13 @@ export default async function PublicHomePage() {
     ]);
 
     return (
-        <HomeContent
-            projects={(projects && projects.items) || []}
-            properties={(properties && properties.items) || []}
-            locations={Array.isArray(locations) ? locations : []}
-        />
+        <>
+            <HomeContent
+                projects={(projects && projects.items) || []}
+                properties={(properties && properties.items) || []}
+                locations={Array.isArray(locations) ? locations : []}
+            />
+            <JsonLd data={realEstateAgentJsonLd} />
+        </>
     );
 }

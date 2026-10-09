@@ -47,7 +47,7 @@ export default function HomeClient({ projects, properties, locations }) {
                         transition={{ duration: 1, delay: 0.2 }}
                         className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-6 drop-shadow-lg"
                     >
-                        Find a place worth <br className="hidden md:block"/> coming home to.
+                        Real Estate Properties in Ghaziabad
                     </motion.h1>
 
                     <motion.p
@@ -56,7 +56,7 @@ export default function HomeClient({ projects, properties, locations }) {
                         transition={{ duration: 1, delay: 0.4 }}
                         className="text-lg md:text-2xl text-gray-200 mb-10 max-w-2xl mx-auto font-light drop-shadow"
                     >
-                        Discover premium spaces designed for the way you want to live. Explore exclusive projects and curated properties.
+                        Browse flats, plots, homes and commercial properties across Wave City and top localities — live inventory, transparent prices, zero brokerage.
                     </motion.p>
 
                     <motion.div
@@ -100,6 +100,37 @@ export default function HomeClient({ projects, properties, locations }) {
                         </button>
                     </form>
                 </motion.div>
+            </section>
+
+            {/* SEO LINK CLUSTER — crawlable paths to the main landing pages */}
+            <section className="container mx-auto px-6 md:px-12 pb-10">
+                <div className="max-w-4xl">
+                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Explore real estate in Ghaziabad with SpaceEzy</h2>
+                    <p className="text-gray-600 leading-relaxed mb-5">
+                        SpaceEzy is a real estate marketplace for Ghaziabad and the NCR region. Compare live inventory
+                        of flats, plots and commercial properties, or jump straight to a focused listing page:
+                    </p>
+                    <ul className="flex flex-wrap gap-3">
+                        {[
+                            ["/properties-in-ghaziabad", "Properties in Ghaziabad"],
+                            ["/properties-in-wave-city", "Properties in Wave City"],
+                            ["/flats-for-sale", "Flats for Sale"],
+                            ["/plots-for-sale", "Plots for Sale"],
+                            ["/commercial-properties", "Commercial Properties"],
+                            ["/residential-properties", "Residential Properties"],
+                            ["/projects", "Projects"],
+                        ].map(([href, label]) => (
+                            <li key={href}>
+                                <Link
+                                    href={href}
+                                    className="inline-block rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 hover:border-purple-300 hover:text-purple-700 transition-colors"
+                                >
+                                    {label}
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             </section>
 
             {/* FEATURED PROJECTS */}
