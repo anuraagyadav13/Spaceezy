@@ -7,6 +7,7 @@ import {
 import { JsonLd } from "../../../../components/seo/JsonLd";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/seo/Breadcrumbs";
 import { PropertyCard, ProjectCard } from "../../../../components/seo/Cards";
+import ExpandableText from "../../../../components/public/ExpandableText";
 import { LANDING_BY_PLACE } from "../../../../lib/seo/landingPages";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -188,9 +189,13 @@ export default async function ProjectDetailPage({ params }) {
                 <div className="lg:col-span-2 flex flex-col gap-12">
                     <section>
                         <h2 className="text-2xl font-bold text-gray-900 mb-4">Project Overview</h2>
-                        <p className="text-gray-600 leading-relaxed text-lg">
-                            {project.description || project.shortDescription || `${project.name} — explore configurations, pricing, amenities and live availability on this page.`}
-                        </p>
+                        <ExpandableText
+                            text={
+                                project.description ||
+                                project.shortDescription ||
+                                `${project.name} — explore configurations, pricing, amenities and live availability on this page.`
+                            }
+                        />
                     </section>
 
                     <section className="grid grid-cols-2 md:grid-cols-4 gap-4 py-8 border-y border-gray-100">

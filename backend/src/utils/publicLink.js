@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { toMediaPath } = require('../services/storageService');
 
 // Opaque public token: 32 lowercase hex chars (16 random bytes).
 const TOKEN_PATTERN = /^[0-9a-f]{32}$/;
@@ -56,10 +57,14 @@ function publicAvailability(status) {
 
 // Only absolute http(s) URLs can render outside the browser session. Images
 // uploaded in-app may be stored as blob: object URLs — filter them out of
-// public DTOs instead of leaking dead links to visitors.
+// public DTOs instead of leaking dead links to visitors. Stored bucket URLs
+// are rewritten to the public /media streaming route (the bucket is private,
+// so direct S3 links would 403).
 function publicImages(images) {
     if (!Array.isArray(images)) return [];
-    return images.filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u.trim()));
+    return images
+        .filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u.trim()))
+        .map((u) => toMediaPath(u));
 }
 
 module.exports = {

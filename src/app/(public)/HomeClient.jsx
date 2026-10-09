@@ -34,6 +34,7 @@ export default function HomeClient({ projects, properties, locations }) {
                         src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=2800&q=80"
                         alt="Luxury Real Estate"
                         fill
+                        sizes="100vw"
                         className="object-cover"
                         priority
                     />
@@ -316,7 +317,7 @@ export default function HomeClient({ projects, properties, locations }) {
                         </div>
                     </motion.div>
                     <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="flex-1 relative w-full h-[600px] rounded-[40px] overflow-hidden shadow-2xl">
-                        <Image src="https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80" alt="Premium Living" fill className="object-cover" />
+                        <Image src="https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80" alt="Premium Living" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
                     </motion.div>
                 </div>
             </section>

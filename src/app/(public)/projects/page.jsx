@@ -1,4 +1,6 @@
 import ProjectsClient from "./ProjectsClient";
+import { JsonLd } from "../../../components/seo/JsonLd";
+import { breadcrumbJsonLd } from "../../../components/seo/Breadcrumbs";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -56,11 +58,19 @@ export default async function ProjectsPage({ searchParams }) {
     const data = await getJson("/public/projects", { ...filters, limit: 50 });
 
     return (
-        <ProjectsClient
-            initialData={
-                data || { items: [], page: 1, limit: 50, total: 0, totalPages: 0 }
-            }
-            initialFilters={filters}
-        />
+        <>
+            <ProjectsClient
+                initialData={
+                    data || { items: [], page: 1, limit: 50, total: 0, totalPages: 0 }
+                }
+                initialFilters={filters}
+            />
+            <JsonLd
+                data={breadcrumbJsonLd([
+                    { name: "Home", href: "/" },
+                    { name: "Projects" },
+                ])}
+            />
+        </>
     );
 }

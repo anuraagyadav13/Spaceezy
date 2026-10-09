@@ -54,6 +54,31 @@ const publicUrlFor = (config, key) => {
     return `https://${config.bucket}.s3.${config.region}.amazonaws.com/${key}`;
 };
 
+// The bucket is private, so direct object URLs always return 403. Rewrite
+// stored bucket URLs to the public /media streaming route instead. Only URLs
+// that point at this bucket's configured upload prefix are rewritten — every
+// other URL (CDN, external hosts) passes through untouched.
+const toMediaPath = (url) => {
+    if (typeof url !== 'string') return url;
+    const config = getConfig();
+    if (!config) return url;
+    const trimmed = url.trim();
+    const origins = [
+        config.publicBaseUrl ? `${config.publicBaseUrl}/` : null,
+        `https://${config.bucket}.s3.${config.region}.amazonaws.com/`,
+        `https://${config.bucket}.s3.amazonaws.com/`,
+        `http://${config.bucket}.s3.${config.region}.amazonaws.com/`,
+        `http://${config.bucket}.s3.amazonaws.com/`
+    ].filter(Boolean);
+    for (const origin of origins) {
+        if (trimmed.startsWith(origin)) {
+            const key = trimmed.slice(origin.length);
+            if (key.startsWith(`${config.prefix}/`)) return `/media/${key}`;
+        }
+    }
+    return url;
+};
+
 // Uploads one image buffer. Throws AppError-compatible failures upstream.
 const uploadImage = async ({ buffer, organizationId }) => {
     const config = getConfig();
@@ -108,5 +133,7 @@ module.exports = {
     uploadImage,
     sniffImageType,
     getConfig,
+    publicUrlFor,
+    toMediaPath,
     MAX_IMAGE_BYTES,
 };

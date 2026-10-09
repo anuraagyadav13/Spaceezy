@@ -17,7 +17,7 @@ export default function AboutPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center mb-24">
                     <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="relative h-[500px] rounded-[40px] overflow-hidden">
-                        <Image src="https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" alt="Our Vision" fill className="object-cover" />
+                        <Image src="https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" alt="Our Vision" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
                     </motion.div>
                     <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
                         <h2 className="text-3xl font-bold text-gray-900 mb-6">Built on trust and transparency.</h2>
@@ -46,7 +46,7 @@ export default function AboutPage() {
                     className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center mb-24"
                 >
                     <div className="relative h-[440px] rounded-[40px] overflow-hidden order-1">
-                        <Image src="/images/founder.jpg" alt="Kamal, Founder of SpaceEzy" fill className="object-cover" />
+                        <Image src="/images/founder.jpg" alt="Kamal, Founder of SpaceEzy" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
                     </div>
                     <div className="order-2">
                         <span className="text-purple-600 font-bold tracking-wider uppercase text-sm mb-2 block">Founder&apos;s Message</span>

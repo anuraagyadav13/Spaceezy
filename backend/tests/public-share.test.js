@@ -120,6 +120,27 @@ describe('public link utilities', () => {
             .toEqual(['https://cdn.example.com/a.jpg', 'http://cdn.example.com/b.jpg']);
         expect(publicImages(null)).toEqual([]);
     });
+
+    it('rewrites private bucket URLs to the public /media route (bucket stays private)', () => {
+        process.env.AWS_S3_BUCKET = 'spaceezy-media-prod';
+        process.env.AWS_REGION = 'ap-south-1';
+        delete process.env.AWS_S3_PUBLIC_BASE_URL;
+        try {
+            expect(publicImages([
+                'https://spaceezy-media-prod.s3.ap-south-1.amazonaws.com/uploads/org/2026/10/a.jpg',
+                'https://spaceezy-media-prod.s3.ap-south-1.amazonaws.com/diagnostics/secret.txt',
+                'https://cdn.example.com/x.jpg',
+                'blob:http://localhost/dead'
+            ])).toEqual([
+                '/media/uploads/org/2026/10/a.jpg',
+                'https://spaceezy-media-prod.s3.ap-south-1.amazonaws.com/diagnostics/secret.txt',
+                'https://cdn.example.com/x.jpg'
+            ]);
+        } finally {
+            delete process.env.AWS_S3_BUCKET;
+            delete process.env.AWS_REGION;
+        }
+    });
 });
 
 describe('Property/Project share fields are server-managed', () => {

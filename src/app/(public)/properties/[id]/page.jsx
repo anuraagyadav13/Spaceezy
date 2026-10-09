@@ -5,6 +5,7 @@ import { MapPin, Maximize, Compass, ArrowLeft, Building2, ImageOff } from "lucid
 import { JsonLd } from "../../../../components/seo/JsonLd";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/seo/Breadcrumbs";
 import { PropertyCard } from "../../../../components/seo/Cards";
+import ExpandableText from "../../../../components/public/ExpandableText";
 import { LANDING_BY_PLACE } from "../../../../lib/seo/landingPages";
 import { absoluteUrl } from "../../../../lib/seo/site";
 
@@ -234,10 +235,13 @@ export default async function PropertyDetailPage({ params }) {
                             </div>
 
                             <h2 className="text-2xl font-bold text-gray-900 mb-4">About this property</h2>
-                            <p className="text-gray-600 leading-relaxed text-lg mb-8">
-                                {property.description ||
-                                    `Unit ${property.unitNumber || property.title} is a ${property.configuration || "premium"} residence in ${project.name || "this project"}. Contact us for full details, pricing and a site visit.`}
-                            </p>
+                            <ExpandableText
+                                className="mb-8"
+                                text={
+                                    property.description ||
+                                    `Unit ${property.unitNumber || property.title} is a ${property.configuration || "premium"} residence in ${project.name || "this project"}. Contact us for full details, pricing and a site visit.`
+                                }
+                            />
 
                             {property.amenities && property.amenities.length > 0 && (
                                 <>

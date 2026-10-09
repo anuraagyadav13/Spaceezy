@@ -57,6 +57,11 @@ export async function getInventory() {
 }
 
 export function inScope(location, scope = {}) {
+    const hasScope = Boolean(scope.state || scope.district || scope.region);
+    // Global (unscoped) pages do not claim a location, so inventory without
+    // one must still match. Location-scoped pages (Wave City, Ghaziabad…)
+    // require a location to verify the claim.
+    if (!hasScope) return true;
     if (!location) return false;
     if (scope.state && location.state !== scope.state) return false;
     if (scope.district && location.district !== scope.district) return false;

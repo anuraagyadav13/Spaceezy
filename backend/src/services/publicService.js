@@ -110,7 +110,27 @@ class PublicService {
         return map;
     }
 
-    static projectListItem(project, stats) {
+    // Cover image fallback: projects may have no gallery images of their own,
+    // while their published units do. Use the earliest uploaded unit photo so
+    // public project cards never render an empty placeholder.
+    static async projectCoverImages(projectIds) {
+        const map = new Map();
+        if (!projectIds || !projectIds.length) return map;
+        const rows = (await prisma.property.findMany({
+            where: { projectId: { in: projectIds }, images: { isEmpty: false } },
+            select: { projectId: true, images: true },
+            orderBy: { createdAt: 'asc' },
+            take: 100
+        })) || [];
+        for (const row of rows) {
+            if (map.has(row.projectId)) continue;
+            const image = publicImages(row.images)[0];
+            if (image) map.set(row.projectId, image);
+        }
+        return map;
+    }
+
+    static projectListItem(project, stats, coverImage) {
         const images = publicImages(project.images);
         const start = money(project.startingPrice) !== null ? money(project.startingPrice) : (stats && stats.minPrice);
         const max = money(project.maximumPrice) !== null ? money(project.maximumPrice) : (stats && stats.maxPrice);
@@ -120,7 +140,7 @@ class PublicService {
             projectType: project.projectType,
             status: project.status,
             description: project.shortDescription || project.description || null,
-            image: images[0] || null,
+            image: images[0] || coverImage || null,
             address: project.address,
             location: locationNames(project),
             startingPrice: start !== undefined ? start : null,
@@ -166,14 +186,20 @@ class PublicService {
                 orderBy: { updatedAt: 'desc' },
                 skip,
                 take,
-                include: { configurations: { where: { active: true }, select: { name: true }, orderBy: { name: 'asc' } } }
+                include: {
+                    configurations: { where: { active: true }, select: { name: true }, orderBy: { name: 'asc' } },
+                    locationState: { select: { name: true } },
+                    locationDistrict: { select: { name: true } },
+                    locationRegion: { select: { name: true } }
+                }
             }),
             prisma.project.count({ where })
         ]);
         const stats = await PublicService.projectStats(items.map((p) => p.id));
+        const covers = await PublicService.projectCoverImages(items.map((p) => p.id));
 
         return {
-            items: items.map((p) => PublicService.projectListItem(p, stats.get(p.id))),
+            items: items.map((p) => PublicService.projectListItem(p, stats.get(p.id), covers.get(p.id))),
             page,
             limit,
             total,
@@ -186,7 +212,10 @@ class PublicService {
         const project = await prisma.project.findFirst({
             where: { publicSlug: slug, organizationId, ...PUBLIC_PROJECT_WHERE },
             include: {
-                configurations: { where: { active: true }, orderBy: { name: 'asc' } }
+                configurations: { where: { active: true }, orderBy: { name: 'asc' } },
+                locationState: { select: { name: true } },
+                locationDistrict: { select: { name: true } },
+                locationRegion: { select: { name: true } }
             }
         });
         if (!project) throw PROJECT_NOT_FOUND();
@@ -209,6 +238,9 @@ class PublicService {
         }
 
         const images = publicImages(project.images);
+        const cover = images[0]
+            || (await PublicService.projectCoverImages([project.id])).get(project.id)
+            || null;
         const start = money(project.startingPrice) !== null ? money(project.startingPrice) : stats.minPrice;
         const max = money(project.maximumPrice) !== null ? money(project.maximumPrice) : stats.maxPrice;
 
@@ -221,7 +253,7 @@ class PublicService {
             description: project.description || null,
             shortDescription: project.shortDescription || null,
             images,
-            heroImage: images[0] || null,
+            heroImage: cover,
             address: project.address,
             location: locationNames(project),
             locationLabel: locationLabel(project),

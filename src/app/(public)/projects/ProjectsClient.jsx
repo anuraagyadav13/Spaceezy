@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MapPin, ArrowRight, Home, ImageOff, Search } from "lucide-react";
 import { motion } from "framer-motion";
+import { Breadcrumbs } from "../../../components/seo/Breadcrumbs";
 import { fetchPublicProjects, fetchPublicLocations } from "../../../lib/api/publicSite";
 import { formatPrice } from "../../../utils/format";
 
@@ -25,8 +26,11 @@ const syncUrl = (filters) => {
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
 };
 
-const placeLabel = (location) =>
-    [location?.locality || location?.district, location?.state].filter(Boolean).join(", ");
+const placeLabel = (location) => {
+    const { locality, district, state } = location || {};
+    if (locality && district) return `${locality}, ${district}`;
+    return [locality || district, state].filter(Boolean).join(", ");
+};
 
 const priceRange = (project) => {
     const { startingPrice, maximumPrice } = project;
@@ -103,9 +107,13 @@ export default function ProjectsClient({ initialData, initialFilters }) {
         <div className="bg-gray-50 min-h-screen pt-32 pb-24">
             <div className="container mx-auto px-6 md:px-12">
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+                    <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Projects", href: null }]} />
                     <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-4">Discover Projects</h1>
                     <p className="text-gray-500 text-lg max-w-2xl">
-                        Explore our curated selection of premium real estate projects designed for exceptional living.
+                        Browse every published project with current prices, unit availability and configurations,
+                        synced from the SpaceEzy team&apos;s inventory. Narrow the list by state, district, property
+                        type and budget — then open a project for amenities, RERA details, possession timelines and
+                        ready-to-move units.
                     </p>
                 </motion.div>
 
