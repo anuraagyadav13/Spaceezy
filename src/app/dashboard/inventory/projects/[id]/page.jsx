@@ -16,6 +16,7 @@ import { PermissionGate } from "../../../../../features/auth/components/Permissi
 import { showToast } from "../../../../../lib/toast";
 import { formatCurrency } from "../../../../../features/pipeline/helpers";
 import LocationSelector from "../../../../../components/shared/LocationSelector";
+import ImageUploader from "../../../../../components/shared/ImageUploader";
 
 const inputClass =
     "w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all";
@@ -65,6 +66,7 @@ export default function ProjectDetailPage() {
     const [unitStatus, setUnitStatus] = useState("");
     const [configForm, setConfigForm] = useState({ name: "", bhk: "", areaSaleable: "", basePrice: "" });
     const [locationSel, setLocationSel] = useState({ stateId: "", districtId: "", regionId: "" });
+    const [editImages, setEditImages] = useState([]);
 
     const {
         data: project,
@@ -231,6 +233,7 @@ export default function ProjectDetailPage() {
                                         districtId: project?.districtId || "",
                                         regionId: project?.regionId || "",
                                     });
+                                    setEditImages(project?.images || []);
                                     setEditing((v) => !v);
                                 }}
                                 className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-bold inline-flex items-center gap-1.5"
@@ -333,6 +336,7 @@ export default function ProjectDetailPage() {
                                     startingPrice: fd.get("startingPrice") ? Number(fd.get("startingPrice")) : undefined,
                                     totalUnits: fd.get("totalUnits") ? Number(fd.get("totalUnits")) : undefined,
                                     description: fd.get("description") || undefined,
+                                    images: editImages,
                                 });
                             }}
                             className="border-t border-gray-100 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
@@ -366,6 +370,15 @@ export default function ProjectDetailPage() {
                             <div className="sm:col-span-2 lg:col-span-3">
                                 <label className={labelClass}>Description</label>
                                 <textarea name="description" rows={2} defaultValue={project.description || ""} className={inputClass} />
+                            </div>
+                            <div className="sm:col-span-2 lg:col-span-3">
+                                <label className={labelClass}>Gallery Images</label>
+                                <ImageUploader
+                                    images={editImages}
+                                    onChange={setEditImages}
+                                    disabled={saveProject.isPending}
+                                    altPrefix="Project"
+                                />
                             </div>
                             <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
                                 <button

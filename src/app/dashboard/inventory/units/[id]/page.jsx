@@ -11,6 +11,7 @@ import { fetchPropertyById, updateProperty } from "../../../../../lib/api/proper
 import { fetchConfigurations } from "../../../../../lib/api/configurations";
 import { PermissionGate } from "../../../../../features/auth/components/PermissionGate";
 import SharePropertyModal from "../../../../../components/shared/SharePropertyModal";
+import ImageUploader from "../../../../../components/shared/ImageUploader";
 import { showToast } from "../../../../../lib/toast";
 import { formatCurrency } from "../../../../../features/pipeline/helpers";
 
@@ -42,6 +43,7 @@ export default function UnitEditPage() {
     const queryClient = useQueryClient();
     const [statusError, setStatusError] = useState("");
     const [shareOpen, setShareOpen] = useState(false);
+    const [editImages, setEditImages] = useState(null);
 
     const { data: unit, isPending, isError, error, refetch } = useQuery({
         queryKey: ["property", unitId],
@@ -49,6 +51,11 @@ export default function UnitEditPage() {
         enabled: !!unitId,
         retry: 1
     });
+
+    // Seed the gallery editor from the loaded record (render-phase state
+    // adjustment). Guarded by `editImages === null`, so later refetches —
+    // saves, status changes — never wipe images mid-edit.
+    if (editImages === null && unit) setEditImages(unit.images || []);
 
     const projectId = unit?.projectId;
 
@@ -171,6 +178,7 @@ export default function UnitEditPage() {
                                     facing: fd.get("facing") || null,
                                     purpose: fd.get("purpose") || null,
                                     price: Number(fd.get("price")),
+                                    images: editImages ?? [],
                                 });
                             }}
                             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
@@ -240,6 +248,15 @@ export default function UnitEditPage() {
                                     <option>Resale</option>
                                     <option>Rent</option>
                                 </select>
+                            </div>
+                            <div className="sm:col-span-2 lg:col-span-3">
+                                <label className={labelClass}>Gallery Images</label>
+                                <ImageUploader
+                                    images={editImages ?? []}
+                                    onChange={setEditImages}
+                                    disabled={saveUnit.isPending}
+                                    altPrefix="Unit"
+                                />
                             </div>
                             <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-3 pt-1">
                                 <button
