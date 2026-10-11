@@ -1,38 +1,24 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchUsers } from "../../../lib/api/users";
 import Modal from "../../../components/shared/Modal";
 import { TeamTable } from "../../../features/team/components/TeamTable";
 import { TeamMemberForm } from "../../../features/team/components/TeamMemberForm";
 import { PermissionGate } from "../../../features/auth/components/PermissionGate";
-import { AlertCircle } from "lucide-react";
 
 export default function DashboardTeamPage() {
-    const [employees, setEmployees] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
 
-    const refreshEmployees = async () => {
-        try {
-            setLoading(true);
-            const data = await fetchUsers();
-            setEmployees(data);
-            setError(null);
-        } catch (err) {
-            setError(err.message || "Failed to load team members");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        refreshEmployees();
-    }, []);
+    const { data: employees = [], refetch } = useQuery({
+        queryKey: ["users"],
+        queryFn: () => fetchUsers(),
+        retry: 1
+    });
 
     const handleSaved = () => {
         setIsModalOpen(false);
-        refreshEmployees();
+        refetch();
     };
 
     return (
