@@ -14,7 +14,8 @@ const idParamsSchema = {
 
 const inventoryRefFields = {
     projectId: z.string().uuid('projectId must be a valid UUID').nullish(),
-    propertyId: z.string().uuid('propertyId must be a valid UUID').nullish()
+    propertyId: z.string().uuid('propertyId must be a valid UUID').nullish(),
+    configurationId: z.string().uuid('configurationId must be a valid UUID').nullish()
 };
 
 // Structured customer requirement (Phase 7). preferredLocations references the

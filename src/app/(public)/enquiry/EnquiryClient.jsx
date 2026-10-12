@@ -13,7 +13,7 @@ import { formatPrice } from "../../../utils/format";
 const placeLabel = (location) =>
     [location?.locality || location?.district, location?.state].filter(Boolean).join(", ");
 
-export default function EnquiryClient({ type = "enquiry", projectSlug = "", propertyToken = "" }) {
+export default function EnquiryClient({ type = "enquiry", projectSlug = "", propertyToken = "", configuration = "" }) {
     const isVisit = type === "visit";
 
     const [projects, setProjects] = useState([]);
@@ -26,7 +26,7 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
         projectSlug: projectSlug || "",
         date: "",
         time: "10:00",
-        unitType: "",
+        unitType: configuration || "",
         message: "",
     });
     const [submitting, setSubmitting] = useState(false);
@@ -76,6 +76,10 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
         if (isVisit && form.date) payload.preferredVisitDate = form.date;
         if (isVisit && form.time) payload.preferredVisitTime = form.time;
         if (form.unitType) payload.interestedUnitType = form.unitType;
+        // Configuration attribution: the visitor's selection (or the
+        // deep-linked configuration) resolves to a configurationId server-side.
+        const configLabel = form.unitType || configuration;
+        if (configLabel) payload.configuration = configLabel;
 
         try {
             await submitPublicEnquiry(payload);

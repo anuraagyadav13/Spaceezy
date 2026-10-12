@@ -4,7 +4,8 @@ const {
     getConfiguration,
     createConfiguration,
     updateConfiguration,
-    deleteConfiguration
+    deleteConfiguration,
+    updateInventory
 } = require('../controllers/configurations');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -12,6 +13,7 @@ const {
     projectIdParamsSchema,
     createConfigurationSchema,
     updateConfigurationSchema,
+    updateInventorySchema,
     configurationParamsSchema
 } = require('../validators/configuration');
 
@@ -23,6 +25,7 @@ router.get('/', requirePermission('project:view'), validate(projectIdParamsSchem
 router.get('/:configId', requirePermission('project:view'), validate(configurationParamsSchema), getConfiguration);
 router.post('/', requirePermission('project:create'), validate(createConfigurationSchema), createConfiguration);
 router.patch('/:configId', requirePermission('project:update'), validate(updateConfigurationSchema), updateConfiguration);
+router.patch('/:configId/inventory', requirePermission('project:update'), validate(updateInventorySchema), updateInventory);
 router.delete('/:configId', requirePermission('project:update'), validate(configurationParamsSchema), deleteConfiguration);
 
 module.exports = router;

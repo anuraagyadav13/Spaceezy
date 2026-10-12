@@ -1,6 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const LocationService = require('./locationService');
+const ConfigurationService = require('./configurationService');
 const { generatePublicSlug } = require('../utils/publicLink');
 
 class ProjectService {
@@ -163,6 +164,22 @@ class ProjectService {
         ]);
 
         // Enrich with live inventory counts from DB
+        // Bulk-mode configuration counters are folded in: bulk configs have
+        // zero linked Property rows (enforced), so the sums cannot overlap.
+        const bulkByProject = new Map();
+        if (projects.length > 0) {
+            const bulkRows = (await prisma.configuration.findMany({
+                where: { projectId: { in: projects.map((p) => p.id) }, organizationId, totalUnits: { not: null } },
+                select: { projectId: true, totalUnits: true, availableUnits: true }
+            })) || [];
+            for (const row of bulkRows) {
+                const entry = bulkByProject.get(row.projectId) || { total: 0, available: 0 };
+                entry.total += row.totalUnits || 0;
+                entry.available += row.availableUnits || 0;
+                bulkByProject.set(row.projectId, entry);
+            }
+        }
+
         const enriched = await Promise.all(projects.map(async (project) => {
             const statusCounts = await prisma.property.groupBy({
                 by: ['status'],
@@ -182,6 +199,11 @@ class ProjectService {
                 if (sc.status === 'RESERVED') inventory.reserved = sc._count.status;
                 if (sc.status === 'SOLD') inventory.sold = sc._count.status;
             });
+            const bulk = bulkByProject.get(project.id);
+            if (bulk) {
+                inventory.total += bulk.total;
+                inventory.available += bulk.available;
+            }
 
             return {
                 ...project,
@@ -276,6 +298,13 @@ class ProjectService {
             if (sc.status === 'SOLD') inventory.sold = sc._count.status;
         });
 
+        // Fold in bulk-mode configuration counters. The included
+        // configurations carry the stored counters; bulk configs have zero
+        // linked rows (enforced at write time), so the sums cannot overlap.
+        const bulk = ConfigurationService.sumBulkCounters(project.configurations);
+        inventory.total += bulk.total;
+        inventory.available += bulk.available;
+
         // Compute configuration summary from properties
         const configCounts = await prisma.property.groupBy({
             by: ['configuration'],
@@ -285,15 +314,53 @@ class ProjectService {
             _max: { price: true }
         });
 
+        // Per-label unit aggregates from the already-loaded property rows, so
+        // unit-tracked entries can report their own available counts.
+        const unitAgg = new Map();
+        for (const unit of project.properties || []) {
+            const key = String(unit.configuration || 'Unknown').toLowerCase();
+            const entry = unitAgg.get(key) || { count: 0, available: 0 };
+            entry.count += 1;
+            if (unit.status === 'AVAILABLE') entry.available += 1;
+            unitAgg.set(key, entry);
+        }
+
+        const summaryByLabel = new Map();
+        for (const cc of configCounts) {
+            const label = cc.configuration || 'Unknown';
+            const agg = unitAgg.get(label.toLowerCase()) || { available: 0 };
+            summaryByLabel.set(label.toLowerCase(), {
+                configuration: label,
+                count: cc._count.configuration,
+                availableUnits: agg.available,
+                minPrice: cc._min.price,
+                maxPrice: cc._max.price,
+                mode: 'units'
+            });
+        }
+
+        // Bulk-mode configurations have no property rows, so they never
+        // appear above — merge them under their canonical name. Stray
+        // same-label free-text rows (unreachable via API guards) fold into
+        // the same entry so summary counts stay reconciled with the totals.
+        for (const config of project.configurations || []) {
+            if (!ConfigurationService.isBulkMode(config)) continue;
+            const key = String(config.name || '').toLowerCase();
+            const prev = summaryByLabel.get(key);
+            summaryByLabel.set(key, {
+                configuration: config.name,
+                count: (config.totalUnits || 0) + (prev && prev.mode === 'units' ? prev.count : 0),
+                availableUnits: (config.availableUnits || 0) + (prev && prev.mode === 'units' ? (prev.availableUnits || 0) : 0),
+                minPrice: config.priceMin ?? config.basePrice ?? (prev ? prev.minPrice : null),
+                maxPrice: config.priceMax ?? config.basePrice ?? (prev ? prev.maxPrice : null),
+                mode: 'bulk'
+            });
+        }
+
         return {
             ...project,
             inventory,
-            configurationSummary: configCounts.map(cc => ({
-                configuration: cc.configuration || 'Unknown',
-                count: cc._count.configuration,
-                minPrice: cc._min.price,
-                maxPrice: cc._max.price
-            }))
+            configurationSummary: Array.from(summaryByLabel.values())
         };
     }
 

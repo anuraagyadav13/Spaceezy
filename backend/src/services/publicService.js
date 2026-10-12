@@ -81,6 +81,9 @@ class PublicService {
 
     // Price/availability rollup for a set of projects (computed from real unit
     // rows — no denormalized counters that can drift).
+    // Bulk-mode configuration counters are folded in: bulk configs have zero
+    // linked Property rows (enforced), so the sums cannot overlap. Only
+    // active configurations contribute publicly.
     static async projectStats(projectIds) {
         if (!projectIds.length) return new Map();
         const groups = await prisma.property.groupBy({
@@ -106,6 +109,23 @@ class PublicService {
             if (min !== null && (stat.minPrice === null || min < stat.minPrice)) stat.minPrice = min;
             if (max !== null && (stat.maxPrice === null || max > stat.maxPrice)) stat.maxPrice = max;
             map.set(g.projectId, stat);
+        }
+        const bulkRows = (await prisma.configuration.findMany({
+            where: { projectId: { in: projectIds }, active: true, totalUnits: { not: null } },
+            select: { projectId: true, totalUnits: true, availableUnits: true, priceMin: true, priceMax: true }
+        })) || [];
+        for (const row of bulkRows) {
+            const stat = map.get(row.projectId) || {
+                totalUnits: 0, availableUnits: 0, reservedUnits: 0, soldUnits: 0,
+                minPrice: null, maxPrice: null
+            };
+            stat.totalUnits += row.totalUnits || 0;
+            stat.availableUnits += row.availableUnits || 0;
+            const min = money(row.priceMin);
+            const max = money(row.priceMax);
+            if (min !== null && (stat.minPrice === null || min < stat.minPrice)) stat.minPrice = min;
+            if (max !== null && (stat.maxPrice === null || max > stat.maxPrice)) stat.maxPrice = max;
+            map.set(row.projectId, stat);
         }
         return map;
     }
@@ -280,11 +300,20 @@ class PublicService {
                 soldUnits: stats.soldUnits
             },
             unitTypes: Array.from(unitTypes.values()),
+            // Safe aggregates only: names, representative values, and
+            // bulk-mode counters/ranges. No internal IDs, versions, unit
+            // numbers, or owner fields ever leave this DTO.
             configurations: project.configurations.map((c) => ({
                 name: c.name,
                 bhk: c.bhk,
                 areaSaleable: c.areaSaleable,
-                basePrice: money(c.basePrice)
+                basePrice: money(c.basePrice),
+                totalUnits: c.totalUnits ?? null,
+                availableUnits: c.availableUnits ?? null,
+                areaMin: c.areaMin ?? null,
+                areaMax: c.areaMax ?? null,
+                priceMin: money(c.priceMin),
+                priceMax: money(c.priceMax)
             })),
             url: buildPublicProjectUrl(project.publicSlug)
         };

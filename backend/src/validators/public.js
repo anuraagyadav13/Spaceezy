@@ -25,6 +25,9 @@ const publicEnquirySchema = {
         // handle (or learn) internal inventory IDs.
         propertyToken: z.string().max(64).optional().nullable(),
         projectSlug: z.string().max(120).optional().nullable(),
+        // Bulk-mode attribution: configuration label resolved server-side
+        // within the resolved project (never a raw internal ID).
+        configuration: z.string().max(100).optional().nullable(),
         preferredVisitDate: z.string()
             .refine((v) => !Number.isNaN(Date.parse(v)), 'Invalid date')
             .optional().nullable(),

@@ -328,11 +328,22 @@ export default async function ProjectDetailPage({ params }) {
                             <div>
                                 <p className="text-sm text-gray-500 mb-1">Configurations</p>
                                 <div className="flex flex-wrap gap-2 mt-2">
-                                    {(project.configurations || []).map((conf) => (
-                                        <span key={conf.name} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm font-medium">
-                                            {conf.name}{conf.bhk ? ` · ${conf.areaSaleable ? `${conf.areaSaleable} sq.ft` : ""}` : ""}
-                                        </span>
-                                    ))}
+                                    {(project.configurations || []).map((conf) => {
+                                        const isBulk = conf.totalUnits !== null && conf.totalUnits !== undefined;
+                                        const bulkAvailable = isBulk ? (conf.availableUnits ?? 0) : null;
+                                        return (
+                                            <Link
+                                                key={conf.name}
+                                                href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}&configuration=${encodeURIComponent(conf.name)}`}
+                                                className="bg-gray-100 hover:bg-purple-50 text-gray-700 hover:text-purple-700 px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                                                title={`Enquire about ${conf.name}`}
+                                            >
+                                                {conf.name}{conf.bhk ? ` · ${conf.areaSaleable ? `${conf.areaSaleable} sq.ft` : ""}` : ""}
+                                                {bulkAvailable !== null && bulkAvailable > 0 ? ` · ${bulkAvailable} available` : ""}
+                                                {bulkAvailable === 0 ? " · Sold out" : ""}
+                                            </Link>
+                                        );
+                                    })}
                                     {(project.configurations || []).length === 0 && (
                                         <span className="text-sm text-gray-400">Coming soon</span>
                                     )}

@@ -1,6 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const { generatePublicToken } = require('../utils/publicLink');
+const ConfigurationService = require('./configurationService');
 
 const AREA_FIELDS = ['area', 'areaCarpet', 'areaSaleable', 'areaBuiltUp', 'areaProject', 'areaCovered', 'areaTerrace'];
 
@@ -249,6 +250,13 @@ class PropertyService {
 
         if (payload.configurationId) {
             const config = await PropertyService.resolveConfiguration(payload.configurationId, normalized.projectId, organizationId);
+            if (ConfigurationService.isBulkMode(config)) {
+                throw new AppError(
+                    `Configuration "${config.name}" uses bulk inventory tracking and cannot have individual unit records`,
+                    409,
+                    'BULK_MODE_CONFIGURATION'
+                );
+            }
             payload.configuration = config.name;
             if (payload.bhk === undefined || payload.bhk === null) payload.bhk = config.bhk;
             if (payload.areaSaleable === undefined || payload.areaSaleable === null) payload.areaSaleable = config.areaSaleable;
@@ -316,6 +324,13 @@ class PropertyService {
             const config = await PropertyService.resolveConfiguration(
                 safeData.configurationId, existing.projectId, organizationId
             );
+            if (ConfigurationService.isBulkMode(config)) {
+                throw new AppError(
+                    `Configuration "${config.name}" uses bulk inventory tracking and cannot have individual unit records`,
+                    409,
+                    'BULK_MODE_CONFIGURATION'
+                );
+            }
             safeData.configuration = config.name;
         }
 
@@ -403,7 +418,7 @@ class PropertyService {
 
         const configs = await prisma.configuration.findMany({
             where: { projectId, organizationId },
-            select: { id: true, name: true, bhk: true, areaSaleable: true, basePrice: true }
+            select: { id: true, name: true, bhk: true, areaSaleable: true, basePrice: true, totalUnits: true, availableUnits: true }
         });
         const configByName = new Map(configs.map(c => [c.name.toLowerCase(), c]));
 
@@ -441,6 +456,8 @@ class PropertyService {
                 config = configByName.get(configName.toLowerCase());
                 if (!config) {
                     errors.push(`Configuration "${configName}" not found in project "${project.name}"`);
+                } else if (ConfigurationService.isBulkMode(config)) {
+                    errors.push(`Configuration "${configName}" uses bulk inventory tracking and cannot have individual units imported`);
                 }
             }
 

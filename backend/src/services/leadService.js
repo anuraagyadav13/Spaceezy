@@ -39,8 +39,10 @@ class LeadService {
     static async resolveInventoryRefs(db, payload, organizationId, existingLead = null) {
         const hasProject = Object.prototype.hasOwnProperty.call(payload, 'projectId');
         const hasProperty = Object.prototype.hasOwnProperty.call(payload, 'propertyId');
+        const hasConfiguration = Object.prototype.hasOwnProperty.call(payload, 'configurationId');
         let projectId = hasProject ? payload.projectId : undefined;
         let propertyId = hasProperty ? payload.propertyId : undefined;
+        let configurationId = hasConfiguration ? payload.configurationId : undefined;
 
         if (hasProject && projectId !== existingLead?.projectId && !hasProperty && existingLead?.propertyId) {
             const existingProperty = await db.property.findFirst({
@@ -52,10 +54,22 @@ class LeadService {
             }
         }
 
+        // Changing project clears a stale configuration reference, mirroring
+        // the unit rule above.
+        if (hasProject && projectId !== existingLead?.projectId && !hasProperty && !hasConfiguration && existingLead?.configurationId) {
+            const existingConfiguration = await db.configuration.findFirst({
+                where: { id: existingLead.configurationId, organizationId },
+                select: { id: true, projectId: true }
+            });
+            if (!existingConfiguration || existingConfiguration.projectId !== projectId) {
+                configurationId = null;
+            }
+        }
+
         if (propertyId) {
             const property = await db.property.findFirst({
                 where: { id: propertyId, organizationId },
-                select: { id: true, projectId: true }
+                select: { id: true, projectId: true, configurationId: true }
             });
             if (!property) throw new AppError('Property not found', 404, 'NOT_FOUND');
             if (projectId === undefined || projectId === null) {
@@ -63,10 +77,29 @@ class LeadService {
             } else if (projectId !== property.projectId) {
                 throw new AppError('Property does not belong to the selected project', 400, 'CROSS_PROJECT_REFERENCE');
             }
+            if (!hasConfiguration && property.configurationId) {
+                configurationId = property.configurationId;
+            } else if (hasConfiguration && configurationId && property.configurationId && property.configurationId !== configurationId) {
+                throw new AppError('Property does not belong to the selected configuration', 400, 'BAD_REQUEST');
+            }
+        }
+
+        if (configurationId) {
+            const configuration = await db.configuration.findFirst({
+                where: { id: configurationId, organizationId },
+                select: { id: true, projectId: true }
+            });
+            if (!configuration) throw new AppError('Configuration not found', 404, 'NOT_FOUND');
+            if (projectId === undefined || projectId === null) {
+                projectId = configuration.projectId;
+            } else if (projectId !== configuration.projectId) {
+                throw new AppError('Configuration does not belong to the selected project', 400, 'CROSS_PROJECT_REFERENCE');
+            }
         }
 
         if (projectId === null) {
             if (propertyId === undefined) propertyId = null;
+            if (configurationId === undefined) configurationId = null;
         } else if (projectId) {
             const project = await db.project.findFirst({
                 where: { id: projectId, organizationId },
@@ -75,7 +108,7 @@ class LeadService {
             if (!project) throw new AppError('Project not found', 404, 'NOT_FOUND');
         }
 
-        return { projectId, propertyId };
+        return { projectId, propertyId, configurationId };
     }
 
     static normalizeLeadPayload(data = {}) {
@@ -483,6 +516,7 @@ class LeadService {
         const refs = await LeadService.resolveInventoryRefs(prisma, payload, organizationId, null);
         if (refs.projectId !== undefined) payload.projectId = refs.projectId;
         if (refs.propertyId !== undefined) payload.propertyId = refs.propertyId;
+        if (refs.configurationId !== undefined) payload.configurationId = refs.configurationId;
 
         return await prisma.$transaction(async (tx) => {
             const lead = await tx.lead.create({
@@ -762,6 +796,7 @@ class LeadService {
         const refs = await LeadService.resolveInventoryRefs(prisma, payload, organizationId, existing);
         if (refs.projectId !== undefined) payload.projectId = refs.projectId;
         if (refs.propertyId !== undefined) payload.propertyId = refs.propertyId;
+        if (refs.configurationId !== undefined) payload.configurationId = refs.configurationId;
 
         const updated = await prisma.lead.update({
             where: { id },
@@ -842,17 +877,39 @@ class LeadService {
             // instead of failing the public submission.
             let projectId = isUuid(data.projectId) ? data.projectId : null;
             let propertyId = isUuid(data.propertyId) ? data.propertyId : null;
+            let property = null;
             if (projectId) {
                 const project = await tx.project.findFirst({ where: { id: projectId, organizationId: spaceezyOrgId }, select: { id: true } });
                 if (!project) projectId = null;
             }
             if (propertyId) {
-                const property = await tx.property.findFirst({ where: { id: propertyId, organizationId: spaceezyOrgId }, select: { id: true, projectId: true } });
+                property = await tx.property.findFirst({ where: { id: propertyId, organizationId: spaceezyOrgId }, select: { id: true, projectId: true, configurationId: true } });
                 if (!property || (projectId && property.projectId !== projectId)) {
                     propertyId = null;
                 } else if (!projectId) {
                     projectId = property.projectId;
                 }
+            }
+            // Bulk-mode attribution: resolve the visitor-supplied configuration
+            // label server-side within the resolved project. Unknown labels are
+            // dropped, like invalid IDs. The exact unit's own configuration
+            // wins when a property is referenced.
+            let configurationId = property && property.configurationId ? property.configurationId : null;
+            if (!configurationId && typeof data.configuration === 'string' && data.configuration.trim() && projectId) {
+                const config = await tx.configuration.findFirst({
+                    where: { projectId, organizationId: spaceezyOrgId, active: true, name: { equals: data.configuration.trim(), mode: 'insensitive' } },
+                    select: { id: true }
+                });
+                if (config) configurationId = config.id;
+            }
+            // Fall back to the visitor's selected unit type so everyday
+            // website enquiries also carry configuration attribution.
+            if (!configurationId && typeof data.interestedUnitType === 'string' && data.interestedUnitType.trim() && projectId) {
+                const configByType = await tx.configuration.findFirst({
+                    where: { projectId, organizationId: spaceezyOrgId, active: true, name: { equals: data.interestedUnitType.trim(), mode: 'insensitive' } },
+                    select: { id: true }
+                });
+                if (configByType) configurationId = configByType.id;
             }
             // Find existing lead by phone
             const existingLead = await tx.lead.findFirst({
@@ -870,6 +927,10 @@ class LeadService {
                 if (resolvedPropertyId && resolvedProjectId !== existingLead.projectId && !propertyId) {
                     resolvedPropertyId = null;
                 }
+                let resolvedConfigurationId = configurationId || existingLead.configurationId;
+                if (resolvedConfigurationId && resolvedProjectId !== existingLead.projectId && !configurationId) {
+                    resolvedConfigurationId = null;
+                }
 
                 // Update relevant context but keep status unless it was LOST
                 lead = await tx.lead.update({
@@ -878,6 +939,7 @@ class LeadService {
                         message: data.message ? `${existingLead.message || ''}\n\nNew Enquiry: ${data.message}` : existingLead.message,
                         projectId: resolvedProjectId,
                         propertyId: resolvedPropertyId,
+                        configurationId: resolvedConfigurationId,
                         status: existingLead.status === 'LOST' ? 'NEW' : existingLead.status
                     }
                 });
@@ -887,7 +949,7 @@ class LeadService {
                         organizationId: spaceezyOrgId,
                         leadId: lead.id,
                         type: 'NOTE',
-                        description: `Duplicate enquiry received from website. Project: ${resolvedProjectId || 'N/A'}, Property: ${resolvedPropertyId || 'N/A'}`
+                        description: `Duplicate enquiry received from website. Project: ${resolvedProjectId || 'N/A'}, Property: ${resolvedPropertyId || 'N/A'}, Configuration: ${resolvedConfigurationId || 'N/A'}`
                     }
                 });
             } else {
@@ -903,6 +965,7 @@ class LeadService {
                         landingPage: data.landingPage,
                         projectId,
                         propertyId,
+                        configurationId,
                         message: data.message,
                         status: 'NEW',
                         preferredVisitDate: data.preferredVisitDate ? new Date(data.preferredVisitDate) : null,

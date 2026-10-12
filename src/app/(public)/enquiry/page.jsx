@@ -32,6 +32,7 @@ export default async function EnquiryPage({ searchParams }) {
                     type={first(sp.type) === "visit" ? "visit" : "enquiry"}
                     projectSlug={first(sp.projectSlug)}
                     propertyToken={first(sp.propertyToken)}
+                    configuration={first(sp.configuration)}
                 />
             </div>
         </div>

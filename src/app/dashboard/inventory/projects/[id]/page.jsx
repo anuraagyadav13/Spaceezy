@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { fetchProjectById, updateProject, deleteProject } from "../../../../../lib/api/projects";
 import {
-    fetchConfigurations, createConfiguration, deleteConfiguration
+    fetchConfigurations, createConfiguration, deleteConfiguration,
+    updateConfigurationInventory
 } from "../../../../../lib/api/configurations";
 import { updateProperty } from "../../../../../lib/api/properties";
 import { PermissionGate } from "../../../../../features/auth/components/PermissionGate";
@@ -64,7 +65,15 @@ export default function ProjectDetailPage() {
     const [editing, setEditing] = useState(false);
     const [unitSearch, setUnitSearch] = useState("");
     const [unitStatus, setUnitStatus] = useState("");
-    const [configForm, setConfigForm] = useState({ name: "", bhk: "", areaSaleable: "", basePrice: "" });
+    // Multi-row bulk configuration draft. totalUnits set = bulk inventory
+    // mode (available defaults to total server-side); empty = classic
+    // unit-tracked mode.
+    const emptyConfigRow = () => ({ name: "", bhk: "", areaSaleable: "", basePrice: "", totalUnits: "", availableUnits: "" });
+    const [configRows, setConfigRows] = useState([emptyConfigRow()]);
+    const [bulkAdding, setBulkAdding] = useState(false);
+    // Inline bulk-inventory adjust state (config id + draft counters).
+    const [adjustingId, setAdjustingId] = useState(null);
+    const [adjustForm, setAdjustForm] = useState({ totalUnits: "", availableUnits: "" });
     const [locationSel, setLocationSel] = useState({ stateId: "", districtId: "", regionId: "" });
     const [editImages, setEditImages] = useState([]);
 
@@ -129,16 +138,6 @@ export default function ProjectDetailPage() {
         onError: (err) => showToast(err?.message || "Could not change publication", "error")
     });
 
-    const addConfig = useMutation({
-        mutationFn: (data) => createConfiguration(projectId, data),
-        onSuccess: () => {
-            showToast("Configuration added");
-            setConfigForm({ name: "", bhk: "", areaSaleable: "", basePrice: "" });
-            invalidate();
-        },
-        onError: (err) => showToast(err?.message || "Failed to add configuration", "error")
-    });
-
     const removeConfig = useMutation({
         mutationFn: (configId) => deleteConfiguration(projectId, configId),
         onSuccess: () => {
@@ -146,6 +145,26 @@ export default function ProjectDetailPage() {
             invalidate();
         },
         onError: (err) => showToast(err?.message || "Failed to delete configuration", "error")
+    });
+
+    // Explicit bulk-inventory adjustment with optimistic concurrency. On a
+    // 409 conflict the data is refreshed and the user retries against the
+    // latest version — never silent last-write-wins.
+    const adjustInventory = useMutation({
+        mutationFn: ({ configId, data }) => updateConfigurationInventory(projectId, configId, data),
+        onSuccess: () => {
+            showToast("Inventory updated");
+            setAdjustingId(null);
+            invalidate();
+        },
+        onError: (err) => {
+            if (err?.code === "INVENTORY_CONFLICT" || err?.status === 409) {
+                showToast("Inventory was changed by someone else — refreshed to the latest. Review and retry.", "error");
+            } else {
+                showToast(err?.message || "Failed to update inventory", "error");
+            }
+            invalidate();
+        }
     });
 
     const changeUnitStatus = useMutation({
@@ -171,6 +190,17 @@ export default function ProjectDetailPage() {
 
     const configList = Array.isArray(configurations) ? configurations : [];
 
+    // Available units per configuration for unit-tracked configs, derived
+    // from the loaded unit rows (bulk configs carry stored counters instead).
+    const unitAvailByConfigId = useMemo(() => {
+        const map = new Map();
+        for (const u of project?.properties || []) {
+            if (u.status !== "AVAILABLE" || !u.configurationId) continue;
+            map.set(u.configurationId, (map.get(u.configurationId) || 0) + 1);
+        }
+        return map;
+    }, [project]);
+
     if (isPending) {
         return (
             <div className="flex items-center justify-center h-full text-gray-400">
@@ -195,14 +225,84 @@ export default function ProjectDetailPage() {
     }
 
     const inv = project.inventory || {};
-    const handleConfigSubmit = (e) => {
+    const updateConfigRow = (idx, patch) =>
+        setConfigRows((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+    const addConfigRow = () =>
+        setConfigRows((rows) => [...rows, emptyConfigRow()]);
+    const removeConfigRow = (idx) =>
+        setConfigRows((rows) => (rows.length > 1 ? rows.filter((_, i) => i !== idx) : rows));
+
+    const buildConfigPayload = (row) => ({
+        name: row.name.trim(),
+        ...(row.bhk !== "" ? { bhk: Number(row.bhk) } : {}),
+        ...(row.areaSaleable !== "" ? { areaSaleable: Number(row.areaSaleable) } : {}),
+        ...(row.basePrice !== "" ? { basePrice: Number(row.basePrice) } : {}),
+        ...(row.totalUnits !== "" ? { totalUnits: Number(row.totalUnits) } : {}),
+        ...(row.availableUnits !== "" ? { availableUnits: Number(row.availableUnits) } : {}),
+    });
+
+    // Save all filled rows in one workflow. Rows are created sequentially so
+    // per-row server errors (duplicates, available > total, mixed mode) can
+    // be attributed; one refresh happens at the end.
+    const handleConfigSubmit = async (e) => {
         e.preventDefault();
-        if (!configForm.name.trim()) return;
-        addConfig.mutate({
-            name: configForm.name.trim(),
-            ...(configForm.bhk !== "" ? { bhk: Number(configForm.bhk) } : {}),
-            ...(configForm.areaSaleable !== "" ? { areaSaleable: Number(configForm.areaSaleable) } : {}),
-            ...(configForm.basePrice !== "" ? { basePrice: Number(configForm.basePrice) } : {}),
+        const rows = configRows.map(buildConfigPayload).filter((r) => r.name);
+        if (!rows.length || bulkAdding) return;
+        setBulkAdding(true);
+        let ok = 0;
+        const failures = [];
+        for (let i = 0; i < rows.length; i++) {
+            try {
+                await createConfiguration(projectId, rows[i]);
+                ok += 1;
+            } catch (err) {
+                failures.push(`${rows[i].name}: ${err?.message || "failed"}`);
+            }
+        }
+        setBulkAdding(false);
+        setConfigRows([emptyConfigRow()]);
+        invalidate();
+        if (failures.length === 0) {
+            showToast(`Added ${ok} configuration${ok === 1 ? "" : "s"}`);
+        } else {
+            showToast(
+                `Added ${ok} of ${rows.length} configuration${rows.length === 1 ? "" : "s"}. Failed: ${failures.join("; ")}`,
+                "error"
+            );
+        }
+    };
+
+    const openAdjust = (config) => {
+        setAdjustingId(config.id);
+        setAdjustForm({
+            totalUnits: config.totalUnits ?? "",
+            availableUnits: config.availableUnits ?? "",
+        });
+    };
+
+    const adjustingConfig = adjustingId ? configList.find((c) => c.id === adjustingId) || null : null;
+
+    const submitAdjust = (e, config) => {
+        e.preventDefault();
+        if (adjustForm.totalUnits === "" && adjustForm.availableUnits === "") {
+            showToast("Enter both totals to save, or use Unit mode to clear back to individual-unit tracking", "error");
+            return;
+        }
+        adjustInventory.mutate({
+            configId: config.id,
+            data: {
+                totalUnits: adjustForm.totalUnits === "" ? null : Number(adjustForm.totalUnits),
+                availableUnits: adjustForm.availableUnits === "" ? null : Number(adjustForm.availableUnits),
+                expectedInventoryVersion: config.inventoryVersion ?? 0,
+            },
+        });
+    };
+
+    const clearToUnitMode = (config) => {
+        if (!window.confirm(`Switch "${config.name}" back to individual-unit tracking? Stored totals will be cleared.`)) return;
+        adjustInventory.mutate({
+            configId: config.id,
+            data: { totalUnits: null, availableUnits: null, expectedInventoryVersion: config.inventoryVersion ?? 0 },
         });
     };
 
@@ -414,51 +514,161 @@ export default function ProjectDetailPage() {
                                         <th className="p-3">BHK</th>
                                         <th className="p-3">Area (sq.ft)</th>
                                         <th className="p-3">Base Price</th>
-                                        <th className="p-3">Units</th>
+                                        <th className="p-3">Total</th>
+                                        <th className="p-3">Available</th>
                                         <th className="p-3 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {configList.map((c) => (
-                                        <tr key={c.id} className="hover:bg-gray-50">
-                                            <td className="p-3 font-bold text-gray-900">{c.name}</td>
-                                            <td className="p-3 text-gray-600">{c.bhk ?? "—"}</td>
-                                            <td className="p-3 text-gray-600">{c.areaSaleable ?? "—"}</td>
-                                            <td className="p-3 font-black text-purple-700">{c.basePrice != null ? formatCurrency(c.basePrice) : "—"}</td>
-                                            <td className="p-3 text-gray-600">{c._count?.properties ?? 0}</td>
-                                            <td className="p-3 text-right">
-                                                <PermissionGate permission="project:update">
-                                                    <button
-                                                        onClick={() => {
-                                                            if (window.confirm(`Delete configuration "${c.name}"?`)) removeConfig.mutate(c.id);
-                                                        }}
-                                                        className="text-red-500 hover:text-red-700 p-1"
-                                                        title="Delete configuration"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </PermissionGate>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {configList.map((c) => {
+                                        const isBulk = c.totalUnits !== null && c.totalUnits !== undefined;
+                                        return (
+                                            <tr key={c.id} className="hover:bg-gray-50">
+                                                <td className="p-3 font-bold text-gray-900">
+                                                    {c.name}
+                                                    {isBulk && (
+                                                        <span className="ml-2 px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-black uppercase">Bulk</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-gray-600">{c.bhk ?? "—"}</td>
+                                                <td className="p-3 text-gray-600">{c.areaSaleable ?? "—"}</td>
+                                                <td className="p-3 font-black text-purple-700">{c.basePrice != null ? formatCurrency(c.basePrice) : "—"}</td>
+                                                <td className="p-3 text-gray-600">{isBulk ? c.totalUnits : (c._count?.properties ?? 0)}</td>
+                                                <td className="p-3 text-gray-600">{isBulk ? c.availableUnits : (unitAvailByConfigId.get(c.id) ?? 0)}</td>
+                                                <td className="p-3 text-right whitespace-nowrap">
+                                                    {isBulk && (
+                                                        <PermissionGate permission="project:update">
+                                                            <button
+                                                                onClick={() => openAdjust(c)}
+                                                                className="text-purple-600 hover:text-purple-800 p-1"
+                                                                title="Adjust bulk inventory"
+                                                            >
+                                                                <Pencil size={14} />
+                                                            </button>
+                                                        </PermissionGate>
+                                                    )}
+                                                    <PermissionGate permission="project:update">
+                                                        <button
+                                                            onClick={() => {
+                                                                if (window.confirm(`Delete configuration "${c.name}"?`)) removeConfig.mutate(c.id);
+                                                            }}
+                                                            className="text-red-500 hover:text-red-700 p-1"
+                                                            title="Delete configuration"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </PermissionGate>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
                     )}
 
+                    {adjustingConfig && (
+                        <PermissionGate permission="project:update">
+                            <form onSubmit={(e) => submitAdjust(e, adjustingConfig)} className="mb-4 rounded-2xl border border-purple-200 bg-[#faf7ff] p-4">
+                                <div className="text-xs font-black text-gray-700 mb-3">
+                                    Adjust bulk inventory — {adjustingConfig.name}
+                                    <span className="ml-2 font-semibold text-gray-400">version {adjustingConfig.inventoryVersion ?? 0}</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+                                    <div>
+                                        <label className={labelClass}>Total units</label>
+                                        <input
+                                            type="number" min="0"
+                                            value={adjustForm.totalUnits}
+                                            onChange={(e) => setAdjustForm((f) => ({ ...f, totalUnits: e.target.value }))}
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Available units</label>
+                                        <input
+                                            type="number" min="0"
+                                            value={adjustForm.availableUnits}
+                                            onChange={(e) => setAdjustForm((f) => ({ ...f, availableUnits: e.target.value }))}
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={adjustInventory.isPending}
+                                        className="h-[38px] px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                    >
+                                        {adjustInventory.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
+                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => clearToUnitMode(adjustingConfig)}
+                                            disabled={adjustInventory.isPending}
+                                            className="h-[38px] px-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-bold disabled:opacity-50"
+                                            title="Clear stored totals and return to individual-unit tracking"
+                                        >
+                                            Unit mode
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAdjustingId(null)}
+                                            className="h-[38px] px-3 text-gray-400 hover:text-gray-700 text-xs font-bold"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                                <p className="mt-2 text-[11px] text-gray-400">
+                                    Only aggregate availability changes — no unit records are created or modified. If someone else saves first, you will be asked to refresh and retry.
+                                </p>
+                            </form>
+                        </PermissionGate>
+                    )}
+
                     <PermissionGate permission="project:create">
-                        <form onSubmit={handleConfigSubmit} className="border-t border-gray-100 pt-4 grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
-                            <div><label className={labelClass}>Name *</label><input value={configForm.name} onChange={(e) => setConfigForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. 2 BHK" className={inputClass} /></div>
-                            <div><label className={labelClass}>BHK</label><input type="number" min="0" max="20" value={configForm.bhk} onChange={(e) => setConfigForm((f) => ({ ...f, bhk: e.target.value }))} className={inputClass} /></div>
-                            <div><label className={labelClass}>Saleable Area</label><input type="number" min="0" value={configForm.areaSaleable} onChange={(e) => setConfigForm((f) => ({ ...f, areaSaleable: e.target.value }))} className={inputClass} /></div>
-                            <div><label className={labelClass}>Base Price (₹)</label><input type="number" min="0" value={configForm.basePrice} onChange={(e) => setConfigForm((f) => ({ ...f, basePrice: e.target.value }))} className={inputClass} /></div>
-                            <button
-                                type="submit"
-                                disabled={addConfig.isPending || !configForm.name.trim()}
-                                className="h-[38px] px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
-                            >
-                                {addConfig.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add
-                            </button>
+                        <form onSubmit={handleConfigSubmit} className="border-t border-gray-100 pt-4 space-y-3">
+                            {configRows.map((row, idx) => (
+                                <div key={idx} className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
+                                    <div><label className={labelClass}>Name *</label><input value={row.name} onChange={(e) => updateConfigRow(idx, { name: e.target.value })} placeholder="e.g. 2 BHK" className={inputClass} /></div>
+                                    <div><label className={labelClass}>BHK</label><input type="number" min="0" max="20" value={row.bhk} onChange={(e) => updateConfigRow(idx, { bhk: e.target.value })} className={inputClass} /></div>
+                                    <div><label className={labelClass}>Saleable Area</label><input type="number" min="0" value={row.areaSaleable} onChange={(e) => updateConfigRow(idx, { areaSaleable: e.target.value })} className={inputClass} /></div>
+                                    <div><label className={labelClass}>Base Price (₹)</label><input type="number" min="0" value={row.basePrice} onChange={(e) => updateConfigRow(idx, { basePrice: e.target.value })} className={inputClass} /></div>
+                                    <div><label className={labelClass}>Total Units</label><input type="number" min="0" value={row.totalUnits} onChange={(e) => updateConfigRow(idx, { totalUnits: e.target.value })} placeholder="Bulk mode" className={inputClass} /></div>
+                                    <div><label className={labelClass}>Available</label><input type="number" min="0" value={row.availableUnits} onChange={(e) => updateConfigRow(idx, { availableUnits: e.target.value })} placeholder="= Total" className={inputClass} /></div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => removeConfigRow(idx)}
+                                            disabled={configRows.length <= 1}
+                                            className="h-[38px] px-3 text-gray-300 hover:text-red-500 disabled:opacity-30"
+                                            title="Remove row"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={addConfigRow}
+                                    className="h-[38px] px-4 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-sm font-bold inline-flex items-center gap-1.5"
+                                >
+                                    <Plus size={14} /> Add row
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={bulkAdding || !configRows.some((r) => r.name.trim())}
+                                    className="h-[38px] px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                >
+                                    {bulkAdding ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                                    Add {configRows.filter((r) => r.name.trim()).length || ""} configuration{configRows.filter((r) => r.name.trim()).length === 1 ? "" : "s"}
+                                </button>
+                            </div>
+                            <p className="text-[11px] text-gray-400">
+                                Leave Total Units empty for individual-unit tracking. Setting it creates a bulk configuration (Available defaults to Total) — no flat numbers or unit records needed.
+                            </p>
                         </form>
                     </PermissionGate>
                 </div>

@@ -66,10 +66,24 @@ const deleteConfiguration = asyncHandler(async (req, res) => {
     });
 });
 
+const updateInventory = asyncHandler(async (req, res) => {
+    const { projectId, configId } = req.params;
+    const { organizationId } = req.auth;
+
+    const configuration = await ConfigurationService.updateInventory(configId, projectId, req.body, organizationId);
+
+    res.status(200).json({
+        success: true,
+        data: configuration,
+        message: 'Configuration inventory updated successfully'
+    });
+});
+
 module.exports = {
     getConfigurations,
     getConfiguration,
     createConfiguration,
     updateConfiguration,
-    deleteConfiguration
+    deleteConfiguration,
+    updateInventory
 };

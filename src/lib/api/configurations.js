@@ -20,6 +20,11 @@ export const updateConfiguration = async (projectId, configId, data = {}) => {
     return response;
 };
 
+export const updateConfigurationInventory = async (projectId, configId, data = {}) => {
+    const response = await apiClient.patch(`/projects/${projectId}/configurations/${configId}/inventory`, data);
+    return response;
+};
+
 export const deleteConfiguration = async (projectId, configId) => {
     const response = await apiClient.delete(`/projects/${projectId}/configurations/${configId}`);
     return response;
