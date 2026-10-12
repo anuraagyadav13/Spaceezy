@@ -26,6 +26,7 @@ jest.mock('../src/db/prisma', () => {
             create: jest.fn(), update: jest.fn(), groupBy: jest.fn()
         },
         configuration: { findMany: jest.fn() },
+        booking: { findFirst: jest.fn(), count: jest.fn(), groupBy: jest.fn() },
         locationState: { findMany: jest.fn() },
         whatsAppConversation: { findFirst: jest.fn(), update: jest.fn() },
         whatsAppMessage: { create: jest.fn() },

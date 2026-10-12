@@ -107,7 +107,7 @@ export default function DashboardBookingsPage() {
                                         </p>
                                     </div>
                                     <p className="text-sm text-gray-700">
-                                        {b.project?.name || "—"} · {b.property ? (b.property.unitNumber || b.property.title) : "No unit"}
+                                        {b.project?.name || "—"} · {b.property ? (b.property.unitNumber || b.property.title) : (b.configuration ? `${b.configuration.name} (bulk)` : "No unit")}
                                     </p>
                                     <p className="text-sm font-bold text-emerald-600">{formatCurrency(b.amount)}</p>
                                     <p className="text-sm text-gray-500">{b.assignedTo?.name || "Unassigned"}</p>

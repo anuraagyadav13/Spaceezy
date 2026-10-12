@@ -2,6 +2,7 @@ const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const LocationService = require('./locationService');
 const ConfigurationService = require('./configurationService');
+const BookingService = require('./bookingService');
 const { generatePublicSlug } = require('../utils/publicLink');
 
 class ProjectService {
@@ -166,7 +167,9 @@ class ProjectService {
         // Enrich with live inventory counts from DB
         // Bulk-mode configuration counters are folded in: bulk configs have
         // zero linked Property rows (enforced), so the sums cannot overlap.
+        // Bulk reserved/sold derive from their booking rows.
         const bulkByProject = new Map();
+        const bulkBookedByProject = new Map();
         if (projects.length > 0) {
             const bulkRows = (await prisma.configuration.findMany({
                 where: { projectId: { in: projects.map((p) => p.id) }, organizationId, totalUnits: { not: null } },
@@ -177,6 +180,16 @@ class ProjectService {
                 entry.total += row.totalUnits || 0;
                 entry.available += row.availableUnits || 0;
                 bulkByProject.set(row.projectId, entry);
+            }
+            const bulkBookings = await BookingService.bulkBookingCounts(
+                prisma,
+                { projectId: { in: projects.map((p) => p.id) }, organizationId }
+            );
+            for (const entry of bulkBookings.values()) {
+                const agg = bulkBookedByProject.get(entry.projectId) || { reserved: 0, sold: 0 };
+                agg.reserved += entry.reserved;
+                agg.sold += entry.sold;
+                bulkBookedByProject.set(entry.projectId, agg);
             }
         }
 
@@ -203,6 +216,11 @@ class ProjectService {
             if (bulk) {
                 inventory.total += bulk.total;
                 inventory.available += bulk.available;
+            }
+            const bulkBooked = bulkBookedByProject.get(project.id);
+            if (bulkBooked) {
+                inventory.reserved += bulkBooked.reserved;
+                inventory.sold += bulkBooked.sold;
             }
 
             return {
@@ -301,9 +319,15 @@ class ProjectService {
         // Fold in bulk-mode configuration counters. The included
         // configurations carry the stored counters; bulk configs have zero
         // linked rows (enforced at write time), so the sums cannot overlap.
+        // Reserved/sold for bulk configs derive from their booking rows.
         const bulk = ConfigurationService.sumBulkCounters(project.configurations);
         inventory.total += bulk.total;
         inventory.available += bulk.available;
+        const bulkBookings = await BookingService.bulkBookingCounts(prisma, { projectId: id, organizationId });
+        for (const entry of bulkBookings.values()) {
+            inventory.reserved += entry.reserved;
+            inventory.sold += entry.sold;
+        }
 
         // Compute configuration summary from properties
         const configCounts = await prisma.property.groupBy({
@@ -315,24 +339,28 @@ class ProjectService {
         });
 
         // Per-label unit aggregates from the already-loaded property rows, so
-        // unit-tracked entries can report their own available counts.
+        // unit-tracked entries can report their own status split.
         const unitAgg = new Map();
         for (const unit of project.properties || []) {
             const key = String(unit.configuration || 'Unknown').toLowerCase();
-            const entry = unitAgg.get(key) || { count: 0, available: 0 };
+            const entry = unitAgg.get(key) || { count: 0, available: 0, reserved: 0, sold: 0 };
             entry.count += 1;
             if (unit.status === 'AVAILABLE') entry.available += 1;
+            else if (unit.status === 'RESERVED') entry.reserved += 1;
+            else if (unit.status === 'SOLD') entry.sold += 1;
             unitAgg.set(key, entry);
         }
 
         const summaryByLabel = new Map();
         for (const cc of configCounts) {
             const label = cc.configuration || 'Unknown';
-            const agg = unitAgg.get(label.toLowerCase()) || { available: 0 };
+            const agg = unitAgg.get(label.toLowerCase()) || { available: 0, reserved: 0, sold: 0 };
             summaryByLabel.set(label.toLowerCase(), {
                 configuration: label,
                 count: cc._count.configuration,
                 availableUnits: agg.available,
+                reservedUnits: agg.reserved,
+                soldUnits: agg.sold,
                 minPrice: cc._min.price,
                 maxPrice: cc._max.price,
                 mode: 'units'
@@ -347,10 +375,14 @@ class ProjectService {
             if (!ConfigurationService.isBulkMode(config)) continue;
             const key = String(config.name || '').toLowerCase();
             const prev = summaryByLabel.get(key);
+            const stray = prev && prev.mode === 'units' ? prev : null;
+            const bookings = bulkBookings.get(config.id) || { reserved: 0, sold: 0 };
             summaryByLabel.set(key, {
                 configuration: config.name,
-                count: (config.totalUnits || 0) + (prev && prev.mode === 'units' ? prev.count : 0),
-                availableUnits: (config.availableUnits || 0) + (prev && prev.mode === 'units' ? (prev.availableUnits || 0) : 0),
+                count: (config.totalUnits || 0) + (stray ? stray.count : 0),
+                availableUnits: (config.availableUnits || 0) + (stray ? (stray.availableUnits || 0) : 0),
+                reservedUnits: bookings.reserved + (stray ? (stray.reservedUnits || 0) : 0),
+                soldUnits: bookings.sold + (stray ? (stray.soldUnits || 0) : 0),
                 minPrice: config.priceMin ?? config.basePrice ?? (prev ? prev.minPrice : null),
                 maxPrice: config.priceMax ?? config.basePrice ?? (prev ? prev.maxPrice : null),
                 mode: 'bulk'

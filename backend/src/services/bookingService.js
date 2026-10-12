@@ -1,10 +1,36 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const ConfigurationService = require('./configurationService');
 
 const MAX_AMOUNT = 999999999999;
 const ACTIVE_BOOKING_STATUSES = ['PENDING', 'PARTIAL', 'COMPLETED'];
 
 class BookingService {
+    /**
+     * Reserved/sold derivation for bulk-mode configurations from booking
+     * rows: PENDING/PARTIAL bookings hold a unit (reserved), COMPLETED ones
+     * record a sale. Cancelled bookings are ignored. Unit-tracked configs
+     * never appear here (their bookings reference property rows instead).
+     * Returns Map configurationId -> { projectId, reserved, sold }.
+     */
+    static async bulkBookingCounts(db, where = {}) {
+        const groups = await db.booking.groupBy({
+            by: ['projectId', 'configurationId', 'paymentStatus'],
+            where: { ...where, configurationId: { not: null } },
+            _count: { _all: true }
+        });
+        const map = new Map();
+        for (const g of groups || []) {
+            if (!g.configurationId) continue;
+            const entry = map.get(g.configurationId) || { projectId: g.projectId, reserved: 0, sold: 0 };
+            const n = (g._count && g._count._all) || 0;
+            if (g.paymentStatus === 'COMPLETED') entry.sold += n;
+            else if (g.paymentStatus !== 'CANCELLED') entry.reserved += n;
+            map.set(g.configurationId, entry);
+        }
+        return map;
+    }
+
     static async getBookings(organizationId, query, role, userId) {
         const { page = 1, limit = 20, paymentStatus, search, sort = 'desc' } = query;
         const skip = (page - 1) * limit;
@@ -35,6 +61,7 @@ class BookingService {
                 include: {
                     customer: { select: { id: true, name: true, phone: true } },
                     property: { select: { id: true, title: true, unitNumber: true, status: true } },
+                    configuration: { select: { id: true, name: true } },
                     project: { select: { id: true, name: true } },
                     assignedTo: { select: { id: true, name: true } },
                     lead: { select: { id: true, name: true, status: true } },
@@ -53,6 +80,7 @@ class BookingService {
             include: {
                 customer: true,
                 property: { include: { project: { select: { name: true } } } },
+                configuration: { select: { id: true, name: true } },
                 project: { select: { id: true, name: true } },
                 assignedTo: { select: { id: true, name: true } },
                 lead: { select: { id: true, name: true, status: true } },
@@ -121,10 +149,13 @@ class BookingService {
     }
 
     /**
-     * Validates lead + quotation + unit scope inside the transaction and
-     * returns the authoritative booking amount.
+     * Validates lead + quotation + inventory scope inside the transaction and
+     * returns the authoritative booking amount. `inventory` carries exactly
+     * one of { property } (unit booking) or { configuration } (bulk booking).
      */
-    static async validateScope(tx, data, property, organizationId, userId, userRole) {
+    static async validateScope(tx, data, inventory, organizationId, userId, userRole) {
+        const { property = null, configuration = null } = inventory || {};
+        const inventoryProjectId = property ? property.projectId : (configuration ? configuration.projectId : null);
         let lead = null;
         let amount = data.amount;
 
@@ -134,7 +165,7 @@ class BookingService {
             if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
                 throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
             }
-            if (lead.projectId && property.projectId && lead.projectId !== property.projectId) {
+            if (lead.projectId && inventoryProjectId && lead.projectId !== inventoryProjectId) {
                 throw new AppError('Lead, quotation and unit must belong to the same project', 400, 'CROSS_PROJECT_REFERENCE');
             }
             const activeBooking = await tx.booking.findFirst({
@@ -178,33 +209,68 @@ class BookingService {
 
     static async createBooking(data, organizationId, userId, userRole) {
         return await prisma.$transaction(async (tx) => {
-            const property = await tx.property.findFirst({
-                where: { id: data.propertyId, organizationId }
-            });
-            if (!property) throw new AppError('Property not found in your organization', 404, 'NOT_FOUND');
+            const isBulk = !!data.configurationId;
+            let property = null;
+            let configuration = null;
 
-            const { lead, amount } = await BookingService.validateScope(tx, data, property, organizationId, userId, userRole);
-            const customer = await BookingService.resolveCustomer(tx, data, lead, organizationId, userId);
-
-            // Concurrency check (optimistic locking)
-            if (property.status !== 'AVAILABLE') {
-                throw new AppError('Property is no longer available', 409, 'CONFLICT');
+            if (!isBulk) {
+                property = await tx.property.findFirst({
+                    where: { id: data.propertyId, organizationId }
+                });
+                if (!property) throw new AppError('Property not found in your organization', 404, 'NOT_FOUND');
+            } else {
+                if (data.quotationId) {
+                    throw new AppError('quotationId cannot be used with bulk configuration bookings', 400, 'BAD_REQUEST');
+                }
+                configuration = await tx.configuration.findFirst({
+                    where: { id: data.configurationId, organizationId }
+                });
+                if (!configuration) throw new AppError('Configuration not found in your organization', 404, 'NOT_FOUND');
+                if (!ConfigurationService.isBulkMode(configuration)) {
+                    throw new AppError(
+                        `Configuration "${configuration.name}" uses individual-unit tracking — book a specific unit instead`,
+                        400,
+                        'UNIT_TRACKED_CONFIGURATION'
+                    );
+                }
             }
 
-            const locked = await tx.property.updateMany({
-                where: {
-                    id: data.propertyId,
-                    version: property.version,
-                    organizationId
-                },
-                data: {
-                    status: 'RESERVED',
-                    version: { increment: 1 }
-                }
-            });
+            const { lead, amount } = await BookingService.validateScope(tx, data, { property, configuration }, organizationId, userId, userRole);
+            const customer = await BookingService.resolveCustomer(tx, data, lead, organizationId, userId);
 
-            if (locked.count === 0) {
-                throw new AppError('Property was booked by another user. Please try another unit.', 409, 'CONFLICT_CONCURRENCY');
+            if (!isBulk) {
+                // Concurrency check (optimistic locking)
+                if (property.status !== 'AVAILABLE') {
+                    throw new AppError('Property is no longer available', 409, 'CONFLICT');
+                }
+
+                const locked = await tx.property.updateMany({
+                    where: {
+                        id: data.propertyId,
+                        version: property.version,
+                        organizationId
+                    },
+                    data: {
+                        status: 'RESERVED',
+                        version: { increment: 1 }
+                    }
+                });
+
+                if (locked.count === 0) {
+                    throw new AppError('Property was booked by another user. Please try another unit.', 409, 'CONFLICT_CONCURRENCY');
+                }
+            } else {
+                // Atomic check-and-decrement: exactly one concurrent booking can
+                // claim the last available unit. The version bump keeps explicit
+                // inventory adjustments serializable with booking writes.
+                const claimed = await tx.configuration.updateMany({
+                    where: { id: data.configurationId, organizationId, availableUnits: { gt: 0 } },
+                    data: { availableUnits: { decrement: 1 }, inventoryVersion: { increment: 1 } }
+                });
+
+                if (claimed.count === 0) {
+                    throw new AppError('No available units left in this configuration', 409, 'BULK_SOLD_OUT');
+                }
             }
 
             let booking;
@@ -213,8 +279,9 @@ class BookingService {
                     data: {
                         organizationId,
                         customerId: customer.id,
-                        propertyId: data.propertyId,
-                        projectId: property.projectId,
+                        propertyId: data.propertyId || null,
+                        configurationId: data.configurationId || null,
+                        projectId: property ? property.projectId : configuration.projectId,
                         amount,
                         paymentStatus: data.paymentStatus || 'PENDING',
                         assignedToId: userId,
@@ -231,12 +298,13 @@ class BookingService {
 
             if (lead) {
                 // Backfill empty inventory references for provenance
-                if (!lead.projectId || !lead.propertyId) {
+                if (!lead.projectId || !lead.propertyId || (isBulk && !lead.configurationId)) {
                     await tx.lead.update({
                         where: { id: lead.id },
                         data: {
-                            ...( !lead.projectId ? { projectId: property.projectId } : {} ),
-                            ...( !lead.propertyId ? { propertyId: data.propertyId } : {} )
+                            ...( !lead.projectId ? { projectId: property ? property.projectId : configuration.projectId } : {} ),
+                            ...( !lead.propertyId && !isBulk ? { propertyId: data.propertyId } : {} ),
+                            ...( isBulk && !lead.configurationId ? { configurationId: data.configurationId } : {} )
                         }
                     });
                 }
@@ -262,7 +330,12 @@ class BookingService {
                         type: 'NOTE',
                         description: `Booking confirmed for ${customer.name}`,
                         performedById: userId,
-                        metadata: { bookingId: booking.id, amount, propertyId: data.propertyId }
+                        metadata: {
+                            bookingId: booking.id,
+                            amount,
+                            propertyId: data.propertyId || null,
+                            configurationId: data.configurationId || null
+                        }
                     }
                 });
             }
@@ -284,6 +357,7 @@ class BookingService {
         // transaction inside createBooking.
         return await BookingService.createBooking({
             propertyId: data.propertyId,
+            configurationId: data.configurationId,
             amount: data.amount,
             paymentStatus: data.paymentStatus,
             leadId,
@@ -333,6 +407,24 @@ class BookingService {
                     where: { id: booking.propertyId, organizationId, status: 'RESERVED' },
                     data: { status: 'AVAILABLE', version: { increment: 1 } }
                 });
+            }
+
+            if (booking.configurationId) {
+                // Return one unit to bulk availability. Each booking holds
+                // exactly one unit, so increments can never outnumber the
+                // decrements — but the conditional increment additionally
+                // guards against overshooting after manual adjustments, and
+                // the version bump keeps explicit adjusts serializable.
+                // (No-op when the config left bulk mode: nothing to return to.)
+                const config = await tx.configuration.findFirst({
+                    where: { id: booking.configurationId, organizationId }
+                });
+                if (config && ConfigurationService.isBulkMode(config) && config.availableUnits < config.totalUnits) {
+                    await tx.configuration.updateMany({
+                        where: { id: booking.configurationId, organizationId },
+                        data: { availableUnits: { increment: 1 }, inventoryVersion: { increment: 1 } }
+                    });
+                }
             }
 
             if (booking.leadId) {

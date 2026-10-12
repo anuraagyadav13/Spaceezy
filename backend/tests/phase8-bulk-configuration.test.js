@@ -20,6 +20,10 @@ jest.mock('../src/db/prisma', () => {
     },
     lead: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     leadActivity: { create: jest.fn() },
+    booking: {
+      findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(),
+      create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), groupBy: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
   mock.$transaction.mockImplementation(async (fn) => fn(mock));

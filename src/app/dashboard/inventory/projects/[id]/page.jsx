@@ -13,6 +13,7 @@ import {
     updateConfigurationInventory
 } from "../../../../../lib/api/configurations";
 import { updateProperty } from "../../../../../lib/api/properties";
+import { createBooking } from "../../../../../lib/api/bookings";
 import { PermissionGate } from "../../../../../features/auth/components/PermissionGate";
 import { showToast } from "../../../../../lib/toast";
 import { formatCurrency } from "../../../../../features/pipeline/helpers";
@@ -74,6 +75,9 @@ export default function ProjectDetailPage() {
     // Inline bulk-inventory adjust state (config id + draft counters).
     const [adjustingId, setAdjustingId] = useState(null);
     const [adjustForm, setAdjustForm] = useState({ totalUnits: "", availableUnits: "" });
+    // Inline bulk booking state (config + customer/amount draft).
+    const [bookingFor, setBookingFor] = useState(null);
+    const [bookForm, setBookForm] = useState({ name: "", phone: "", amount: "" });
     const [locationSel, setLocationSel] = useState({ stateId: "", districtId: "", regionId: "" });
     const [editImages, setEditImages] = useState([]);
 
@@ -167,6 +171,22 @@ export default function ProjectDetailPage() {
         }
     });
 
+    // Direct bulk booking: reserves one unit out of a bulk configuration's
+    // available inventory (atomic server-side; 409 when just sold out).
+    const bookBulk = useMutation({
+        mutationFn: ({ configId, data }) => createBooking({ configurationId: configId, ...data }),
+        onSuccess: () => {
+            showToast("Unit booked from bulk inventory");
+            setBookingFor(null);
+            invalidate();
+            queryClient.invalidateQueries({ queryKey: ["bookings"] });
+        },
+        onError: (err) => {
+            showToast(err?.message || "Failed to create booking", "error");
+            invalidate();
+        }
+    });
+
     const changeUnitStatus = useMutation({
         mutationFn: ({ id, status }) => updateProperty({ id, status }),
         onSuccess: (_data, vars) => {
@@ -197,6 +217,16 @@ export default function ProjectDetailPage() {
         for (const u of project?.properties || []) {
             if (u.status !== "AVAILABLE" || !u.configurationId) continue;
             map.set(u.configurationId, (map.get(u.configurationId) || 0) + 1);
+        }
+        return map;
+    }, [project]);
+
+    // Booking-derived reserved/sold per configuration (both modes), from the
+    // detail summary. Keyed by lowercased name (unique per project).
+    const summaryByName = useMemo(() => {
+        const map = new Map();
+        for (const s of project?.configurationSummary || []) {
+            if (s?.configuration) map.set(String(s.configuration).toLowerCase(), s);
         }
         return map;
     }, [project]);
@@ -273,6 +303,7 @@ export default function ProjectDetailPage() {
     };
 
     const openAdjust = (config) => {
+        setBookingFor(null);
         setAdjustingId(config.id);
         setAdjustForm({
             totalUnits: config.totalUnits ?? "",
@@ -303,6 +334,27 @@ export default function ProjectDetailPage() {
         adjustInventory.mutate({
             configId: config.id,
             data: { totalUnits: null, availableUnits: null, expectedInventoryVersion: config.inventoryVersion ?? 0 },
+        });
+    };
+
+    const openBook = (config) => {
+        setAdjustingId(null);
+        setBookingFor(config);
+        setBookForm({ name: "", phone: "", amount: config.basePrice != null ? String(config.basePrice) : "" });
+    };
+
+    const submitBook = (e, config) => {
+        e.preventDefault();
+        if (!bookForm.name.trim() || !bookForm.phone.trim() || bookForm.amount === "") {
+            showToast("Customer name, phone and amount are required", "error");
+            return;
+        }
+        bookBulk.mutate({
+            configId: config.id,
+            data: {
+                amount: Number(bookForm.amount),
+                customer: { name: bookForm.name.trim(), phone: bookForm.phone.trim() },
+            },
         });
     };
 
@@ -516,12 +568,15 @@ export default function ProjectDetailPage() {
                                         <th className="p-3">Base Price</th>
                                         <th className="p-3">Total</th>
                                         <th className="p-3">Available</th>
+                                        <th className="p-3">Reserved</th>
+                                        <th className="p-3">Sold</th>
                                         <th className="p-3 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {configList.map((c) => {
                                         const isBulk = c.totalUnits !== null && c.totalUnits !== undefined;
+                                        const summary = summaryByName.get(String(c.name).toLowerCase());
                                         return (
                                             <tr key={c.id} className="hover:bg-gray-50">
                                                 <td className="p-3 font-bold text-gray-900">
@@ -535,7 +590,20 @@ export default function ProjectDetailPage() {
                                                 <td className="p-3 font-black text-purple-700">{c.basePrice != null ? formatCurrency(c.basePrice) : "—"}</td>
                                                 <td className="p-3 text-gray-600">{isBulk ? c.totalUnits : (c._count?.properties ?? 0)}</td>
                                                 <td className="p-3 text-gray-600">{isBulk ? c.availableUnits : (unitAvailByConfigId.get(c.id) ?? 0)}</td>
+                                                <td className="p-3 text-gray-600">{summary?.reservedUnits ?? 0}</td>
+                                                <td className="p-3 text-gray-600">{summary?.soldUnits ?? 0}</td>
                                                 <td className="p-3 text-right whitespace-nowrap">
+                                                    {isBulk && (c.availableUnits ?? 0) > 0 && (
+                                                        <PermissionGate permission="booking:create">
+                                                            <button
+                                                                onClick={() => openBook(c)}
+                                                                className="mr-1 px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[11px] font-black"
+                                                                title="Book one unit from bulk inventory"
+                                                            >
+                                                                Book
+                                                            </button>
+                                                        </PermissionGate>
+                                                    )}
                                                     {isBulk && (
                                                         <PermissionGate permission="project:update">
                                                             <button
@@ -621,6 +689,63 @@ export default function ProjectDetailPage() {
                                 </div>
                                 <p className="mt-2 text-[11px] text-gray-400">
                                     Only aggregate availability changes — no unit records are created or modified. If someone else saves first, you will be asked to refresh and retry.
+                                </p>
+                            </form>
+                        </PermissionGate>
+                    )}
+
+                    {bookingFor && (
+                        <PermissionGate permission="booking:create">
+                            <form onSubmit={(e) => submitBook(e, bookingFor)} className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
+                                <div className="text-xs font-black text-gray-700 mb-3">
+                                    Book one unit — {bookingFor.name}
+                                    <span className="ml-2 font-semibold text-gray-400">{bookingFor.availableUnits ?? 0} available</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+                                    <div>
+                                        <label className={labelClass}>Customer name *</label>
+                                        <input
+                                            value={bookForm.name}
+                                            onChange={(e) => setBookForm((f) => ({ ...f, name: e.target.value }))}
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Customer phone *</label>
+                                        <input
+                                            value={bookForm.phone}
+                                            onChange={(e) => setBookForm((f) => ({ ...f, phone: e.target.value }))}
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Amount (₹) *</label>
+                                        <input
+                                            type="number" min="0"
+                                            value={bookForm.amount}
+                                            onChange={(e) => setBookForm((f) => ({ ...f, amount: e.target.value }))}
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="submit"
+                                            disabled={bookBulk.isPending}
+                                            className="h-[38px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                        >
+                                            {bookBulk.isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Book
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setBookingFor(null)}
+                                            className="h-[38px] px-3 text-gray-400 hover:text-gray-700 text-xs font-bold"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                                <p className="mt-2 text-[11px] text-gray-400">
+                                    Reserves one unit immediately from bulk availability. Fails safely if the last unit was just taken.
                                 </p>
                             </form>
                         </PermissionGate>
@@ -773,7 +898,14 @@ export default function ProjectDetailPage() {
                             {project.configurationSummary.map((c) => (
                                 <div key={c.configuration} className="bg-gray-50 rounded-2xl p-3">
                                     <p className="text-xs font-black text-gray-900">{c.configuration}</p>
-                                    <p className="text-[11px] text-gray-500 mt-1">{c.count} units</p>
+                                    <p className="text-[11px] text-gray-500 mt-1">
+                                        {c.mode === "bulk"
+                                            ? `${c.availableUnits ?? 0} of ${c.count} available`
+                                            : `${c.count} units`}
+                                        {((c.reservedUnits ?? 0) > 0 || (c.soldUnits ?? 0) > 0)
+                                            ? ` · ${c.reservedUnits ?? 0} reserved · ${c.soldUnits ?? 0} sold`
+                                            : ""}
+                                    </p>
                                     <p className="text-sm font-black text-purple-700 mt-1">{formatCurrency(c.minPrice)} – {formatCurrency(c.maxPrice)}</p>
                                 </div>
                             ))}

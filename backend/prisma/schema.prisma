@@ -418,6 +418,7 @@ model Configuration {
 
   properties Property[]
   leads      Lead[]
+  bookings   Booking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -536,6 +537,12 @@ model Booking {
   propertyId String?
   property   Property? @relation(fields: [propertyId], references: [id])
 
+  // Bulk-mode booking target (Phase 2). Exactly one of propertyId /
+  // configurationId is set (enforced in service + validators); bulk bookings
+  // atomically decrement the configuration's availableUnits.
+  configurationId String?
+  configuration   Configuration? @relation(fields: [configurationId], references: [id], onDelete: SetNull)
+
   amount        Decimal              @db.Decimal(12, 2)
   bookingDate   DateTime             @default(now()) // Stored in UTC
   paymentStatus BookingPaymentStatus @default(PENDING)
@@ -554,6 +561,7 @@ model Booking {
 
   @@index([organizationId])
   @@index([leadId])
+  @@index([organizationId, configurationId])
 }
 
 enum SiteVisitStatus {

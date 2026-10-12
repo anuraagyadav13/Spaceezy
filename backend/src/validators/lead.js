@@ -201,7 +201,8 @@ const leadBookingSchema = {
         id: z.string().uuid('id must be a valid UUID')
     }),
     body: z.object({
-        propertyId: z.string().uuid('Valid Property ID is required'),
+        propertyId: z.string().uuid('Valid Property ID is required').optional(),
+        configurationId: z.string().uuid('Valid Configuration ID is required').optional(),
         amount: z.number().positive('Amount must be positive').max(999999999999, 'Amount exceeds the supported maximum').optional(),
         quotationId: z.string().uuid('quotationId must be a valid UUID').optional(),
         paymentStatus: z.enum(['PENDING', 'PARTIAL', 'COMPLETED']).optional(),
@@ -211,8 +212,17 @@ const leadBookingSchema = {
             email: z.string().email().optional().nullable()
         }).optional()
     }).refine(
+        (body) => Boolean(body.propertyId) !== Boolean(body.configurationId),
+        { message: 'Provide exactly one of propertyId or configurationId', path: ['propertyId'] }
+    ).refine(
         (body) => body.amount !== undefined || body.quotationId !== undefined,
         { message: 'amount or quotationId is required', path: ['amount'] }
+    ).refine(
+        (body) => !body.configurationId || body.amount !== undefined,
+        { message: 'amount is required for bulk configuration bookings', path: ['amount'] }
+    ).refine(
+        (body) => !body.configurationId || !body.quotationId,
+        { message: 'quotationId cannot be used with bulk configuration bookings', path: ['quotationId'] }
     )
 };
 

@@ -1,5 +1,6 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const BookingService = require('./bookingService');
 const {
     isValidPublicToken,
     publicAvailability,
@@ -126,6 +127,18 @@ class PublicService {
             if (min !== null && (stat.minPrice === null || min < stat.minPrice)) stat.minPrice = min;
             if (max !== null && (stat.maxPrice === null || max > stat.maxPrice)) stat.maxPrice = max;
             map.set(row.projectId, stat);
+        }
+        // Bulk reserved/sold derive from booking rows (unit bookings never
+        // carry a configurationId, so these cannot overlap unit counts).
+        const bulkBookings = await BookingService.bulkBookingCounts(prisma, { projectId: { in: projectIds } });
+        for (const entry of bulkBookings.values()) {
+            const stat = map.get(entry.projectId) || {
+                totalUnits: 0, availableUnits: 0, reservedUnits: 0, soldUnits: 0,
+                minPrice: null, maxPrice: null
+            };
+            stat.reservedUnits += entry.reserved;
+            stat.soldUnits += entry.sold;
+            map.set(entry.projectId, stat);
         }
         return map;
     }

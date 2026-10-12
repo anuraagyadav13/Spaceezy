@@ -259,6 +259,20 @@ class ConfigurationService {
             );
         }
 
+        // Bulk-mode booking history must survive the configuration: block
+        // deletion while any booking references it (cancelled history is
+        // included — it documents sold/released units).
+        const bookingRefs = await prisma.booking.count({
+            where: { configurationId: configId, organizationId }
+        });
+        if (bookingRefs > 0) {
+            throw new AppError(
+                'Configuration has booking record(s). Cancel or reassign the bookings before deleting.',
+                409,
+                'CONFLICT'
+            );
+        }
+
         await prisma.configuration.delete({ where: { id: configId } });
         return { deleted: true };
     }
