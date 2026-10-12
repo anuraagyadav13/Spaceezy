@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { fetchUserProfile, updateUser } from "../../../../lib/api/users";
+import { useRouter } from "next/navigation";
+import { fetchUserProfile, updateUser, deleteUser } from "../../../../lib/api/users";
 import { ArrowLeft, Calendar, FileText, Gauge } from "lucide-react";
 import Image from "next/image";
 import { showToast } from "../../../../lib/toast";
 import { PermissionGate } from "../../../../features/auth/components/PermissionGate";
+import { useAuth } from "../../../../features/auth/hooks/useAuth";
 
 const VISIT_STYLES = {
     Scheduled: "bg-purple-100 text-purple-700",
@@ -20,12 +22,25 @@ const PAYMENT_STYLES = {
 
 export default function DashboardEmployeeDetailPage({ params }) {
     const resolvedParams = use(params);
+    const router = useRouter();
+    const { user: currentUser } = useAuth();
     const [employee, setEmployee] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [editForm, setEditForm] = useState({ name: "", phone: "", role: "SALES_EXECUTIVE", status: "ACTIVE" });
+    const [saving, setSaving] = useState(false);
+    const [deactivating, setDeactivating] = useState(false);
 
     const loadProfile = (id) => {
         fetchUserProfile(id)
-            .then(data => setEmployee(data))
+            .then(data => {
+                setEmployee(data);
+                setEditForm({
+                    name: data.name || "",
+                    phone: data.phone || "",
+                    role: data.role || "SALES_EXECUTIVE",
+                    status: data.status || "ACTIVE",
+                });
+            })
             .catch(err => showToast("Failed to load employee profile", "error"))
             .finally(() => setLoading(false));
     };
@@ -36,6 +51,40 @@ export default function DashboardEmployeeDetailPage({ params }) {
 
     if (loading) return <div className="p-8 text-gray-400 font-medium">Loading employee details...</div>;
     if (!employee) return <div className="p-8 text-gray-400 font-medium">Employee not found.</div>;
+
+    const isSelf = currentUser?.id === resolvedParams.employeeId;
+
+    const handleSave = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            await updateUser({ id: resolvedParams.employeeId, ...editForm });
+            showToast("Employee updated");
+            loadProfile(resolvedParams.employeeId);
+        } catch (err) {
+            showToast(err?.message || "Failed to update employee", "error");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeactivate = async () => {
+        if (isSelf) {
+            showToast("You cannot deactivate your own account", "error");
+            return;
+        }
+        if (!window.confirm(`Deactivate ${employee.name}? They will lose access immediately; history is preserved.`)) return;
+        setDeactivating(true);
+        try {
+            await deleteUser(resolvedParams.employeeId);
+            showToast(`${employee.name} deactivated`);
+            router.push("/dashboard/team");
+        } catch (err) {
+            showToast(err?.message || "Failed to deactivate employee", "error");
+        } finally {
+            setDeactivating(false);
+        }
+    };
 
     const leads = employee.leads || [];
     const clients = employee.clients || [];
@@ -64,6 +113,80 @@ export default function DashboardEmployeeDetailPage({ params }) {
                     </div>
                 </div>
             </div>
+
+            <PermissionGate permission="employee:update">
+                <div className="px-4 sm:px-8 mb-6">
+                    <form onSubmit={handleSave} className="bg-white rounded-[24px] p-6 shadow-sm border border-gray-100">
+                        <h3 className="font-medium text-[15px] text-gray-900 mb-4">Edit employee</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Name</label>
+                                <input
+                                    value={editForm.name}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:border-purple-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Phone</label>
+                                <input
+                                    value={editForm.phone}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:border-purple-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Role</label>
+                                <select
+                                    value={editForm.role}
+                                    disabled={isSelf}
+                                    title={isSelf ? "You cannot change your own role" : undefined}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                                >
+                                    <option value="SALES_EXECUTIVE">Sales Executive (employee)</option>
+                                    <option value="ADMIN">Admin (owner)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Status</label>
+                                <select
+                                    value={editForm.status}
+                                    disabled={isSelf}
+                                    title={isSelf ? "You cannot change your own status" : undefined}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                                >
+                                    <option value="ACTIVE">Active</option>
+                                    <option value="INACTIVE">Inactive</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 mt-4">
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="px-5 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 disabled:opacity-60"
+                            >
+                                {saving ? "Saving..." : "Save changes"}
+                            </button>
+                            <PermissionGate permission="employee:delete">
+                                {employee.status !== "INACTIVE" && (
+                                    <button
+                                        type="button"
+                                        onClick={handleDeactivate}
+                                        disabled={deactivating || isSelf}
+                                        title={isSelf ? "You cannot deactivate your own account" : "Deactivate (preserves history)"}
+                                        className="px-5 py-2.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 disabled:opacity-50"
+                                    >
+                                        {deactivating ? "Deactivating..." : "Deactivate"}
+                                    </button>
+                                )}
+                            </PermissionGate>
+                        </div>
+                    </form>
+                </div>
+            </PermissionGate>
 
             <div className="px-4 sm:px-8 grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 <div className="bg-white rounded-2xl p-4 shadow-sm"><p className="text-xs text-gray-500 mb-1">Leads</p><h3 className="text-xl font-normal text-gray-900">{leads.length}</h3></div>

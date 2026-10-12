@@ -1,5 +1,10 @@
 const { z } = require('zod');
 
+// Two-role model: owner (ADMIN) and employees (SALES_EXECUTIVE). Other enum
+// values stay valid in the database but can no longer be assigned through
+// the API; SUPER_ADMIN elevation is additionally guarded in userService.
+const assignableRoles = z.enum(['ADMIN', 'SALES_EXECUTIVE']);
+
 const getUsersQuerySchema = {
     query: z.object({
         page: z.string().optional(),
@@ -16,8 +21,8 @@ const createUserSchema = {
         name: z.string().min(1, 'Name is required'),
         email: z.string().email('Invalid email address'),
         phone: z.string().optional(),
-        password: z.string().min(6, 'Password must be at least 6 characters'),
-        role: z.enum(['SUPER_ADMIN', 'ADMIN', 'SALES_MANAGER', 'SALES_EXECUTIVE', 'CHANNEL_PARTNER']).optional(),
+        password: z.string().min(10, 'Password must be at least 10 characters'),
+        role: assignableRoles.optional(),
         status: z.enum(['ACTIVE', 'INACTIVE']).optional()
     })
 };
@@ -27,7 +32,7 @@ const updateUserSchema = {
         name: z.string().optional(),
         email: z.string().email('Invalid email address').optional(),
         phone: z.string().optional(),
-        role: z.enum(['SUPER_ADMIN', 'ADMIN', 'SALES_MANAGER', 'SALES_EXECUTIVE', 'CHANNEL_PARTNER']).optional(),
+        role: assignableRoles.optional(),
         status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
         selfClaimLimit: z.number().int().min(0, 'selfClaimLimit must be 0 or greater').max(1000, 'selfClaimLimit cannot exceed 1000').nullable().optional()
     })

@@ -20,7 +20,7 @@ const ROLE_PERMISSIONS = {
     ],
     ADMIN: [
         "lead:view", "lead:create", "lead:update", "lead:assign", "lead:merge",
-        "employee:view", "employee:update",
+        "employee:view", "employee:create", "employee:update", "employee:delete",
         "inventory:view", "inventory:create", "inventory:update",
         "booking:view", "booking:create", "booking:update",
         "payment:view",
