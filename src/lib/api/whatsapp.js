@@ -14,6 +14,8 @@ export const sendWhatsAppMessage = async ({ conversationId, ...data }) =>
 
 export const fetchWhatsAppTemplates = async (params = {}) => (await apiClient.get("/whatsapp/templates", { params }));
 
+export const fetchTemplateLibrary = async () => (await apiClient.get("/whatsapp/templates/library"));
+
 export const createWhatsAppTemplate = async (data) => (await apiClient.post("/whatsapp/templates", data));
 
 export const updateWhatsAppTemplate = async ({ id, ...data }) => (await apiClient.patch(`/whatsapp/templates/${id}`, data));

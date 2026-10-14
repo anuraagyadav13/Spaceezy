@@ -227,6 +227,20 @@ model Lead {
   configurationId String?
   configuration   Configuration? @relation(fields: [configurationId], references: [id], onDelete: SetNull)
 
+  // Meta Lead Ads attribution. All nullable: NULL = non-Meta lead.
+  // metaLeadId is the Meta-assigned lead identifier, unique per org for
+  // webhook idempotency. metaPlatform is only set when reliably determinable
+  // ('Facebook' | 'Instagram') — never inferred.
+  metaLeadId       String?
+  metaPageId       String?
+  metaFormId       String?
+  metaAdId         String?
+  metaAdsetId      String?
+  metaCampaignId   String?
+  metaCampaignName String?
+  metaPlatform     String?
+  metaCreatedAt    DateTime? // submission time reported by Meta (UTC)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -247,6 +261,7 @@ model Lead {
   @@index([organizationId, assignedToId])
   @@index([organizationId, projectId])
   @@index([organizationId, configurationId])
+  @@unique([organizationId, metaLeadId])
 }
 
 enum ActivityType {
@@ -879,6 +894,11 @@ model WhatsAppTemplate {
   providerTemplateId String?
   language          String  @default("en")
   category          String  @default("UTILITY") // MARKETING | UTILITY | AUTHENTICATION
+  // Human-readable short description for the template selector.
+  description       String?
+  // Message preview text with {{named}} placeholders. Custom templates may
+  // leave this empty (selector then shows name + variables only).
+  body              String?
   variables         Json?   // array of variable names, e.g. ["lead_name", "project_name"]
   active            Boolean @default(true)
 

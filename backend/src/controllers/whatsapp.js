@@ -36,6 +36,11 @@ const listTemplates = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data, message: 'Templates fetched successfully' });
 });
 
+const listLibrary = asyncHandler(async (req, res) => {
+    const data = await WhatsAppService.listLibrary();
+    res.status(200).json({ success: true, data, message: 'Template library fetched successfully' });
+});
+
 const createTemplate = asyncHandler(async (req, res) => {
     const { organizationId, userId } = req.auth;
     const template = await WhatsAppService.createTemplate(req.body, organizationId, userId);
@@ -55,6 +60,7 @@ module.exports = {
     getMessages,
     sendMessage,
     listTemplates,
+    listLibrary,
     createTemplate,
     updateTemplate
 };

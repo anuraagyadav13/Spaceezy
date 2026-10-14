@@ -104,6 +104,7 @@ const NAVIGATION_GROUPS = [
         items: [
             { label: "Lead Sources", href: "/dashboard/marketing/sources" },
             { label: "Campaigns", href: "/dashboard/marketing/campaigns" },
+            { label: "Meta Ads", href: "/dashboard/marketing/meta-ads" },
             { label: "Website Enquiries", href: "/dashboard/marketing/website" }
         ]
     },

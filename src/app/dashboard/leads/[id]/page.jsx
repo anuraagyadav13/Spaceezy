@@ -367,6 +367,26 @@ export default function LeadProfile() {
 
                     <hr className="my-6 border-gray-100" />
 
+                    {lead.metaLeadId && (
+                        <>
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Meta Attribution</h3>
+                            <div className="space-y-4">
+                                <DetailRow label="Platform" value={lead.metaPlatform || "Meta"} />
+                                {lead.metaCampaignName && <DetailRow label="Campaign" value={lead.metaCampaignName} />}
+                                {lead.metaFormId && <DetailRow label="Form ID" value={lead.metaFormId} />}
+                                {lead.metaAdId && <DetailRow label="Ad ID" value={lead.metaAdId} />}
+                                {lead.metaAdsetId && <DetailRow label="Ad Set ID" value={lead.metaAdsetId} />}
+                                {lead.metaCampaignId && <DetailRow label="Meta Campaign ID" value={lead.metaCampaignId} />}
+                                <DetailRow
+                                    label="Synced"
+                                    value={lead.metaCreatedAt ? new Date(lead.metaCreatedAt).toLocaleString() : "—"}
+                                />
+                            </div>
+
+                            <hr className="my-6 border-gray-100" />
+                        </>
+                    )}
+
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Ownership</h3>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                         <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden shrink-0 border border-white shadow-sm">

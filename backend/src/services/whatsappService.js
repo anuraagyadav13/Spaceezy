@@ -1,6 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const { getWhatsAppProvider } = require('../providers/whatsapp');
+const { getCatalogEntry, listCatalog } = require('./templateCatalog');
 const { canSeePII, maskPhone } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { buildPublicPropertyUrl } = require('../utils/publicLink');
@@ -169,11 +170,28 @@ class WhatsAppService {
         let body = data.body || '';
         let templateName = null;
         let variables = null;
+        let templateLanguage = null;
 
         if (data.templateName) {
-            const template = await prisma.whatsAppTemplate.findFirst({
+            let template = await prisma.whatsAppTemplate.findFirst({
                 where: { organizationId, name: data.templateName }
             });
+            if (!template) {
+                // Catalog pre-check: reject missing variables BEFORE provisioning,
+                // so invalid attempts never create rows.
+                const catalogEntry = getCatalogEntry(data.templateName);
+                if (catalogEntry) {
+                    const provided = Array.isArray(data.variables) ? data.variables : [];
+                    if (provided.length < catalogEntry.variables.length) {
+                        throw new AppError(
+                            `Template requires variables: ${catalogEntry.variables.join(', ')}`,
+                            400,
+                            'TEMPLATE_VARIABLES_MISSING'
+                        );
+                    }
+                }
+                template = await WhatsAppService.provisionCatalogTemplate(data.templateName, organizationId, userId);
+            }
             if (!template) throw new AppError('Template not found', 404, 'NOT_FOUND');
             if (!template.active) throw new AppError('This template is inactive', 409, 'TEMPLATE_INACTIVE');
 
@@ -188,6 +206,7 @@ class WhatsAppService {
             }
             templateName = template.name;
             variables = provided;
+            templateLanguage = template.language || null;
             body = template.name; // placeholder body for previews; provider renders template
         } else {
             if (!body || !String(body).trim()) {
@@ -196,7 +215,15 @@ class WhatsAppService {
             body = String(body).trim();
         }
 
-        const result = await provider.sendMessage({ to, body, templateName, variables });
+        const result = await provider.sendMessage({
+            to,
+            body,
+            templateName,
+            variables,
+            // Used by transports that render provider templates natively
+            // (meta); ignored by mock/generic/none.
+            language: templateLanguage
+        });
 
         const message = await prisma.$transaction(async (tx) => {
             const created = await tx.whatsAppMessage.create({
@@ -250,6 +277,44 @@ class WhatsAppService {
 
     // --- Templates ---
 
+    static listLibrary() {
+        return listCatalog();
+    }
+
+    // Provision a predefined-library entry as a LOCAL database row on first
+    // use, so sending flows through the existing validated contract. This
+    // never touches Meta: providerTemplateId stays null until a verified
+    // provider response supplies one. The unique constraint makes concurrent
+    // provisioning safe — on a P2002 race only the matching organization's
+    // row is re-fetched, and no other org's row is ever modified.
+    static async provisionCatalogTemplate(name, organizationId, userId) {
+        const entry = getCatalogEntry(name);
+        if (!entry) return null;
+        try {
+            return await prisma.whatsAppTemplate.create({
+                data: {
+                    organizationId,
+                    name: entry.name,
+                    providerTemplateId: null,
+                    language: 'en',
+                    category: entry.metaCategory,
+                    description: entry.description,
+                    body: entry.body,
+                    variables: [...entry.variables],
+                    active: true,
+                    createdById: userId || null
+                }
+            });
+        } catch (err) {
+            if (err.code === 'P2002') {
+                return await prisma.whatsAppTemplate.findFirst({
+                    where: { organizationId, name: entry.name }
+                });
+            }
+            throw err;
+        }
+    }
+
     static async listTemplates(organizationId, query = {}) {
         const { active } = query;
         const where = { organizationId };
@@ -273,6 +338,8 @@ class WhatsAppService {
                 providerTemplateId: data.providerTemplateId || null,
                 language: data.language || 'en',
                 category: data.category || 'UTILITY',
+                description: data.description || null,
+                body: data.body || null,
                 variables: Array.isArray(data.variables) ? data.variables : [],
                 active: data.active !== false,
                 createdById: userId
@@ -291,8 +358,25 @@ class WhatsAppService {
         if (data.language !== undefined) updateData.language = data.language;
         if (data.variables !== undefined) updateData.variables = Array.isArray(data.variables) ? data.variables : [];
         if (data.providerTemplateId !== undefined) updateData.providerTemplateId = data.providerTemplateId;
+        if (data.description !== undefined) updateData.description = data.description || null;
+        if (data.body !== undefined) updateData.body = data.body || null;
 
         return await prisma.whatsAppTemplate.update({ where: { id }, data: updateData });
+    }
+
+    /**
+     * Webhook organization resolution. Provider credentials are global
+     * (single WhatsApp app/number for the deployment), so inbound traffic
+     * belongs to the primary organization — same pattern as public-enquiry
+     * attribution. Scoping every webhook lookup by it keeps phone-matched
+     * leads and status events from leaking across organizations.
+     */
+    static async resolveWebhookOrganization() {
+        const org = await prisma.organization.findFirst({ select: { id: true } });
+        if (!org) {
+            throw new AppError('System not configured correctly (No organization found)', 500, 'INTERNAL_ERROR');
+        }
+        return org.id;
     }
 
     /**
@@ -308,6 +392,8 @@ class WhatsAppService {
             throw new AppError('Invalid webhook signature', 401, 'WEBHOOK_SIGNATURE_INVALID');
         }
 
+        const organizationId = await WhatsAppService.resolveWebhookOrganization();
+
         let payload;
         try {
             payload = JSON.parse(rawBody);
@@ -317,15 +403,65 @@ class WhatsAppService {
 
         const type = payload.type;
         if (type === 'status') {
-            return await WhatsAppService._processStatusEvent(payload);
+            return await WhatsAppService._processStatusEvent(payload, organizationId);
         }
         if (type === 'message') {
-            return await WhatsAppService._processInboundEvent(payload, providerName);
+            return await WhatsAppService._processInboundEvent(payload, providerName, organizationId);
+        }
+        if (payload && payload.object === 'whatsapp_business_account' && Array.isArray(payload.entry)) {
+            return await WhatsAppService._processMetaEnvelope(payload, organizationId, providerName);
         }
         throw new AppError('Unsupported webhook event type', 400, 'VALIDATION_ERROR');
     }
 
-    static async _processStatusEvent(payload) {
+    // Meta's native envelope (object/entry/changes) normalized onto the
+    // internal handlers above. Text messages ingest; statuses map onto the
+    // existing rank progression; anything else (media, reactions, unknown
+    // statuses) is counted as ignored, never thrown — one bad event must not
+    // sink the batch. No leads are ever auto-created from contact profiles.
+    static async _processMetaEnvelope(payload, organizationId, providerName) {
+        let processed = 0;
+        let ignored = 0;
+        let duplicates = 0;
+        const tally = (result) => {
+            if (!result || result.ignored) ignored += 1;
+            else if (result.duplicate) duplicates += 1;
+            else processed += 1;
+        };
+        for (const entry of payload.entry || []) {
+            const changes = (entry && entry.changes) || [];
+            for (const change of changes) {
+                const value = (change && change.value) || {};
+                for (const msg of value.messages || []) {
+                    if (!msg || msg.type !== 'text' || !msg.text || !msg.text.body) {
+                        ignored += 1;
+                        continue;
+                    }
+                    tally(await WhatsAppService._processInboundEvent({
+                        providerMessageId: msg.id || null,
+                        providerContactId: msg.from || null,
+                        phone: msg.from || null,
+                        body: msg.text.body
+                    }, providerName, organizationId));
+                }
+                for (const st of value.statuses || []) {
+                    const mapped = { sent: 'sent', delivered: 'delivered', read: 'read', failed: 'failed' }[String((st && st.status) || '').toLowerCase()];
+                    if (!mapped || !(st && st.id)) {
+                        ignored += 1;
+                        continue;
+                    }
+                    tally(await WhatsAppService._processStatusEvent({
+                        providerMessageId: st.id,
+                        status: mapped,
+                        error: st.errors && st.errors[0] ? (st.errors[0].title || st.errors[0].message || null) : null
+                    }, organizationId));
+                }
+            }
+        }
+        return { ok: true, processed, ignored, duplicates };
+    }
+
+    static async _processStatusEvent(payload, organizationId) {
         const { providerMessageId, status, eventId } = payload;
         if (!providerMessageId || !status) {
             throw new AppError('providerMessageId and status are required', 400, 'VALIDATION_ERROR');
@@ -335,7 +471,7 @@ class WhatsAppService {
         if (!mapped) throw new AppError('Unknown message status', 400, 'VALIDATION_ERROR');
 
         const message = await prisma.whatsAppMessage.findFirst({
-            where: { providerMessageId }
+            where: { organizationId, providerMessageId }
         });
         if (!message) return { ok: true, ignored: true };
 
@@ -358,28 +494,34 @@ class WhatsAppService {
         return { ok: true, eventId: eventId || null };
     }
 
-    static async _processInboundEvent(payload, providerName) {
+    static async _processInboundEvent(payload, providerName, organizationId) {
         const { providerMessageId, providerContactId, leadId, body, phone } = payload;
         if (!body) throw new AppError('body is required for inbound messages', 400, 'VALIDATION_ERROR');
 
         // Idempotency: unique (organizationId, providerMessageId).
         if (providerMessageId) {
             const existing = await prisma.whatsAppMessage.findFirst({
-                where: { providerMessageId }
+                where: { organizationId, providerMessageId }
             });
             if (existing) return { ok: true, duplicate: true };
         }
 
-        // Resolve lead: explicit leadId (mock/test) or exact phone match.
+        // Resolve lead: explicit leadId (must belong to the webhook
+        // organization — the HMAC secret is global, so a crafted payload must
+        // never steer attribution into another org) or exact phone match
+        // within it.
         let lead = null;
+        if (payload.organizationId && payload.organizationId !== organizationId) {
+            throw new AppError('Webhook organization mismatch', 400, 'ORGANIZATION_MISMATCH');
+        }
         if (payload.organizationId) {
             lead = await prisma.lead.findFirst({
-                where: { id: leadId || '', organizationId: payload.organizationId }
+                where: { id: leadId || '', organizationId }
             });
         }
         if (!lead && phone) {
             lead = await prisma.lead.findFirst({
-                where: { phone: String(phone).trim() },
+                where: { organizationId, phone: String(phone).trim() },
                 orderBy: { createdAt: 'desc' }
             });
         }

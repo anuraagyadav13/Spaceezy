@@ -26,7 +26,7 @@ export default function BrowserSoftphonePage() {
 
     const { data: recentCalls } = useCalls({ limit: 10 });
 
-    const leads = leadsData?.leads || [];
+    const leads = Array.isArray(leadsData) ? leadsData : (leadsData?.leads || []);
     const selectedLead = leads.find((l) => l.id === selectedLeadId) || null;
 
     const handleSearch = (event) => {

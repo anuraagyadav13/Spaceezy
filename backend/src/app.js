@@ -152,6 +152,7 @@ const activityRoutes = require('./routes/activities');
 const locationRoutes = require('./routes/locations');
 const uploadRoutes = require('./routes/uploads');
 const mediaRoutes = require('./routes/media');
+const metaAdsRoutes = require('./routes/metaAds');
 const webhookRoutes = require('./controllers/webhooks');
 
 app.use('/api/v1/auth', authRoutes);
@@ -170,13 +171,17 @@ app.use('/api/v1/whatsapp', whatsappRoutes);
 app.use('/api/v1/activities', activityRoutes);
 app.use('/api/v1/locations', locationRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
+app.use('/api/v1/meta-ads', metaAdsRoutes);
 // Public image delivery from the private media bucket (no auth, images only).
 app.use('/media', mediaRoutes);
 
 // Provider webhooks (authenticated by HMAC signature, not by session)
-app.get('/api/v1/webhooks/whatsapp', webhookRoutes.whatsappWebhookVerify);
+app.get('/api/v1/webhooks/whatsapp/:provider', webhookRoutes.whatsappWebhookVerify);
 app.post('/api/v1/webhooks/telephony/:provider', webhookRoutes.telephonyWebhook);
 app.post('/api/v1/webhooks/whatsapp/:provider', webhookRoutes.whatsappWebhook);
+// Meta Lead Ads (dedicated path; no conflict with provider webhooks above)
+app.get('/api/v1/webhooks/meta/leadgen', webhookRoutes.metaLeadgenVerify);
+app.post('/api/v1/webhooks/meta/leadgen', webhookRoutes.metaLeadgen);
 
 // Error handling
 app.use(notFoundHandler);

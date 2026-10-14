@@ -6,6 +6,7 @@ const {
     getMessages,
     sendMessage,
     listTemplates,
+    listLibrary,
     createTemplate,
     updateTemplate
 } = require('../controllers/whatsapp');
@@ -29,10 +30,11 @@ router.use(requireAuth());
 router.get('/status', requirePermission('whatsapp:view'), getStatus);
 router.get('/conversations', requirePermission('whatsapp:view'), validate(listConversationsQuerySchema), listConversations);
 router.post('/conversations', requirePermission('whatsapp:create'), validate(createConversationSchema), createConversation);
-router.get('/conversations/:id', requirePermission('whatsapp:view'), validate(idParamsSchema), getMessages);
+router.get('/conversations/:id', requirePermission('whatsapp:view'), validate({ ...idParamsSchema, ...listMessagesQuerySchema }), getMessages);
 router.post('/conversations/:id/messages', requirePermission('whatsapp:create'), validate(sendMessageSchema), sendMessage);
 router.get('/templates', requirePermission('whatsapp:view'), validate(listTemplatesQuerySchema), listTemplates);
+router.get('/templates/library', requirePermission('whatsapp:view'), listLibrary);
 router.post('/templates', requirePermission('whatsapp:manage'), validate(createTemplateSchema), createTemplate);
-router.patch('/templates/:id', requirePermission('whatsapp:manage'), validate(idParamsSchema), updateTemplate);
+router.patch('/templates/:id', requirePermission('whatsapp:manage'), validate({ ...idParamsSchema, ...updateTemplateSchema }), updateTemplate);
 
 module.exports = router;

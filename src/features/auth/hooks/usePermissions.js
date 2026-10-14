@@ -16,6 +16,7 @@ const ROLE_PERMISSIONS = {
         "quotation:view", "quotation:create", "quotation:update",
         "call:view", "call:create", "call:update",
         "whatsapp:view", "whatsapp:create", "whatsapp:manage",
+        "marketing:view", "marketing:manage",
         "recording:view", "pii:view"
     ],
     ADMIN: [
@@ -32,6 +33,7 @@ const ROLE_PERMISSIONS = {
         "quotation:view", "quotation:create", "quotation:update",
         "call:view", "call:create", "call:update",
         "whatsapp:view", "whatsapp:create", "whatsapp:manage",
+        "marketing:view", "marketing:manage",
         "recording:view", "pii:view"
     ],
     SALES_MANAGER: [
@@ -46,6 +48,7 @@ const ROLE_PERMISSIONS = {
         "quotation:view", "quotation:create", "quotation:update",
         "call:view", "call:create", "call:update",
         "whatsapp:view", "whatsapp:create", "whatsapp:manage",
+        "marketing:view",
         "recording:view"
     ],
     SALES_EXECUTIVE: [

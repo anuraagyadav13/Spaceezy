@@ -5,6 +5,7 @@ const app = require('../src/app');
 jest.mock('../src/db/prisma', () => {
   const mock = {
     session: { findUnique: jest.fn() },
+    organization: { findFirst: jest.fn() },
     user: { findFirst: jest.fn(), findMany: jest.fn() },
     lead: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), update: jest.fn(), create: jest.fn() },
     leadActivity: { create: jest.fn(), findMany: jest.fn() },
@@ -111,6 +112,7 @@ beforeEach(() => {
   resetTelephonyProvider();
   resetWhatsAppProvider();
   prisma.auditLog.create.mockResolvedValue({ id: 'audit-1' });
+  prisma.organization.findFirst.mockResolvedValue({ id: ORG });
 });
 
 afterEach(() => {
@@ -965,13 +967,13 @@ describe('Phase 4 - webhooks (HMAC + idempotency)', () => {
 
   test('whatsapp verify handshake rejects wrong token', async () => {
     const res = await request(app)
-      .get('/api/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=123');
+      .get('/api/v1/webhooks/whatsapp/mock?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=123');
     expect(res.status).toBe(403);
   });
 
   test('whatsapp verify handshake accepts correct token', async () => {
     const res = await request(app)
-      .get(`/api/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=${process.env.WHATSAPP_VERIFY_TOKEN}&hub.challenge=999`);
+      .get(`/api/v1/webhooks/whatsapp/mock?hub.mode=subscribe&hub.verify_token=${process.env.WHATSAPP_VERIFY_TOKEN}&hub.challenge=999`);
     expect(res.status).toBe(200);
     expect(res.text).toBe('999');
   });
@@ -1029,5 +1031,483 @@ describe('Phase 4 - PII utilities', () => {
     expect(res.status).toBe(200);
     const dataArg = prisma.lead.update.mock.calls[0][0].data;
     expect(dataArg.phone).toBeUndefined();
+  });
+});
+
+describe('Phase 4 - Hardening (validators + webhook org scoping)', () => {
+  const OTHER_ORG = '99999999-9999-4999-8999-999999999999';
+  const conv = () => ({
+    id: CONV_ID, status: 'ACTIVE', leadId: LEAD, organizationId: ORG,
+    lead: { phone: PHONE, assignedToId: EXEC }, providerContactId: PHONE,
+  });
+
+  test('message pagination query is validated (400 on garbage, passthrough on valid)', async () => {
+    admin();
+
+    const bad = await request(app)
+      .get(`/api/v1/whatsapp/conversations/${CONV_ID}?page=abc`)
+      .set('Cookie', cookie('t70'));
+    expect(bad.status).toBe(400);
+    expect(prisma.whatsAppMessage.findMany).not.toHaveBeenCalled();
+
+    prisma.whatsAppConversation.findFirst.mockResolvedValue(conv());
+    prisma.whatsAppMessage.findMany.mockResolvedValue([]);
+    prisma.whatsAppMessage.count.mockResolvedValue(0);
+    const good = await request(app)
+      .get(`/api/v1/whatsapp/conversations/${CONV_ID}?page=2&limit=5`)
+      .set('Cookie', cookie('t71'));
+    expect(good.status).toBe(200);
+    expect(prisma.whatsAppMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 5, take: 5 })
+    );
+  });
+
+  test('template update body is validated (400 on wrong types)', async () => {
+    admin();
+
+    const bad = await request(app)
+      .patch('/api/v1/whatsapp/templates/aaaaaaaa-1111-4111-8111-111111111111')
+      .set('Cookie', cookie('t72'))
+      .send({ active: 'yes' });
+    expect(bad.status).toBe(400);
+    expect(prisma.whatsAppTemplate.update).not.toHaveBeenCalled();
+
+    prisma.whatsAppTemplate.findFirst.mockResolvedValue({ id: 'tpl1', organizationId: ORG });
+    prisma.whatsAppTemplate.update.mockResolvedValue({ id: 'tpl1', active: false });
+    const good = await request(app)
+      .patch('/api/v1/whatsapp/templates/aaaaaaaa-1111-4111-8111-111111111111')
+      .set('Cookie', cookie('t73'))
+      .send({ active: false, language: 'pt-BR' });
+    expect(good.status).toBe(200);
+    expect(prisma.whatsAppTemplate.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ active: false, language: 'pt-BR' }) })
+    );
+  });
+
+  test('webhook status lookup is scoped to the webhook organization', async () => {
+    prisma.whatsAppMessage.findFirst.mockResolvedValue({ id: 'msg9', status: 'SENT' });
+    prisma.whatsAppMessage.update.mockResolvedValue({});
+
+    const payload = { type: 'status', providerMessageId: 'wamid.9', status: 'delivered' };
+    const res = await request(app)
+      .post('/api/v1/webhooks/whatsapp/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-webhook-signature', whSign(JSON.stringify(payload)))
+      .send(JSON.stringify(payload));
+
+    expect(res.status).toBe(200);
+    expect(prisma.whatsAppMessage.findFirst).toHaveBeenCalledWith({ where: { organizationId: ORG, providerMessageId: 'wamid.9' } });
+    expect(prisma.whatsAppMessage.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'DELIVERED' }) })
+    );
+  });
+
+  test('webhook status for unknown message is ignored without writes', async () => {
+    prisma.whatsAppMessage.findFirst.mockResolvedValue(null);
+
+    const payload = { type: 'status', providerMessageId: 'wamid.unknown', status: 'delivered' };
+    const res = await request(app)
+      .post('/api/v1/webhooks/whatsapp/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-webhook-signature', whSign(JSON.stringify(payload)))
+      .send(JSON.stringify(payload));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.ignored).toBe(true);
+    expect(prisma.whatsAppMessage.update).not.toHaveBeenCalled();
+  });
+
+  test('webhook rejects explicit organization mismatch (400)', async () => {
+    const payload = { type: 'message', organizationId: OTHER_ORG, leadId: LEAD, body: 'hi' };
+    const res = await request(app)
+      .post('/api/v1/webhooks/whatsapp/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-webhook-signature', whSign(JSON.stringify(payload)))
+      .send(JSON.stringify(payload));
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('ORGANIZATION_MISMATCH');
+    expect(prisma.lead.findFirst).not.toHaveBeenCalled();
+    expect(prisma.whatsAppMessage.create).not.toHaveBeenCalled();
+  });
+
+  test('webhook inbound phone match is scoped to the webhook organization', async () => {
+    prisma.whatsAppMessage.findFirst.mockResolvedValue(null);
+    prisma.lead.findFirst.mockResolvedValue(lead());
+    prisma.whatsAppConversation.findFirst.mockResolvedValue(null);
+    prisma.whatsAppConversation.create.mockResolvedValue({ id: CONV_ID });
+    prisma.whatsAppMessage.create.mockResolvedValue({ id: 'msg10' });
+    prisma.whatsAppConversation.update.mockResolvedValue({});
+    prisma.leadActivity.create.mockResolvedValue({});
+
+    const payload = { type: 'message', phone: PHONE, body: 'hello again' };
+    const res = await request(app)
+      .post('/api/v1/webhooks/whatsapp/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-webhook-signature', whSign(JSON.stringify(payload)))
+      .send(JSON.stringify(payload));
+
+    expect(res.status).toBe(200);
+    expect(prisma.lead.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ organizationId: ORG }) })
+    );
+    expect(prisma.whatsAppMessage.create).toHaveBeenCalled();
+  });
+
+  test('webhook fails closed with 500 when no organization exists', async () => {
+    prisma.organization.findFirst.mockResolvedValue(null);
+
+    const payload = { type: 'status', providerMessageId: 'wamid.x', status: 'sent' };
+    const res = await request(app)
+      .post('/api/v1/webhooks/whatsapp/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-webhook-signature', whSign(JSON.stringify(payload)))
+      .send(JSON.stringify(payload));
+
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('Phase 4 - Template library (predefined catalog)', () => {
+  const conv = () => ({
+    id: CONV_ID, status: 'ACTIVE', leadId: LEAD, organizationId: ORG,
+    lead: { phone: PHONE, assignedToId: EXEC }, providerContactId: PHONE,
+  });
+  const sendAsAdmin = (body) => request(app)
+    .post(`/api/v1/whatsapp/conversations/${CONV_ID}/messages`)
+    .set('Cookie', cookie('t80'))
+    .send(body);
+
+  test('library endpoint serves all seven categories with complete definitions', async () => {
+    admin();
+    const res = await request(app)
+      .get('/api/v1/whatsapp/templates/library')
+      .set('Cookie', cookie('t81'));
+
+    expect(res.status).toBe(200);
+    const entries = res.body.data;
+    expect(Array.isArray(entries)).toBe(true);
+    const groups = new Set(entries.map((e) => e.group));
+    for (const g of ['Property Information', 'Schedule a Site Visit', 'Floor Plan & Brochure', 'New Enquiry Follow-up', 'Site Visit Reminder', 'Booking & Documentation']) {
+      expect(groups.has(g)).toBe(true);
+    }
+    for (const e of entries) {
+      expect(typeof e.name).toBe('string');
+      expect(typeof e.description).toBe('string');
+      expect(typeof e.body).toBe('string');
+      expect(Array.isArray(e.variables)).toBe(true);
+      expect(e.variables.length).toBeGreaterThan(0);
+      // every placeholder is declared and every declared variable is used
+      const inBody = new Set([...e.body.matchAll(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g)].map((m) => m[1]));
+      expect([...inBody].sort()).toEqual([...e.variables].sort());
+      // no provider ids, secrets, or approval claims leak through the catalog
+      expect(Object.keys(e).sort()).toEqual(['body', 'description', 'group', 'metaCategory', 'name', 'variables']);
+    }
+  });
+
+  test('library endpoint requires auth but is visible to executives', async () => {
+    const anon = await request(app).get('/api/v1/whatsapp/templates/library');
+    expect(anon.status).toBe(401);
+
+    exec();
+    prisma.lead.findFirst.mockResolvedValue(lead());
+    const res = await request(app)
+      .get('/api/v1/whatsapp/templates/library')
+      .set('Cookie', cookie('t82'));
+    expect(res.status).toBe(200);
+  });
+
+  test('sending a catalog template auto-provisions a local row, then reuses it', async () => {
+    admin();
+    prisma.whatsAppConversation.findFirst.mockResolvedValue(conv());
+    prisma.whatsAppTemplate.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'tpl-lib', organizationId: ORG, name: 'Enquiry Follow-up', active: true, variables: ['customer_name', 'project_name', 'salesperson_name'] });
+    prisma.whatsAppTemplate.create.mockResolvedValue({ id: 'tpl-lib', organizationId: ORG, name: 'Enquiry Follow-up', active: true, variables: ['customer_name', 'project_name', 'salesperson_name'] });
+    prisma.whatsAppMessage.create.mockResolvedValue({ id: 'm1' });
+    prisma.whatsAppConversation.update.mockResolvedValue({});
+    prisma.leadActivity.create.mockResolvedValue({});
+
+    const payload = { templateName: 'Enquiry Follow-up', variables: ['Rohit', 'Skyline', 'Asha'] };
+    const first = await sendAsAdmin(payload);
+    expect(first.status).toBe(201);
+    expect(prisma.whatsAppTemplate.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          organizationId: ORG, name: 'Enquiry Follow-up', providerTemplateId: null,
+          variables: ['customer_name', 'project_name', 'salesperson_name'],
+        }),
+      })
+    );
+
+    const second = await sendAsAdmin(payload);
+    expect(second.status).toBe(201);
+    expect(prisma.whatsAppTemplate.create).toHaveBeenCalledTimes(1);
+    // mock transport stamps provider ids without any network call
+    expect(prisma.whatsAppMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ providerMessageId: expect.stringMatching(/^mockwa_/) }) })
+    );
+  });
+
+  test('concurrent provisioning race re-fetches only the matching org row', async () => {
+    admin();
+    prisma.whatsAppConversation.findFirst.mockResolvedValue(conv());
+    prisma.whatsAppTemplate.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'tpl-race', organizationId: ORG, name: 'Visit Reminder', active: true, variables: ['customer_name', 'property_name', 'visit_date', 'visit_time', 'site_address', 'salesperson_name'] });
+    prisma.whatsAppTemplate.create.mockRejectedValueOnce({ code: 'P2002' });
+    prisma.whatsAppMessage.create.mockResolvedValue({ id: 'm2' });
+    prisma.whatsAppConversation.update.mockResolvedValue({});
+    prisma.leadActivity.create.mockResolvedValue({});
+
+    const res = await sendAsAdmin({ templateName: 'Visit Reminder', variables: ['R', 'P', 'D', 'T', 'S', 'A'] });
+    expect(res.status).toBe(201);
+    expect(prisma.whatsAppTemplate.findFirst).toHaveBeenLastCalledWith({ where: { organizationId: ORG, name: 'Visit Reminder' } });
+  });
+
+  test('catalog sends still enforce required variables (400, no row created)', async () => {
+    admin();
+    prisma.whatsAppConversation.findFirst.mockResolvedValue(conv());
+    prisma.whatsAppTemplate.findFirst.mockResolvedValue(null);
+
+    const res = await sendAsAdmin({ templateName: 'Enquiry Follow-up', variables: ['Only-one'] });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('TEMPLATE_VARIABLES_MISSING');
+    expect(prisma.whatsAppTemplate.create).not.toHaveBeenCalled();
+    expect(prisma.whatsAppMessage.create).not.toHaveBeenCalled();
+  });
+
+  test('unknown template names still 404 (no catalog match, no row)', async () => {
+    admin();
+    prisma.whatsAppConversation.findFirst.mockResolvedValue(conv());
+    prisma.whatsAppTemplate.findFirst.mockResolvedValue(null);
+
+    const res = await sendAsAdmin({ templateName: 'No Such Template', variables: ['a'] });
+    expect(res.status).toBe(404);
+    expect(prisma.whatsAppTemplate.create).not.toHaveBeenCalled();
+  });
+
+  test('create/update validation accepts description and body', async () => {
+    admin();
+    prisma.whatsAppTemplate.findFirst.mockResolvedValue(null);
+    prisma.whatsAppTemplate.create.mockResolvedValue({ id: 'tpl-c' });
+
+    const created = await request(app)
+      .post('/api/v1/whatsapp/templates')
+      .set('Cookie', cookie('t83'))
+      .send({ name: 'Custom One', description: 'Short desc', body: 'Hi {{customer_name}}', variables: ['customer_name'] });
+    expect(created.status).toBe(201);
+    expect(prisma.whatsAppTemplate.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ description: 'Short desc', body: 'Hi {{customer_name}}' }) })
+    );
+
+    prisma.whatsAppTemplate.findFirst.mockResolvedValue({ id: 'tpl-c', organizationId: ORG });
+    prisma.whatsAppTemplate.update.mockResolvedValue({ id: 'tpl-c' });
+    const updated = await request(app)
+      .patch('/api/v1/whatsapp/templates/aaaaaaaa-1111-4111-8111-111111111111')
+      .set('Cookie', cookie('t84'))
+      .send({ description: 'New desc', body: null });
+    expect(updated.status).toBe(200);
+    expect(prisma.whatsAppTemplate.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ description: 'New desc', body: null }) })
+    );
+  });
+});
+
+describe('Phase 4 - Meta Cloud API provider (stubbed transport, no network)', () => {
+  const MetaWhatsAppProvider = require('../src/providers/whatsapp/metaProvider');
+  const { resetWhatsAppProvider } = require('../src/providers/whatsapp');
+  const TEST_SECRET = 'test-app-secret-0123456789';
+  let savedEnv;
+
+  beforeEach(() => {
+    savedEnv = {
+      WHATSAPP_PROVIDER: process.env.WHATSAPP_PROVIDER,
+      WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID,
+      WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN,
+      WHATSAPP_APP_SECRET: process.env.WHATSAPP_APP_SECRET,
+    };
+    process.env.WHATSAPP_PROVIDER = 'meta';
+    process.env.WHATSAPP_PHONE_NUMBER_ID = '1411466198708019';
+    process.env.WHATSAPP_ACCESS_TOKEN = 'test-token';
+    process.env.WHATSAPP_APP_SECRET = TEST_SECRET;
+    resetWhatsAppProvider();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    resetWhatsAppProvider();
+  });
+
+  const stubGraph = (response, ok = true) =>
+    jest.spyOn(global, 'fetch').mockResolvedValue({ ok, status: ok ? 200 : 400, json: async () => response });
+
+  const metaSign = (rawBody) =>
+    `sha256=${crypto.createHmac('sha256', TEST_SECRET).update(rawBody).digest('hex')}`;
+
+  test('provider selection reports meta/live and requires number + token', () => {
+    const { getWhatsAppProvider } = require('../src/providers/whatsapp');
+    expect(getWhatsAppProvider().name).toBe('meta');
+    expect(getWhatsAppProvider().simulated).toBe(false);
+    expect(getWhatsAppProvider().isConfigured()).toBe(true);
+    delete process.env.WHATSAPP_ACCESS_TOKEN;
+    expect(getWhatsAppProvider().isConfigured()).toBe(false);
+  });
+
+  test('text send posts the Meta payload shape and parses the wamid', async () => {
+    const spy = stubGraph({ messages: [{ id: 'wamid.abc123' }] });
+    const provider = new MetaWhatsAppProvider();
+
+    const result = await provider.sendMessage({ to: '+91 90000 12345', body: 'hello' });
+
+    expect(result).toMatchObject({ providerMessageId: 'wamid.abc123', status: 'SENT' });
+    expect(spy).toHaveBeenCalledTimes(1);
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe('https://graph.facebook.com/v21.0/1411466198708019/messages');
+    expect(init.method).toBe('POST');
+    expect(String(init.headers.Authorization)).toMatch(/^Bearer /);
+    expect(JSON.parse(init.body)).toMatchObject({
+      messaging_product: 'whatsapp',
+      to: '919000012345',
+      type: 'text',
+      text: { body: 'hello' },
+    });
+  });
+
+  test('template send maps ordered variables to body components', async () => {
+    const spy = stubGraph({ messages: [{ id: 'wamid.tpl1' }] });
+    const provider = new MetaWhatsAppProvider();
+
+    await provider.sendMessage({ to: '919000012345', templateName: 'Visit Reminder', variables: ['Rohit', '12 Oct'], language: 'en' });
+
+    const [, init] = spy.mock.calls[0];
+    expect(JSON.parse(init.body)).toMatchObject({
+      type: 'template',
+      template: {
+        name: 'Visit Reminder',
+        language: { code: 'en' },
+        components: [{ type: 'body', parameters: [{ type: 'text', text: 'Rohit' }, { type: 'text', text: '12 Oct' }] }],
+      },
+    });
+  });
+
+  test('Meta API errors and network failures surface as 502, never fake success', async () => {
+    const provider = new MetaWhatsAppProvider();
+
+    stubGraph({ error: { message: 'Invalid OAuth access token', code: 190 } }, false);
+    await expect(provider.sendMessage({ to: '919000012345', body: 'hi' }))
+      .rejects.toMatchObject({ statusCode: 502, code: 'WHATSAPP_PROVIDER_ERROR' });
+
+    jest.restoreAllMocks();
+    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('socket hang up'));
+    await expect(provider.sendMessage({ to: '919000012345', body: 'hi' }))
+      .rejects.toMatchObject({ statusCode: 502, code: 'WHATSAPP_PROVIDER_ERROR' });
+  });
+
+  test('invalid recipients fail before any network call', async () => {
+    const spy = stubGraph({ messages: [{ id: 'wamid.x' }] });
+    const provider = new MetaWhatsAppProvider();
+
+    await expect(provider.sendMessage({ to: 'not-a-number', body: 'hi' }))
+      .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_RECIPIENT' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  test('webhook HMAC enforces the app secret', () => {
+    expect(MetaWhatsAppProvider.verify('{}', metaSign('{}'), TEST_SECRET)).toBe(true);
+    expect(MetaWhatsAppProvider.verify('{}', 'sha256=deadbeef', TEST_SECRET)).toBe(false);
+    expect(MetaWhatsAppProvider.verify('{}', metaSign('{}'), '')).toBe(false);
+    expect(new MetaWhatsAppProvider().verifyWebhookSignature('{}', metaSign('{}'))).toBe(true);
+  });
+
+  test('Meta envelope ingests a text message and upgrades a status', async () => {
+    prisma.whatsAppMessage.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'msg-old', status: 'SENT' });
+    prisma.lead.findFirst.mockResolvedValue(lead());
+    prisma.whatsAppConversation.findFirst.mockResolvedValue(null);
+    prisma.whatsAppConversation.create.mockResolvedValue({ id: CONV_ID });
+    prisma.whatsAppMessage.create.mockResolvedValue({ id: 'msg-meta' });
+    prisma.whatsAppConversation.update.mockResolvedValue({});
+    prisma.leadActivity.create.mockResolvedValue({});
+
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        id: 'WABA-1',
+        changes: [{
+          field: 'messages',
+          value: {
+            messaging_product: 'whatsapp',
+            messages: [{ from: '919000012345', id: 'wamid.meta1', timestamp: '1700000000', type: 'text', text: { body: 'hello meta' } }],
+            statuses: [{ id: 'wamid.meta0', status: 'delivered', timestamp: '1700000001', recipient_id: '919000012345' }],
+          },
+        }],
+      }],
+    };
+    const res = await request(app)
+      .post('/api/v1/webhooks/whatsapp/meta')
+      .set('Content-Type', 'application/json')
+      .set('x-hub-signature-256', metaSign(JSON.stringify(payload)))
+      .send(JSON.stringify(payload));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ ok: true, processed: 2, ignored: 0, duplicates: 0 });
+    // inbound attributed within the webhook org; status scoped the same way
+    expect(prisma.lead.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ organizationId: ORG }) })
+    );
+    expect(prisma.whatsAppMessage.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'DELIVERED' }) })
+    );
+  });
+
+  test('Meta envelope skips non-text and unknown statuses without failing', async () => {
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        id: 'WABA-1',
+        changes: [{
+          field: 'messages',
+          value: {
+            messaging_product: 'whatsapp',
+            messages: [{ from: '919000012345', id: 'wamid.img', timestamp: '1700000000', type: 'image', image: { id: 'media1' } }],
+            statuses: [{ id: 'wamid.meta9', status: 'deleted', timestamp: '1700000001', recipient_id: '919000012345' }],
+          },
+        }],
+      }],
+    };
+    const res = await request(app)
+      .post('/api/v1/webhooks/whatsapp/meta')
+      .set('Content-Type', 'application/json')
+      .set('x-hub-signature-256', metaSign(JSON.stringify(payload)))
+      .send(JSON.stringify(payload));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ ok: true, processed: 0, ignored: 2, duplicates: 0 });
+    expect(prisma.whatsAppMessage.create).not.toHaveBeenCalled();
+  });
+
+  test('Meta webhook rejects bad signatures and wrong provider paths', async () => {
+    const payload = { object: 'whatsapp_business_account', entry: [] };
+    const badSig = await request(app)
+      .post('/api/v1/webhooks/whatsapp/meta')
+      .set('Content-Type', 'application/json')
+      .set('x-hub-signature-256', 'sha256=deadbeef')
+      .send(JSON.stringify(payload));
+    expect(badSig.status).toBe(401);
+
+    process.env.WHATSAPP_PROVIDER = 'mock';
+    resetWhatsAppProvider();
+    const wrongPath = await request(app)
+      .post('/api/v1/webhooks/whatsapp/meta')
+      .set('Content-Type', 'application/json')
+      .set('x-hub-signature-256', metaSign(JSON.stringify(payload)))
+      .send(JSON.stringify(payload));
+    expect(wrongPath.status).toBe(503);
   });
 });

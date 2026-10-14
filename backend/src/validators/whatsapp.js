@@ -51,6 +51,8 @@ const createTemplateSchema = {
         providerTemplateId: z.string().max(200).optional(),
         language: z.string().max(20).optional(),
         category: z.enum(['MARKETING', 'UTILITY', 'AUTHENTICATION']).optional(),
+        description: z.string().trim().max(200).optional(),
+        body: z.string().trim().min(1).max(4000).optional(),
         variables: templateVariablesSchema.optional(),
         active: z.boolean().optional()
     })
@@ -61,7 +63,9 @@ const updateTemplateSchema = {
         active: z.boolean().optional(),
         language: z.string().max(20).optional(),
         variables: templateVariablesSchema.optional(),
-        providerTemplateId: z.string().max(200).optional()
+        providerTemplateId: z.string().max(200).optional(),
+        description: z.string().trim().max(200).nullable().optional(),
+        body: z.string().trim().min(1).max(4000).nullable().optional()
     })
 };
 

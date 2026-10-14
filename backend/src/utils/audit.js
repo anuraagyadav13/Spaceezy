@@ -23,7 +23,8 @@ const AUDIT_ACTIONS = {
     FOLLOWUP_CHANGED: 'followup.changed',
     ASSIGNMENT_CHANGED: 'assignment.changed',
     WHATSAPP_SENT: 'whatsapp.sent',
-    WHATSAPP_INBOUND: 'whatsapp.inbound'
+    WHATSAPP_INBOUND: 'whatsapp.inbound',
+    META_LEAD_SYNC: 'meta.lead_sync'
 };
 
 module.exports = { audit, AUDIT_ACTIONS };

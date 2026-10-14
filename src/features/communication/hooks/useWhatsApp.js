@@ -6,6 +6,7 @@ import {
     fetchMessages,
     sendWhatsAppMessage,
     fetchWhatsAppTemplates,
+    fetchTemplateLibrary,
     createWhatsAppTemplate,
     updateWhatsAppTemplate
 } from "../../../lib/api/whatsapp";
@@ -58,6 +59,17 @@ export const useWhatsAppTemplates = (params = {}, options = {}) =>
         queryFn: () => fetchWhatsAppTemplates(params),
         enabled: options.enabled !== false,
         staleTime: 5 * 60_000,
+        retry: 1
+    });
+
+// Predefined real-estate library (code-owned catalog, no DB rows needed to
+// browse). Entries provision org-local rows on first send.
+export const useTemplateLibrary = (options = {}) =>
+    useQuery({
+        queryKey: ["whatsapp-template-library"],
+        queryFn: fetchTemplateLibrary,
+        enabled: options.enabled !== false,
+        staleTime: 30 * 60_000,
         retry: 1
     });
 
