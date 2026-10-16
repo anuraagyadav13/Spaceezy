@@ -1,6 +1,9 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const { getWhatsAppProvider } = require('../providers/whatsapp');
+const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
+const WhatsappSettingsService = require('./whatsappSettingsService');
+const WhatsappNotifyService = require('./whatsappNotifyService');
 const { getCatalogEntry, listCatalog } = require('./templateCatalog');
 const { canSeePII, maskPhone } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
@@ -121,8 +124,25 @@ class WhatsAppService {
     }
 
     static async sendMessage(conversationId, data, organizationId, userId, role) {
-        const provider = getWhatsAppProvider();
-        if (!provider.isConfigured()) {
+        // Effective transport: a saved DB mode of 'meta' sends through Meta
+        // with the org's stored credentials; anything else keeps the exact
+        // legacy env-driven provider behavior (default mock).
+        const effective = await WhatsappSettingsService.getEffectiveConfig(organizationId);
+        const useDbMeta = effective.source === 'db' && effective.providerMode === 'meta';
+        const provider = useDbMeta ? new MetaWhatsAppProvider() : getWhatsAppProvider();
+        const dbCredentials = useDbMeta
+            ? {
+                phoneNumberId: effective.phoneNumberId,
+                accessToken: effective.accessToken,
+                appSecret: effective.appSecret,
+                graphVersion: effective.graphVersion,
+            }
+            : undefined;
+        if (useDbMeta) {
+            if (!effective.accessToken || !effective.phoneNumberId) {
+                throw new AppError('WhatsApp credentials are incomplete. Save an access token and Phone Number ID first.', 409, 'WHATSAPP_NOT_CONFIGURED');
+            }
+        } else if (!provider.isConfigured()) {
             throw new AppError('WhatsApp integration not configured. Ask your administrator to connect the WhatsApp Business API.', 409, 'WHATSAPP_NOT_CONFIGURED');
         }
 
@@ -222,7 +242,10 @@ class WhatsAppService {
             variables,
             // Used by transports that render provider templates natively
             // (meta); ignored by mock/generic/none.
-            language: templateLanguage
+            language: templateLanguage,
+            // Organization credentials for DB-configured Meta mode; undefined
+            // keeps exact legacy env behavior on every other provider.
+            credentials: dbCredentials
         });
 
         const message = await prisma.$transaction(async (tx) => {
@@ -379,27 +402,65 @@ class WhatsAppService {
         return org.id;
     }
 
+    // Sender identities for webhook routing: every phone_number_id and
+    // entry (WABA) id found in a Meta envelope. Custom envelopes carry none
+    // and route through legacy handling.
+    static extractMetaSenderIds(payload) {
+        if (!payload || payload.object !== 'whatsapp_business_account' || !Array.isArray(payload.entry)) {
+            return { phoneNumberIds: [], wabaIds: [] };
+        }
+        const phoneNumberIds = [];
+        const wabaIds = [];
+        for (const entry of payload.entry) {
+            if (entry && entry.id) wabaIds.push(entry.id);
+            const changes = (entry && entry.changes) || [];
+            for (const change of changes) {
+                const metadata = (change && change.value && change.value.metadata) || {};
+                if (metadata.phone_number_id) phoneNumberIds.push(metadata.phone_number_id);
+            }
+        }
+        return { phoneNumberIds, wabaIds };
+    }
+
     /**
      * Webhook: signature-verified, idempotent by providerMessageId.
      * Supports inbound messages and sent/delivered/read/failed status events.
      */
     static async processWebhook(providerName, rawBody, signature) {
-        const provider = getWhatsAppProvider();
-        if (!provider.isConfigured() || provider.name !== providerName) {
-            throw new AppError('WhatsApp webhook is not configured', 503, 'WEBHOOK_NOT_CONFIGURED');
-        }
-        if (!provider.verifyWebhookSignature(rawBody, signature)) {
-            throw new AppError('Invalid webhook signature', 401, 'WEBHOOK_SIGNATURE_INVALID');
-        }
-
-        const organizationId = await WhatsAppService.resolveWebhookOrganization();
-
         let payload;
         try {
             payload = JSON.parse(rawBody);
         } catch {
             throw new AppError('Invalid webhook payload', 400, 'VALIDATION_ERROR');
         }
+
+        // Route Meta envelopes by sender number; custom envelopes (no sender
+        // identity) keep legacy handling. Resolution happens before any
+        // signature check so verification uses the owning org's secret.
+        const senderIds = WhatsAppService.extractMetaSenderIds(payload);
+        const routedOrg = await WhatsappSettingsService.resolveWebhookOrg(senderIds);
+        const effective = await WhatsappSettingsService.getEffectiveConfig(routedOrg);
+        const useDbMeta = effective.source === 'db' && effective.providerMode === 'meta';
+        const provider = useDbMeta ? new MetaWhatsAppProvider() : getWhatsAppProvider();
+        const configured = useDbMeta
+            ? Boolean(effective.accessToken && effective.phoneNumberId)
+            : provider.isConfigured();
+        if (!configured || provider.name !== providerName) {
+            throw new AppError('WhatsApp webhook is not configured', 503, 'WEBHOOK_NOT_CONFIGURED');
+        }
+        const credentials = useDbMeta
+            ? {
+                phoneNumberId: effective.phoneNumberId,
+                accessToken: effective.accessToken,
+                appSecret: effective.appSecret,
+                graphVersion: effective.graphVersion,
+            }
+            : undefined;
+        if (!provider.verifyWebhookSignature(rawBody, signature, credentials)) {
+            throw new AppError('Invalid webhook signature', 401, 'WEBHOOK_SIGNATURE_INVALID');
+        }
+
+        const organizationId = routedOrg || await WhatsAppService.resolveWebhookOrganization();
 
         const type = payload.type;
         if (type === 'status') {
@@ -490,6 +551,11 @@ class WhatsAppService {
             });
         } else {
             return { ok: true, duplicate: true };
+        }
+        // Bridge delivery progress onto notification outbox rows sharing this
+        // provider message id. Best-effort by design: never fails the webhook.
+        if (mapped === 'DELIVERED' || mapped === 'READ') {
+            await WhatsappNotifyService.handleStatusEvent(organizationId, providerMessageId, mapped).catch(() => {});
         }
         return { ok: true, eventId: eventId || null };
     }

@@ -1,6 +1,7 @@
 const { asyncHandler } = require('../utils/errors');
 const CallService = require('../services/callService');
 const WhatsAppService = require('../services/whatsappService');
+const WhatsappSettingsService = require('../services/whatsappSettingsService');
 const MetaAdsService = require('../services/metaAdsService');
 
 // Public webhook endpoints (authenticated by provider HMAC signature, not
@@ -18,12 +19,15 @@ const whatsappWebhook = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data: result });
 });
 
-// WhatsApp-style verification handshake.
+// WhatsApp-style verification handshake. The token comes from the org's
+// saved settings when present, else legacy env (same precedence as sends).
 const whatsappWebhookVerify = asyncHandler(async (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-    if (mode === 'subscribe' && token && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    const ok = mode === 'subscribe'
+        && await WhatsappSettingsService.verifyChallengeToken(token);
+    if (ok) {
         res.status(200).send(String(challenge || ''));
         return;
     }

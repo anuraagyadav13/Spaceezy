@@ -75,6 +75,64 @@ const listTemplatesQuerySchema = {
     })
 };
 
+const idParam = z.string().uuid('id must be a valid UUID');
+const digitId = z.string().regex(/^\d{1,32}$/, 'must be a numeric identifier').nullish();
+const secretInput = z.string().trim().max(500).nullish();
+
+const recipientInput = z.object({
+    phone: z.string().min(1, 'Recipient phone is required').max(20),
+    label: z.string().max(100).optional().nullable(),
+    enabled: z.boolean().optional(),
+});
+
+const saveSettingsSchema = {
+    body: z.object({
+        appId: digitId,
+        wabaId: digitId,
+        phoneNumberId: digitId,
+        graphVersion: z.string().regex(/^v\d+\.\d+$/, 'must look like v21.0').nullish(),
+        providerMode: z.enum(['mock', 'meta']).optional(),
+        accessToken: secretInput,
+        appSecret: secretInput,
+        verifyToken: secretInput,
+        notifyEnabled: z.boolean().optional(),
+        notifyRecipients: z.array(recipientInput).max(10).nullish(),
+        notifyTemplateName: z.string().trim().min(1).max(100).nullish(),
+    }).superRefine((body, ctx) => {
+        if (body.graphVersion) {
+            const match = /^v(\d+)\.(\d+)$/.exec(body.graphVersion);
+            if (!match || Number(match[1]) < 21) {
+                ctx.addIssue({ code: 'custom', path: ['graphVersion'], message: 'graphVersion must be v21.0 or newer' });
+            }
+        }
+        for (const [index, recipient] of (body.notifyRecipients || []).entries()) {
+            const digits = String(recipient.phone || '').replace(/\D/g, '');
+            if (!/^[1-9]\d{7,14}$/.test(digits)) {
+                ctx.addIssue({ code: 'custom', path: ['notifyRecipients', index, 'phone'], message: 'Recipient phone must be a valid E.164 number' });
+            }
+        }
+    })
+};
+
+const rotateSecretSchema = {
+    body: z.object({
+        field: z.enum(['accessToken', 'appSecret', 'verifyToken']),
+        value: z.string().trim().min(1, 'A non-empty value is required').max(500),
+    })
+};
+
+const secretFieldParamsSchema = {
+    params: z.object({
+        field: z.enum(['accessToken', 'appSecret', 'verifyToken']),
+    })
+};
+
+const testNotifySchema = {
+    body: z.object({
+        recipient: z.string().max(20).optional(),
+    })
+};
+
 module.exports = {
     idParamsSchema,
     createConversationSchema,
@@ -83,5 +141,9 @@ module.exports = {
     sendMessageSchema,
     createTemplateSchema,
     updateTemplateSchema,
-    listTemplatesQuerySchema
+    listTemplatesQuerySchema,
+    saveSettingsSchema,
+    rotateSecretSchema,
+    secretFieldParamsSchema,
+    testNotifySchema,
 };

@@ -17,10 +17,11 @@ const { AppError } = require('../../utils/errors');
 
 const GRAPH_VERSION = process.env.WHATSAPP_GRAPH_VERSION || 'v21.0';
 
-const config = () => ({
-    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
-    accessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
-    appSecret: process.env.WHATSAPP_APP_SECRET || ''
+const config = (override) => ({
+    phoneNumberId: (override && override.phoneNumberId) || process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+    accessToken: (override && override.accessToken) || process.env.WHATSAPP_ACCESS_TOKEN || '',
+    appSecret: (override && override.appSecret) || process.env.WHATSAPP_APP_SECRET || '',
+    graphVersion: (override && override.graphVersion) || process.env.WHATSAPP_GRAPH_VERSION || GRAPH_VERSION,
 });
 
 // E.164 digits: strip formatting, require 8-15 digits starting non-zero.
@@ -33,9 +34,9 @@ function normalizeRecipient(to) {
     return digits;
 }
 
-async function graphRequest(path, payload) {
-    const { phoneNumberId, accessToken } = config();
-    const url = `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}${path}`;
+async function graphRequest(path, payload, credentials) {
+    const { phoneNumberId, accessToken, graphVersion } = config(credentials);
+    const url = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}${path}`;
     let res;
     try {
         res = await fetch(url, {
@@ -83,16 +84,19 @@ class MetaWhatsAppProvider {
         return a.length === b.length && crypto.timingSafeEqual(a, b);
     }
 
-    verifyWebhookSignature(rawBody, signature) {
-        return MetaWhatsAppProvider.verify(rawBody, signature, config().appSecret);
+    verifyWebhookSignature(rawBody, signature, credentials) {
+        return MetaWhatsAppProvider.verify(rawBody, signature, config(credentials).appSecret);
     }
 
     // The service funnels every send through sendMessage (template sends carry
     // templateName + variables). Route accordingly so mock/generic/none
     // behavior stays byte-identical — only this provider branches.
-    async sendMessage({ to, body, templateName, variables, language }) {
+    // An explicit `credentials` object ({phoneNumberId, accessToken,
+    // appSecret, graphVersion}) overrides env for organization-scoped sends;
+    // callers without one keep exact legacy env behavior.
+    async sendMessage({ to, body, templateName, variables, language, credentials }) {
         if (templateName && String(templateName).trim()) {
-            return await this.sendTemplate({ to, templateName, variables, language });
+            return await this.sendTemplate({ to, templateName, variables, language, credentials });
         }
         const recipient = normalizeRecipient(to);
         if (!body || !String(body).trim()) {
@@ -104,7 +108,7 @@ class MetaWhatsAppProvider {
             to: recipient,
             type: 'text',
             text: { preview_url: false, body: String(body).trim() }
-        });
+        }, credentials);
         const wamid = data && data.messages && data.messages[0] && data.messages[0].id;
         if (!wamid) {
             throw new AppError('WhatsApp API accepted the message but returned no message id', 502, 'WHATSAPP_PROVIDER_ERROR');
@@ -112,7 +116,7 @@ class MetaWhatsAppProvider {
         return { providerMessageId: wamid, status: 'SENT' };
     }
 
-    async sendTemplate({ to, templateName, variables = [], language = 'en' }) {
+    async sendTemplate({ to, templateName, variables = [], language = 'en', credentials }) {
         const recipient = normalizeRecipient(to);
         if (!templateName || !String(templateName).trim()) {
             throw new AppError('Template name is required', 400, 'VALIDATION_ERROR');
@@ -134,12 +138,63 @@ class MetaWhatsAppProvider {
             to: recipient,
             type: 'template',
             template
-        });
+        }, credentials);
         const wamid = data && data.messages && data.messages[0] && data.messages[0].id;
         if (!wamid) {
             throw new AppError('WhatsApp API accepted the template but returned no message id', 502, 'WHATSAPP_PROVIDER_ERROR');
         }
         return { providerMessageId: wamid, status: 'SENT' };
+    }
+
+    // Authenticated GET helper for read-only Meta queries (approval checks,
+    // connection probes). Same error mapping and timeout discipline as sends.
+    async graphGet(path, params, credentials) {
+        const { phoneNumberId, accessToken, graphVersion } = config(credentials);
+        if (!accessToken) {
+            throw new AppError('Meta access token is not configured', 409, 'WHATSAPP_NOT_CONFIGURED');
+        }
+        const cleanPath = String(path || '').replace(/^\/+/, '');
+        const url = new URL(`https://graph.facebook.com/${graphVersion || GRAPH_VERSION}/${cleanPath}`);
+        for (const [key, value] of Object.entries(params || {})) {
+            if (value !== undefined && value !== null && value !== '') url.searchParams.append(key, String(value));
+        }
+        let res;
+        try {
+            res = await fetch(url.toString(), {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${accessToken}` },
+                signal: AbortSignal.timeout(15000),
+            });
+        } catch (err) {
+            throw new AppError(`WhatsApp API unreachable: ${err?.message || 'network error'}`, 502, 'WHATSAPP_PROVIDER_ERROR');
+        }
+        let data = null;
+        try {
+            data = await res.json();
+        } catch {
+            throw new AppError('WhatsApp API returned a non-JSON response', 502, 'WHATSAPP_PROVIDER_ERROR');
+        }
+        if (!res.ok) {
+            const metaMessage = data && data.error && data.error.message ? String(data.error.message) : `HTTP ${res.status}`;
+            throw new AppError(`WhatsApp API error: ${metaMessage}`, 502, 'WHATSAPP_PROVIDER_ERROR');
+        }
+        return data;
+    }
+
+    // Safe, read-only connectivity probe for the settings Test Connection
+    // action: resolves the sender number object. Never sends messages,
+    // registers numbers, or changes Meta state. Returns display-safe fields.
+    async checkConnection(credentials) {
+        const data = await graphRequest(
+            `/${(credentials && credentials.phoneNumberId) || config(credentials).phoneNumberId}?fields=display_phone_number,verified_name`,
+            undefined,
+            credentials
+        );
+        return {
+            ok: true,
+            displayPhoneNumber: (data && data.display_phone_number) || null,
+            verifiedName: (data && data.verified_name) || null,
+        };
     }
 }
 

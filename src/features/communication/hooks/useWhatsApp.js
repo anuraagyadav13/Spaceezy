@@ -8,7 +8,14 @@ import {
     fetchWhatsAppTemplates,
     fetchTemplateLibrary,
     createWhatsAppTemplate,
-    updateWhatsAppTemplate
+    updateWhatsAppTemplate,
+    fetchWhatsappSettings,
+    saveWhatsappSettings,
+    rotateWhatsappSecret,
+    removeWhatsappSecret,
+    testWhatsappConnection,
+    fetchLatestNotification,
+    sendTestNotification
 } from "../../../lib/api/whatsapp";
 import { invalidateComm } from "./useCommunication";
 
@@ -86,5 +93,61 @@ export const useUpdateWhatsAppTemplate = () => {
     return useMutation({
         mutationFn: updateWhatsAppTemplate,
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["whatsapp-templates"] })
+    });
+};
+
+export const useWhatsappSettings = (options = {}) =>
+    useQuery({
+        queryKey: ["whatsapp-settings"],
+        queryFn: fetchWhatsappSettings,
+        enabled: options.enabled !== false,
+        staleTime: 60_000,
+        retry: 1
+    });
+
+const invalidateSettings = (queryClient) =>
+    queryClient.invalidateQueries({ queryKey: ["whatsapp-settings"] });
+
+export const useSaveWhatsappSettings = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: saveWhatsappSettings,
+        onSettled: () => invalidateSettings(queryClient)
+    });
+};
+
+export const useRotateWhatsappSecret = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: rotateWhatsappSecret,
+        onSettled: () => invalidateSettings(queryClient)
+    });
+};
+
+export const useRemoveWhatsappSecret = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: removeWhatsappSecret,
+        onSettled: () => invalidateSettings(queryClient)
+    });
+};
+
+export const useTestWhatsappConnection = () =>
+    useMutation({ mutationFn: testWhatsappConnection });
+
+export const useLatestNotification = (options = {}) =>
+    useQuery({
+        queryKey: ["whatsapp-latest-notification"],
+        queryFn: fetchLatestNotification,
+        enabled: options.enabled !== false,
+        staleTime: 30_000,
+        retry: 1
+    });
+
+export const useTestNotify = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: sendTestNotification,
+        onSettled: () => queryClient.invalidateQueries({ queryKey: ["whatsapp-latest-notification"] })
     });
 };

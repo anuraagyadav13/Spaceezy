@@ -36,6 +36,7 @@ jest.mock('../src/db/prisma', () => {
     whatsAppConversation: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), count: jest.fn() },
     whatsAppMessage: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), count: jest.fn() },
     whatsAppTemplate: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+    whatsappSettings: { findUnique: jest.fn(), findMany: jest.fn() },
     auditLog: { create: jest.fn() },
     $transaction: jest.fn(),
   };
@@ -113,6 +114,8 @@ beforeEach(() => {
   resetWhatsAppProvider();
   prisma.auditLog.create.mockResolvedValue({ id: 'audit-1' });
   prisma.organization.findFirst.mockResolvedValue({ id: ORG });
+  prisma.whatsappSettings.findUnique.mockResolvedValue(null);
+  prisma.whatsappSettings.findMany.mockResolvedValue([]);
 });
 
 afterEach(() => {

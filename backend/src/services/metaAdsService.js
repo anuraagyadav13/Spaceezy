@@ -3,6 +3,7 @@ const { graphRequest } = require('./metaGraph');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const crypto = require('crypto');
 const prisma = require('../db/prisma');
+const WhatsappNotifyService = require('./whatsappNotifyService');
 
 // Read-only Meta Marketing API surface for SpaceEzy's own ad assets
 // (single-tenant system-user token from env — see backend/.env.example).
@@ -342,6 +343,9 @@ class MetaAdsService {
                 },
             });
             await audit(organizationId, null, AUDIT_ACTIONS.META_LEAD_SYNC, 'Lead', created.id, { metaLeadId: leadgenId });
+            // New-lead WhatsApp notifications (outbox): fire-and-forget, never
+            // breaks the sync. Only genuinely created leads notify.
+            void WhatsappNotifyService.enqueueForLead(organizationId, created.id).catch(() => {});
             return { ok: true, leadId: created.id };
         } catch (err) {
             // Concurrent duplicate delivery: unique (organizationId, metaLeadId).

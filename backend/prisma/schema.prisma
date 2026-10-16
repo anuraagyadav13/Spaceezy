@@ -34,6 +34,8 @@ model Organization {
   whatsappConversations WhatsAppConversation[]
   whatsappMessages      WhatsAppMessage[]
   whatsappTemplates     WhatsAppTemplate[]
+  whatsappSettings      WhatsappSettings?
+  whatsappNotifications WhatsappNotification[]
   auditLogs   AuditLog[]
 }
 
@@ -254,6 +256,7 @@ model Lead {
   preferredLocations LeadPreferredLocation[]
   whatsappConversations WhatsAppConversation[]
   whatsappMessages      WhatsAppMessage[]
+  whatsappNotifications WhatsappNotification[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -909,6 +912,65 @@ model WhatsAppTemplate {
 
   @@unique([organizationId, name])
   @@index([organizationId, active])
+}
+
+// Meta WhatsApp integration settings — at most one row per organization.
+// Secrets are AES-256-GCM envelopes (never plaintext); see
+// src/utils/whatsappSecrets.js. Non-secret fields are stored plainly.
+//
+// Effective-configuration rule: row absent → legacy environment behavior;
+// row present → the row is authoritative (env is NOT consulted afterwards,
+// and a decryption failure fails closed instead of falling back).
+model WhatsappSettings {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  appId         String?
+  wabaId        String?
+  phoneNumberId String?      @unique
+  graphVersion  String        @default("v21.0")
+  providerMode  String        @default("mock") // mock | meta (explicit admin action only)
+
+  accessTokenEnc   String?
+  appSecretEnc     String?
+  verifyTokenEnc   String?
+
+  // New-lead WhatsApp notifications (admin-configured, off by default).
+  notifyEnabled      Boolean @default(false)
+  notifyRecipients   Json?   // [{ phone, label, enabled }] — phones in E.164, validated server-side
+  notifyTemplateName String? // DB template name; approval verified live via Meta before each send
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+// Outbox record for exactly-once new-lead WhatsApp notifications.
+// Unique (organizationId, leadId, recipient) makes retries, webhook
+// redeliveries and concurrent processing idempotent by construction.
+model WhatsappNotification {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  recipient    String // configured E.164 recipient number (never lead-supplied)
+  templateName String?
+
+  status          String  @default("PENDING") // PENDING | SENT | DELIVERED | READ | FAILED
+  attempts        Int     @default(0)
+  error           String?
+  providerMessageId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, leadId, recipient])
+  @@index([organizationId, status])
 }
 
 model AuditLog {

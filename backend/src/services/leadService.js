@@ -8,6 +8,7 @@ const { normalizeConfig, extractBhk } = require('../utils/propertyRequirement');
 const { canSeePII, maskContact } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { generatePublicToken, buildPublicPropertyUrl, publicAvailability } = require('../utils/publicLink');
+const WhatsappNotifyService = require('./whatsappNotifyService');
 
 function parseBudget(value) {
     if (value === null || value === undefined || value === '') return null;
@@ -518,7 +519,7 @@ class LeadService {
         if (refs.propertyId !== undefined) payload.propertyId = refs.propertyId;
         if (refs.configurationId !== undefined) payload.configurationId = refs.configurationId;
 
-        return await prisma.$transaction(async (tx) => {
+        const created = await prisma.$transaction(async (tx) => {
             const lead = await tx.lead.create({
                 data: {
                     ...payload,
@@ -551,6 +552,12 @@ class LeadService {
 
             return lead;
         });
+
+        // New-lead WhatsApp notifications (outbox): fire-and-forget outside
+        // the transaction above — enqueue failures never break creation.
+        void WhatsappNotifyService.enqueueForLead(organizationId, created.id).catch(() => {});
+
+        return created;
     }
 
     static async getLeads(organizationId, query, userRole, userId) {
@@ -872,7 +879,9 @@ class LeadService {
             }
         }
 
-        return await prisma.$transaction(async (tx) => {
+        let createdLeadId = null;
+
+        const resultLead = await prisma.$transaction(async (tx) => {
             // Validate inventory references against the organization; drop invalid ones
             // instead of failing the public submission.
             let projectId = isUuid(data.projectId) ? data.projectId : null;
@@ -982,10 +991,19 @@ class LeadService {
                         description: 'New enquiry received from website'
                     }
                 });
+                createdLeadId = lead.id;
             }
 
             return lead;
         });
+
+        // New-lead WhatsApp notifications (outbox): created leads only —
+        // duplicate-enquiry updates never re-notify. Fire-and-forget.
+        if (createdLeadId) {
+            void WhatsappNotifyService.enqueueForLead(spaceezyOrgId, createdLeadId).catch(() => {});
+        }
+
+        return resultLead;
     }
     // The preference's deepest selected level must be confirmed on the project:
     // canonical FKs win, legacy free-text columns are a name-equality fallback

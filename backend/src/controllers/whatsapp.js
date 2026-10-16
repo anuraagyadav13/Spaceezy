@@ -1,5 +1,7 @@
 const { asyncHandler } = require('../utils/errors');
 const WhatsAppService = require('../services/whatsappService');
+const WhatsappSettingsService = require('../services/whatsappSettingsService');
+const WhatsappNotifyService = require('../services/whatsappNotifyService');
 
 const getStatus = asyncHandler(async (req, res) => {
     const data = await WhatsAppService.getStatus();
@@ -53,6 +55,48 @@ const updateTemplate = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data: template, message: 'Template updated' });
 });
 
+const getSettings = asyncHandler(async (req, res) => {
+    const { organizationId } = req.auth;
+    const data = await WhatsappSettingsService.getSettings(organizationId);
+    res.status(200).json({ success: true, data, message: 'WhatsApp settings fetched successfully' });
+});
+
+const saveSettings = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const data = await WhatsappSettingsService.saveSettings(organizationId, userId, req.body);
+    res.status(200).json({ success: true, data, message: 'WhatsApp settings saved successfully' });
+});
+
+const rotateSecret = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const data = await WhatsappSettingsService.rotateSecret(organizationId, userId, req.body.field, req.body.value);
+    res.status(200).json({ success: true, data, message: 'Credential rotated successfully' });
+});
+
+const removeSecret = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const data = await WhatsappSettingsService.removeSecret(organizationId, userId, req.params.field);
+    res.status(200).json({ success: true, data, message: 'Credential removed successfully' });
+});
+
+const testConnection = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const data = await WhatsappSettingsService.testConnection(organizationId, userId);
+    res.status(200).json({ success: true, data, message: 'Meta connection verified' });
+});
+
+const latestNotification = asyncHandler(async (req, res) => {
+    const { organizationId } = req.auth;
+    const data = await WhatsappNotifyService.latestForOrg(organizationId);
+    res.status(200).json({ success: true, data, message: 'Latest notification fetched' });
+});
+
+const testNotify = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const data = await WhatsappNotifyService.testNotify(organizationId, userId, req.body && req.body.recipient);
+    res.status(200).json({ success: true, data, message: 'Test notification sent' });
+});
+
 module.exports = {
     getStatus,
     listConversations,
@@ -62,5 +106,12 @@ module.exports = {
     listTemplates,
     listLibrary,
     createTemplate,
-    updateTemplate
+    updateTemplate,
+    getSettings,
+    saveSettings,
+    rotateSecret,
+    removeSecret,
+    testConnection,
+    latestNotification,
+    testNotify
 };

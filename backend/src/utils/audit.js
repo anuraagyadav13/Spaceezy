@@ -24,6 +24,11 @@ const AUDIT_ACTIONS = {
     ASSIGNMENT_CHANGED: 'assignment.changed',
     WHATSAPP_SENT: 'whatsapp.sent',
     WHATSAPP_INBOUND: 'whatsapp.inbound',
+    WHATSAPP_SETTINGS_UPDATED: 'whatsapp.settings_updated',
+    WHATSAPP_SECRET_ROTATED: 'whatsapp.secret_rotated',
+    WHATSAPP_SECRET_REMOVED: 'whatsapp.secret_removed',
+    WHATSAPP_CONNECTION_TESTED: 'whatsapp.connection_tested',
+    WHATSAPP_NOTIFY_TEST: 'whatsapp.notify_test',
     META_LEAD_SYNC: 'meta.lead_sync'
 };
 
