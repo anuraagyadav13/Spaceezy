@@ -1,9 +1,19 @@
 "use client";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight, MapPin, Search, CheckCircle2, ImageOff, Home } from "lucide-react";
 import { formatPrice } from "../../utils/format";
+
+// Rotating landing hero images (local files in public/images).
+// Filenames and alt text carry target keywords for image SEO.
+const HERO_IMAGES = [
+    { src: "/images/luxury-living-room-city-view-ghaziabad.png", alt: "Luxury living room with floor-to-ceiling windows overlooking the Ghaziabad skyline at sunset" },
+    { src: "/images/modern-villa-infinity-pool-sunset.png", alt: "Modern villa with infinity pool and city view at sunset" },
+    { src: "/images/property-site-visit-family-ghaziabad.png", alt: "SpaceEzy agent showing a luxury apartment to a family during a site visit" },
+];
+const HERO_ROTATE_MS = 5000;
 
 const placeLabel = (location) =>
     [location?.locality || location?.district, location?.state].filter(Boolean).join(", ");
@@ -20,6 +30,12 @@ export default function HomeClient({ projects, properties, locations }) {
     const heroY = useTransform(scrollYProgress, [0, 0.5], [0, 200]);
     const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
 
+    const [heroIndex, setHeroIndex] = useState(0);
+    useEffect(() => {
+        const timer = setInterval(() => setHeroIndex((i) => (i + 1) % HERO_IMAGES.length), HERO_ROTATE_MS);
+        return () => clearInterval(timer);
+    }, []);
+
     const fadeInUp = {
         hidden: { opacity: 0, y: 40 },
         visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } }
@@ -30,14 +46,19 @@ export default function HomeClient({ projects, properties, locations }) {
             {/* HERO SECTION */}
             <section className="relative h-screen flex items-center justify-center overflow-hidden">
                 <motion.div style={{ y: heroY, opacity: heroOpacity }} className="absolute inset-0 z-0">
-                    <Image
-                        src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=2800&q=80"
-                        alt="Luxury Real Estate"
-                        fill
-                        sizes="100vw"
-                        className="object-cover"
-                        priority
-                    />
+                    {HERO_IMAGES.map((img, i) => (
+                        <Image
+                            key={img.src}
+                            src={img.src}
+                            alt={img.alt}
+                            fill
+                            sizes="100vw"
+                            className={`object-cover transition-opacity duration-1000 ${i === heroIndex ? "opacity-100" : "opacity-0"}`}
+                            priority={i === 0}
+                            loading={i === 0 ? "eager" : "lazy"}
+                            aria-hidden={i !== heroIndex}
+                        />
+                    ))}
                     <div className="absolute inset-0 bg-gradient-to-b from-gray-900/60 via-gray-900/20 to-gray-900/90"></div>
                 </motion.div>
 
@@ -73,6 +94,17 @@ export default function HomeClient({ projects, properties, locations }) {
                             Search Properties <Search size={20} />
                         </Link>
                     </motion.div>
+                </div>
+
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+                    {HERO_IMAGES.map((img, i) => (
+                        <button
+                            key={img.src}
+                            onClick={() => setHeroIndex(i)}
+                            aria-label={`Show hero image ${i + 1}`}
+                            className={`h-2 rounded-full transition-all ${i === heroIndex ? "w-8 bg-white" : "w-2 bg-white/40 hover:bg-white/70"}`}
+                        />
+                    ))}
                 </div>
             </section>
 
