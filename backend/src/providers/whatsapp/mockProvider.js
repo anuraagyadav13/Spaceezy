@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { AppError } = require('../../utils/errors');
+const { verifyHmacSha256 } = require('../../utils/hmac');
 
 // Explicitly configured simulated provider (WHATSAPP_PROVIDER=mock) for
 // development/E2E. Always reported to the UI as simulated.
@@ -32,11 +33,7 @@ class MockWhatsAppProvider {
     }
 
     static verify(rawBody, signature, secret) {
-        if (!signature || !secret) return false;
-        const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody || '').digest('hex');
-        const a = Buffer.from(String(signature));
-        const b = Buffer.from(expected);
-        return a.length === b.length && crypto.timingSafeEqual(a, b);
+        return verifyHmacSha256(rawBody, signature, secret);
     }
 
     parseWebhook(payload) {

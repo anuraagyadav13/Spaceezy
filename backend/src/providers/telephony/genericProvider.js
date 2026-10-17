@@ -1,5 +1,5 @@
-const crypto = require('crypto');
 const { AppError } = require('../../utils/errors');
+const { verifyHmacSha256 } = require('../../utils/hmac');
 
 // Generic HTTP telephony gateway. Credentials and webhook secrets stay
 // server-side (env only) and are never sent to the frontend.
@@ -83,11 +83,7 @@ class GenericHttpTelephonyProvider {
 
     verifyWebhookSignature(rawBody, signature) {
         const secret = process.env.TELEPHONY_WEBHOOK_SECRET;
-        if (!signature || !secret) return false;
-        const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody || '').digest('hex');
-        const a = Buffer.from(String(signature));
-        const b = Buffer.from(expected);
-        return a.length === b.length && crypto.timingSafeEqual(a, b);
+        return verifyHmacSha256(rawBody, signature, secret);
     }
 }
 

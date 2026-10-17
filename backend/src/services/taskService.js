@@ -1,6 +1,8 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
+const { isExecRole } = require('../utils/roles');
+const { assertOwnership } = require('../utils/roles');
 
 const TERMINAL = ['COMPLETED', 'CANCELLED'];
 const ALLOWED_TRANSITIONS = {
@@ -16,8 +18,7 @@ class TaskService {
 
         const where = { organizationId };
 
-        // Role-based scoping
-        if (role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') {
+        if (isExecRole(role)) {
             where.assignedToId = userId;
         } else if (assignedToId) {
             where.assignedToId = assignedToId;
@@ -98,9 +99,7 @@ class TaskService {
         const task = await prisma.task.findFirst({ where: { id, organizationId } });
         if (!task) throw new AppError('Task not found', 404, 'NOT_FOUND');
 
-        if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && task.assignedToId !== userId) {
-            throw new AppError('Not authorized to update this task', 403, 'FORBIDDEN');
-        }
+        assertOwnership(task, role, userId, 'assignedToId', 'Not authorized to update this task')
 
         const updateData = {};
         if (data.title !== undefined) updateData.title = data.title;
@@ -178,9 +177,7 @@ class TaskService {
         const task = await prisma.task.findFirst({ where: { id, organizationId } });
         if (!task) throw new AppError('Task not found', 404, 'NOT_FOUND');
 
-        if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && task.assignedToId !== userId) {
-            throw new AppError('Not authorized to delete this task', 403, 'FORBIDDEN');
-        }
+        assertOwnership(task, role, userId, 'assignedToId', 'Not authorized to delete this task')
 
         await prisma.task.delete({ where: { id } });
         return true;
@@ -202,7 +199,7 @@ class TaskService {
             status: 'PENDING',
             dueDate: { lt: new Date() }
         };
-        if (role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') {
+        if (isExecRole(role)) {
             where.assignedToId = userId;
         }
 
@@ -217,9 +214,7 @@ class TaskService {
     }
 
     static assertTaskScope(task, role, userId) {
-        if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && task.assignedToId !== userId) {
-            throw new AppError('Not authorized to update this task', 403, 'FORBIDDEN');
-        }
+        assertOwnership(task, role, userId, 'assignedToId', 'Not authorized to update this task')
     }
 
     // Recompute the lead's next follow-up pointer after a lifecycle change.

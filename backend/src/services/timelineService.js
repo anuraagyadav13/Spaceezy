@@ -1,7 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
-
-const isExecRole = (role) => role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER';
+const { isExecRole } = require('../utils/roles');
+const { assertOwnership } = require('../utils/roles');
 
 // Unified, chronological Lead Timeline. Aggregates domain entities and
 // activities into one list; every event links to its underlying record.
@@ -11,9 +11,7 @@ class TimelineService {
 
         const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
-        if (isExecRole(role) && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, role, userId, 'assignedToId', 'You do not have access to this lead');
 
         const take = Math.min(parseInt(limit) || 100, 300);
 

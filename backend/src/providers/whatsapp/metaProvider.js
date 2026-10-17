@@ -1,5 +1,5 @@
-const crypto = require('crypto');
 const { AppError } = require('../../utils/errors');
+const { verifyHmacSha256 } = require('../../utils/hmac');
 
 // Official WhatsApp Business Platform (Cloud API) transport.
 //
@@ -76,12 +76,7 @@ class MetaWhatsAppProvider {
     }
 
     static verify(rawBody, signature, secret) {
-        if (!signature || !secret) return false;
-        const normalized = String(signature).startsWith('sha256=') ? String(signature) : `sha256=${signature}`;
-        const expected = `sha256=${crypto.createHmac('sha256', secret).update(rawBody || '').digest('hex')}`;
-        const a = Buffer.from(normalized);
-        const b = Buffer.from(expected);
-        return a.length === b.length && crypto.timingSafeEqual(a, b);
+        return verifyHmacSha256(rawBody, signature, secret, { normalizePrefix: true });
     }
 
     verifyWebhookSignature(rawBody, signature, credentials) {

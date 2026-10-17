@@ -1,5 +1,6 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { isExecRole, assertOwnership: assertOwnershipUtil } = require('../utils/roles');
 const ConfigurationService = require('./configurationService');
 
 const MAX_AMOUNT = 999999999999;
@@ -37,7 +38,7 @@ class BookingService {
 
         const where = { organizationId };
 
-        if (role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') {
+        if (isExecRole(role)) {
             where.assignedToId = userId;
         }
 
@@ -92,9 +93,7 @@ class BookingService {
     }
 
     static assertOwnership(booking, userRole, userId) {
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && booking.assignedToId !== userId) {
-            throw new AppError('You do not have permission to modify this booking', 403, 'FORBIDDEN');
-        }
+        assertOwnershipUtil(booking, userRole, userId, 'assignedToId', 'You do not have permission to modify this booking');
     }
 
     static validateAmount(amount) {
@@ -162,9 +161,7 @@ class BookingService {
         if (data.leadId) {
             lead = await tx.lead.findFirst({ where: { id: data.leadId, organizationId } });
             if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
-            if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-                throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-            }
+            assertOwnershipUtil(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
             if (lead.projectId && inventoryProjectId && lead.projectId !== inventoryProjectId) {
                 throw new AppError('Lead, quotation and unit must belong to the same project', 400, 'CROSS_PROJECT_REFERENCE');
             }
@@ -348,9 +345,7 @@ class BookingService {
         const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnershipUtil(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
 
         // The full conversion (customer resolution, quotation validation,
         // inventory lock, booking creation and lead write-back) runs in one

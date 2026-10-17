@@ -3,11 +3,10 @@ const { AppError } = require('../utils/errors');
 const { getTelephonyProvider } = require('../providers/telephony');
 const { canSeePII, maskPhone } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
+const { isExecRole, assertOwnership } = require('../utils/roles');
 
 const ACTIVE_STATUSES = ['INITIATED', 'RINGING', 'IN_PROGRESS'];
 const TERMINAL_STATUSES = ['COMPLETED', 'MISSED', 'FAILED'];
-
-const isExecRole = (role) => role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER';
 
 const WEBHOOK_STATUS_MAP = {
     completed: 'COMPLETED',
@@ -51,9 +50,7 @@ class CallService {
 
         const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
-        if (isExecRole(role) && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, role, userId, 'assignedToId', 'You do not have access to this lead');
         if (!lead.phone) {
             throw new AppError('This lead has no phone number', 400, 'BAD_REQUEST');
         }

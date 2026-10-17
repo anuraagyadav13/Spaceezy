@@ -9,26 +9,18 @@ const { canSeePII, maskContact } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { generatePublicToken, buildPublicPropertyUrl, publicAvailability } = require('../utils/publicLink');
 const WhatsappNotifyService = require('./whatsappNotifyService');
+const { isExecRole } = require('../utils/roles');
+const { assertOwnership } = require('../utils/roles');
+const { parseBudgetValue } = require('../utils/budgetParser');
 
 function parseBudget(value) {
-    if (value === null || value === undefined || value === '') return null;
-    if (typeof value === 'number') return value;
-    const str = String(value).trim().replace(/[₹,\s]/g, '');
-    const match = str.match(/^([\d.]+)\s*(cr|crore|l|lakh|k|thousand)?$/i);
-    if (!match) return null;
-    const num = parseFloat(match[1]);
-    if (isNaN(num)) return null;
-    const unit = (match[2] || '').toLowerCase();
-    if (unit === 'cr' || unit === 'crore') return num * 10000000;
-    if (unit === 'l' || unit === 'lakh') return num * 100000;
-    if (unit === 'k' || unit === 'thousand') return num * 1000;
-    return num;
+    return parseBudgetValue(value);
 }
 
 const INELIGIBLE_CLAIM_STATUSES = ['BOOKED', 'LOST', 'CLOSED'];
 
 function assignmentSourceForRole(role) {
-    if (role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') return 'EMPLOYEE_ASSIGNED';
+    if (isExecRole(role)) return 'EMPLOYEE_ASSIGNED';
     if (role === 'SALES_MANAGER') return 'MANAGER_ASSIGNED';
     return 'ADMIN_ASSIGNED';
 }
@@ -200,7 +192,7 @@ class LeadService {
 
     static buildLeadScope(role, userId, filters = {}) {
         const where = {};
-        const isExecutive = role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER';
+        const isExecutive = isExecRole(role);
 
         if (isExecutive) {
             where.assignedToId = userId;
@@ -246,9 +238,7 @@ class LeadService {
             const lead = await tx.lead.findFirst({ where: { id, organizationId } });
             if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-            if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-                throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
-            }
+            assertOwnership(lead, role, userId, 'assignedToId', 'You do not have access to update this lead')
 
             if (groupToStatuses(target).includes(lead.status) || lead.status === target) {
                 throw new AppError(`Lead is already in stage ${target}`, 409, 'SAME_STAGE');
@@ -406,9 +396,7 @@ class LeadService {
             const lead = await tx.lead.findFirst({ where: { id, organizationId } });
             if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-            if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-                throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
-            }
+            assertOwnership(lead, role, userId, 'assignedToId', 'You do not have access to update this lead')
 
             await tx.leadActivity.create({
                 data: {
@@ -446,9 +434,7 @@ class LeadService {
             const lead = await tx.lead.findFirst({ where: { id, organizationId } });
             if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-            if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-                throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
-            }
+            assertOwnership(lead, role, userId, 'assignedToId', 'You do not have access to update this lead')
 
             const dueDate = new Date(data.dueDate);
             const task = await tx.task.create({
@@ -760,9 +746,7 @@ class LeadService {
         if (!lead) return null;
 
         // Scope check
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
 
         if (canSeePII(userRole)) {
             await audit(organizationId, userId, AUDIT_ACTIONS.PII_VIEWED, 'Lead', lead.id, { leadId: lead.id });
@@ -786,9 +770,7 @@ class LeadService {
             throw new AppError('Lead not found', 404, 'NOT_FOUND');
         }
 
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && existing.assignedToId !== userId) {
-            throw new AppError('You do not have access to update this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(existing, userRole, userId, 'assignedToId', 'You do not have access to update this lead')
 
         LeadService.syncLegacyBudget(payload, existing);
 
@@ -844,9 +826,7 @@ class LeadService {
             throw new AppError('Lead not found', 404, 'NOT_FOUND');
         }
 
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && existing.assignedToId !== userId) {
-            throw new AppError('You do not have access to delete this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(existing, userRole, userId, 'assignedToId', 'You do not have access to delete this lead')
 
         await prisma.lead.delete({ where: { id } });
         return true;
@@ -1042,9 +1022,7 @@ class LeadService {
         });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
 
         const where = { organizationId, status: 'AVAILABLE' };
 
@@ -1148,9 +1126,7 @@ class LeadService {
         });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
 
         const uniqueIds = [...new Set(propertyIds)];
         const properties = await prisma.property.findMany({
@@ -1228,9 +1204,7 @@ class LeadService {
         });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
 
         const property = await prisma.property.findFirst({
             where: { id: propertyId, organizationId },
@@ -1334,9 +1308,7 @@ class LeadService {
         const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
 
         const property = await prisma.property.findFirst({ where: { id: propertyId, organizationId } });
         if (!property) throw new AppError('Property not found', 404, 'NOT_FOUND');
@@ -1362,9 +1334,7 @@ class LeadService {
         const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-        if ((userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
 
         await prisma.leadInterest.deleteMany({
             where: {
@@ -1450,7 +1420,7 @@ class LeadService {
 
         const where = { organizationId };
 
-        if (userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER') {
+        if (isExecRole(userRole)) {
             where.lead = { assignedToId: userId };
         }
 
@@ -1487,7 +1457,7 @@ class LeadService {
         if (!user) throw new AppError('Assignee not found', 404, 'NOT_FOUND');
         if (user.status !== 'ACTIVE') throw new AppError('Cannot assign leads to an inactive user', 400, 'BAD_REQUEST');
 
-        const isRestrictedRole = ['SALES_EXECUTIVE', 'CHANNEL_PARTNER'].includes(userRole);
+        const isRestrictedRole = isExecRole(userRole);
 
         return await prisma.$transaction(async (tx) => {
             const leads = await tx.lead.findMany({
@@ -1545,7 +1515,7 @@ class LeadService {
         // Restricted roles only ever see their own leads (same rule as the
         // main list), and every returned lead passes through maskContact so
         // this endpoint can no longer leak org-wide PII.
-        const isRestricted = userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER';
+        const isRestricted = isExecRole(userRole);
         const rawDuplicates = isRestricted
             ? await prisma.$queryRaw`
                 SELECT "phone", COUNT(*) as count 
@@ -1599,7 +1569,7 @@ class LeadService {
 
             if (!survivor || !duplicate) throw new AppError('Lead(s) not found', 404, 'NOT_FOUND');
 
-            if (['SALES_EXECUTIVE', 'CHANNEL_PARTNER'].includes(userRole) &&
+            if (isExecRole(userRole) &&
                 (survivor.assignedToId !== userId || duplicate.assignedToId !== userId)) {
                 throw new AppError('You do not have access to one or more selected leads', 403, 'FORBIDDEN');
             }

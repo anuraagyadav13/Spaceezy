@@ -1,7 +1,6 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
-
-const isExecRole = (role) => role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER';
+const { isExecRole } = require('../utils/roles');
 
 const ACTIVE_LEAD_STATUSES = ['NEW', 'CONTACTED', 'INTERESTED', 'QUALIFIED', 'SITE_VISIT', 'NEGOTIATION', 'FOLLOW_UP', 'QUOTATION'];
 

@@ -1,5 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { isExecRole } = require('../utils/roles');
+const { assertOwnership } = require('../utils/roles');
 
 class CustomerService {
     static async assertAssignableUser(assignedToId, organizationId) {
@@ -32,8 +34,7 @@ class CustomerService {
 
         const where = { organizationId };
 
-        // Role-based scoping
-        if (role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') {
+        if (isExecRole(role)) {
             where.assignedToId = userId;
         } else if (assignedToId) {
             where.assignedToId = assignedToId;
@@ -110,9 +111,7 @@ class CustomerService {
         const customer = await prisma.customer.findFirst({ where: { id, organizationId } });
         if (!customer) throw new AppError('Customer not found', 404, 'NOT_FOUND');
 
-        if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && customer.assignedToId !== userId) {
-            throw new AppError('Not authorized to update this customer', 403, 'FORBIDDEN');
-        }
+        assertOwnership(customer, role, userId, 'assignedToId', 'Not authorized to update this customer')
 
         if (data.phone !== undefined && data.phone.trim() !== customer.phone) {
             await CustomerService.assertUniquePhone(data.phone.trim(), organizationId, id);
@@ -145,9 +144,7 @@ class CustomerService {
         });
         if (!customer) throw new AppError('Customer not found', 404, 'NOT_FOUND');
 
-        if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && customer.assignedToId !== userId) {
-            throw new AppError('Not authorized to delete this customer', 403, 'FORBIDDEN');
-        }
+        assertOwnership(customer, role, userId, 'assignedToId', 'Not authorized to delete this customer')
 
         if (customer._count.bookings > 0) {
             throw new AppError('Customer has bookings and cannot be deleted. Mark them inactive instead.', 409, 'CUSTOMER_HAS_BOOKINGS');

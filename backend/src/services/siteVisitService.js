@@ -1,5 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { isExecRole } = require('../utils/roles');
+const { assertOwnership } = require('../utils/roles');
 
 const EARLIER_THAN_SITE_VISIT = ['NEW', 'CONTACTED', 'FOLLOW_UP', 'INTERESTED', 'QUALIFIED'];
 const FINAL_STATUSES = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
@@ -162,7 +164,7 @@ class SiteVisitService {
 
         const where = { organizationId };
 
-        if (role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') {
+        if (isExecRole(role)) {
             where.assignedToId = userId;
         } else if (assignedToId) {
             where.assignedToId = assignedToId;
@@ -277,9 +279,7 @@ class SiteVisitService {
         const siteVisit = await prisma.siteVisit.findFirst({ where: { id, organizationId } });
         if (!siteVisit) throw new AppError('Site visit not found', 404, 'NOT_FOUND');
 
-        if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && siteVisit.assignedToId !== userId) {
-            throw new AppError('Not authorized to update this site visit', 403, 'FORBIDDEN');
-        }
+        assertOwnership(siteVisit, role, userId, 'assignedToId', 'Not authorized to update this site visit')
 
         return await prisma.$transaction(async (tx) => {
             await SiteVisitService.applyStatusChange(tx, siteVisit, status, organizationId, userId);
@@ -291,9 +291,7 @@ class SiteVisitService {
         const existing = await prisma.siteVisit.findFirst({ where: { id, organizationId } });
         if (!existing) throw new AppError('Site visit not found', 404, 'NOT_FOUND');
 
-        if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && existing.assignedToId !== userId) {
-            throw new AppError('Not authorized to update this site visit', 403, 'FORBIDDEN');
-        }
+        assertOwnership(existing, role, userId, 'assignedToId', 'Not authorized to update this site visit')
 
         let lead = existing.leadId
             ? await prisma.lead.findFirst({ where: { id: existing.leadId, organizationId } })
@@ -372,9 +370,7 @@ class SiteVisitService {
         const siteVisit = await prisma.siteVisit.findFirst({ where: { id, organizationId } });
         if (!siteVisit) throw new AppError('Site visit not found', 404, 'NOT_FOUND');
 
-        if ((role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER') && siteVisit.assignedToId !== userId) {
-            throw new AppError('Not authorized to delete this site visit', 403, 'FORBIDDEN');
-        }
+        assertOwnership(siteVisit, role, userId, 'assignedToId', 'Not authorized to delete this site visit')
 
         await prisma.siteVisit.delete({ where: { id } });
         return true;

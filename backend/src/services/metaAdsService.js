@@ -1,7 +1,7 @@
 const { AppError } = require('../utils/errors');
 const { graphRequest } = require('./metaGraph');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
-const crypto = require('crypto');
+const { verifyHmacSha256 } = require('../utils/hmac');
 const prisma = require('../db/prisma');
 const WhatsappNotifyService = require('./whatsappNotifyService');
 
@@ -150,12 +150,7 @@ class MetaAdsService {
 
     static verifyLeadgenSignature(rawBody, signature) {
         const secret = process.env.META_APP_SECRET || '';
-        if (!signature || !secret) return false;
-        const normalized = String(signature).startsWith('sha256=') ? String(signature) : `sha256=${signature}`;
-        const expected = `sha256=${crypto.createHmac('sha256', secret).update(rawBody || '').digest('hex')}`;
-        const a = Buffer.from(normalized);
-        const b = Buffer.from(expected);
-        return a.length === b.length && crypto.timingSafeEqual(a, b);
+        return verifyHmacSha256(rawBody, signature, secret, { normalizePrefix: true });
     }
 
     static async resolveLeadgenOrganization(pageId) {

@@ -8,8 +8,8 @@ const { getCatalogEntry, listCatalog } = require('./templateCatalog');
 const { canSeePII, maskPhone } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { buildPublicPropertyUrl } = require('../utils/publicLink');
-
-const isExecRole = (role) => role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER';
+const { isExecRole } = require('../utils/roles');
+const { assertOwnership } = require('../utils/roles');
 
 const maskConversation = (conv, role) => {
     if (!conv || canSeePII(role)) return conv;
@@ -58,17 +58,13 @@ class WhatsAppService {
     }
 
     static async assertConversationScope(conversation, role, userId) {
-        if (isExecRole(role) && conversation.lead && conversation.lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this conversation', 403, 'FORBIDDEN');
-        }
+        if (conversation.lead) assertOwnership(conversation.lead, role, userId, 'assignedToId', 'You do not have access to this conversation');
     }
 
     static async getOrCreateConversation(leadId, organizationId, userId, role) {
         const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
-        if (isExecRole(role) && lead.assignedToId !== userId) {
-            throw new AppError('You do not have access to this lead', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, role, userId, 'assignedToId', 'You do not have access to this lead');
 
         const provider = getWhatsAppProvider();
         const existing = await prisma.whatsAppConversation.findFirst({

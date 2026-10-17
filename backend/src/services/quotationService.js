@@ -1,5 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { isExecRole } = require('../utils/roles');
+const { assertOwnership } = require('../utils/roles');
 
 const EARLIER_STAGES = ['NEW', 'CONTACTED', 'FOLLOW_UP', 'SITE_VISIT', 'INTERESTED', 'QUALIFIED', 'NEGOTIATION'];
 const ALLOWED_STATUSES = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'];
@@ -18,10 +20,6 @@ const BASE_INCLUDE = {
     createdBy: { select: { id: true, name: true } }
 };
 
-function isRestricted(role) {
-    return role === 'SALES_EXECUTIVE' || role === 'CHANNEL_PARTNER';
-}
-
 class QuotationService {
     static async getQuotations(organizationId, query, role, userId) {
         const { page = 1, limit = 20, leadId, projectId, status, sort = 'desc' } = query;
@@ -29,7 +27,7 @@ class QuotationService {
 
         const where = { organizationId };
 
-        if (isRestricted(role)) {
+        if (isExecRole(role)) {
             where.lead = { assignedToId: userId };
         }
         if (leadId) where.leadId = leadId;
@@ -98,9 +96,7 @@ class QuotationService {
         const lead = await prisma.lead.findFirst({ where: { id: data.leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
-        if (isRestricted(role) && lead.assignedToId !== userId) {
-            throw new AppError('You can only create quotations for leads assigned to you', 403, 'FORBIDDEN');
-        }
+        assertOwnership(lead, role, userId, 'assignedToId', 'You can only create quotations for leads assigned to you');
 
         await QuotationService.validateInventoryRefs(data, organizationId, lead);
 
@@ -158,9 +154,7 @@ class QuotationService {
             });
             if (!quotation) throw new AppError('Quotation not found', 404, 'NOT_FOUND');
 
-            if (isRestricted(role) && quotation.lead?.assignedToId !== userId) {
-                throw new AppError('You can only update quotations for leads assigned to you', 403, 'FORBIDDEN');
-            }
+            assertOwnership(quotation.lead || {}, role, userId, 'assignedToId', 'You can only update quotations for leads assigned to you');
 
             if (status && status !== quotation.status) {
                 const allowedNext = STATUS_TRANSITIONS[quotation.status] || [];
