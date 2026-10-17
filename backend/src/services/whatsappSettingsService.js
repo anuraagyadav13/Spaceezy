@@ -2,6 +2,9 @@ const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const { encryptSecret, decryptSecret } = require('../utils/whatsappSecrets');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
+const { getWhatsAppProvider } = require('../providers/whatsapp');
+const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
+const MockWhatsAppProvider = require('../providers/whatsapp/mockProvider');
 const crypto = require('crypto');
 
 // Organization-scoped Meta WhatsApp settings (single dedicated org model;
@@ -101,6 +104,23 @@ class WhatsappSettingsService {
             changedFields.push(field);
         }
 
+        // Fail loudly on notify misconfiguration instead of silently skipping
+        // every future lead (QA P1): enabling notifications requires a
+        // template that exists and whose variables the alert resolvers can fill.
+        if (data.notifyEnabled === true) {
+            let willTemplateName = scalar.notifyTemplateName;
+            if (willTemplateName === undefined) {
+                const existing = await prisma.whatsappSettings.findUnique({
+                    where: { organizationId },
+                    select: { notifyTemplateName: true },
+                });
+                willTemplateName = existing ? existing.notifyTemplateName : null;
+            }
+            // Lazy require avoids a circular dependency at module load time.
+            const WhatsappNotifyService = require('./whatsappNotifyService');
+            await WhatsappNotifyService.validateNotifyTemplateConfig(organizationId, willTemplateName);
+        }
+
         try {
             await prisma.whatsappSettings.upsert({
                 where: { organizationId },
@@ -182,6 +202,56 @@ class WhatsappSettingsService {
             accessToken: decryptIfPresent('accessTokenEnc'),
             appSecret: decryptIfPresent('appSecretEnc'),
             verifyToken: decryptIfPresent('verifyTokenEnc'),
+        };
+    }
+
+    // Single source of truth for the outbound send/webhook transport.
+    //
+    // A saved settings row is authoritative: providerMode 'meta' sends through
+    // Meta with the org's stored credentials; providerMode 'mock' ALWAYS sends
+    // through the mock provider (simulated), even if the environment also has
+    // WHATSAPP_PROVIDER=meta + creds. This closes the split where a DB row
+    // saying 'mock' still fell through to an env Meta provider and did real
+    // sends. Only when no row exists do we honor the legacy env provider.
+    static async resolveTransport(organizationId) {
+        const effective = await WhatsappSettingsService.getEffectiveConfig(organizationId);
+        if (effective.source === 'env') {
+            const provider = getWhatsAppProvider();
+            return {
+                mode: effective.providerMode,
+                source: 'env',
+                provider,
+                credentials: undefined,
+                configured: provider.isConfigured(),
+                simulated: Boolean(provider.simulated),
+            };
+        }
+        if (effective.providerMode === 'meta') {
+            const credentials = {
+                phoneNumberId: effective.phoneNumberId,
+                accessToken: effective.accessToken,
+                appSecret: effective.appSecret,
+                graphVersion: effective.graphVersion,
+                wabaId: effective.wabaId,
+            };
+            return {
+                mode: 'meta',
+                source: 'db',
+                provider: new MetaWhatsAppProvider(),
+                credentials,
+                configured: Boolean(effective.accessToken && effective.phoneNumberId),
+                simulated: false,
+            };
+        }
+        // DB row saved as mock → always simulated, never real.
+        const provider = new MockWhatsAppProvider();
+        return {
+            mode: 'mock',
+            source: 'db',
+            provider,
+            credentials: undefined,
+            configured: true,
+            simulated: true,
         };
     }
 

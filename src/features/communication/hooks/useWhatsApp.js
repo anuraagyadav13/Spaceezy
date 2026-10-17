@@ -56,6 +56,15 @@ export const useSendMessage = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: sendWhatsAppMessage,
+        // Target the exact thread that was sent to (the generic prefix
+        // invalidation below does not wake a thread query that mounted
+        // after a fresh conversation was created).
+        onSuccess: (_data, variables) => {
+            if (variables?.conversationId) {
+                queryClient.invalidateQueries({ queryKey: ["whatsapp-messages", variables.conversationId] });
+            }
+            queryClient.invalidateQueries({ queryKey: ["whatsapp-conversations"] });
+        },
         onSettled: () => invalidateComm(queryClient)
     });
 };

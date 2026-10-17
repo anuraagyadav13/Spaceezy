@@ -16,6 +16,14 @@ require('dotenv').config();
 const prisma = require('../src/db/prisma');
 const MASTER = require('./data/india-locations.json');
 
+// Guard: even though this only writes location master + backfills project
+// location FKs (idempotent, no credentials), refuse to run unattended against
+// production. Set ALLOW_PRISMA_SEED=true to opt in explicitly.
+if (process.env.ALLOW_PRISMA_SEED !== 'true' || process.env.NODE_ENV === 'production') {
+    console.error('Refusing to run prisma seed. Set ALLOW_PRISMA_SEED=true (and NODE_ENV != production) if you really intend to.');
+    process.exit(1);
+}
+
 // Legacy district rows whose display name differs from the canonical master.
 // The row keeps its ID (referencing projects/leads keep working); only the
 // label is aligned to the master.

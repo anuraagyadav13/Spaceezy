@@ -22,12 +22,14 @@ const maskConversation = (conv, role) => {
 };
 
 class WhatsAppService {
-    static async getStatus() {
-        const provider = getWhatsAppProvider();
+    static async getStatus(organizationId) {
+        // Resolve the org's effective transport so the reported mode matches
+        // what sends actually do (a saved DB row always wins over env).
+        const t = await WhatsappSettingsService.resolveTransport(organizationId);
         return {
-            provider: provider.name,
-            configured: provider.isConfigured(),
-            simulated: Boolean(provider.simulated)
+            provider: t.mode,
+            configured: t.configured,
+            simulated: t.simulated
         };
     }
 
@@ -123,26 +125,17 @@ class WhatsAppService {
         };
     }
 
-    static async sendMessage(conversationId, data, organizationId, userId, role) {
-        // Effective transport: a saved DB mode of 'meta' sends through Meta
-        // with the org's stored credentials; anything else keeps the exact
-        // legacy env-driven provider behavior (default mock).
-        const effective = await WhatsappSettingsService.getEffectiveConfig(organizationId);
-        const useDbMeta = effective.source === 'db' && effective.providerMode === 'meta';
-        const provider = useDbMeta ? new MetaWhatsAppProvider() : getWhatsAppProvider();
-        const dbCredentials = useDbMeta
-            ? {
-                phoneNumberId: effective.phoneNumberId,
-                accessToken: effective.accessToken,
-                appSecret: effective.appSecret,
-                graphVersion: effective.graphVersion,
-            }
-            : undefined;
-        if (useDbMeta) {
-            if (!effective.accessToken || !effective.phoneNumberId) {
+    static async sendMessage(conversationId, data, organizationId, userId, role, transport) {
+        // Transport is authoritative: a saved DB row (meta or mock) always wins
+        // over env; only a missing row falls back to the legacy env provider.
+        // A DB row saved as 'mock' sends through the mock provider (simulated)
+        // and never reaches for env Meta credentials.
+        const t = transport || (await WhatsappSettingsService.resolveTransport(organizationId));
+        const provider = t.provider;
+        if (!t.configured) {
+            if (t.source === 'db' && t.mode === 'meta') {
                 throw new AppError('WhatsApp credentials are incomplete. Save an access token and Phone Number ID first.', 409, 'WHATSAPP_NOT_CONFIGURED');
             }
-        } else if (!provider.isConfigured()) {
             throw new AppError('WhatsApp integration not configured. Ask your administrator to connect the WhatsApp Business API.', 409, 'WHATSAPP_NOT_CONFIGURED');
         }
 
@@ -245,7 +238,7 @@ class WhatsAppService {
             language: templateLanguage,
             // Organization credentials for DB-configured Meta mode; undefined
             // keeps exact legacy env behavior on every other provider.
-            credentials: dbCredentials
+            credentials: t.credentials
         });
 
         const message = await prisma.$transaction(async (tx) => {
@@ -437,8 +430,22 @@ class WhatsAppService {
         // Route Meta envelopes by sender number; custom envelopes (no sender
         // identity) keep legacy handling. Resolution happens before any
         // signature check so verification uses the owning org's secret.
+        //
+        // Security: resolution outcomes (unknown/ambiguous sender) must never
+        // reach an unauthenticated caller — they would let anyone enumerate
+        // which phone_number_id/WABA ids are configured. Any resolution failure
+        // is reported as the same generic signature error a bad HMAC produces,
+        // so unauthenticated probes cannot distinguish the cases.
         const senderIds = WhatsAppService.extractMetaSenderIds(payload);
-        const routedOrg = await WhatsappSettingsService.resolveWebhookOrg(senderIds);
+        let routedOrg;
+        try {
+            routedOrg = await WhatsappSettingsService.resolveWebhookOrg(senderIds);
+        } catch (err) {
+            if (err && (err.code === 'UNKNOWN_SENDER' || err.code === 'AMBIGUOUS_SENDER')) {
+                throw new AppError('Invalid webhook signature', 401, 'WEBHOOK_SIGNATURE_INVALID');
+            }
+            throw err;
+        }
         const effective = await WhatsappSettingsService.getEffectiveConfig(routedOrg);
         const useDbMeta = effective.source === 'db' && effective.providerMode === 'meta';
         const provider = useDbMeta ? new MetaWhatsAppProvider() : getWhatsAppProvider();

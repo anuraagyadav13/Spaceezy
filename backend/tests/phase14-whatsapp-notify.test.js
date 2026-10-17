@@ -241,15 +241,15 @@ describe('Phase 14: processing, mapping, approval and retries', () => {
     expect(result.status).toBe('SENT');
   });
 
-  test('unresolvable variables fail permanently without sending', async () => {
-    setupRow({}, {}, { variables: ['project_name', 'customer_name'] });
+  test('variables with no resolver fail permanently without sending', async () => {
+    setupRow({}, {}, { variables: ['property_name', 'customer_name'] });
     prisma.whatsappNotification.findFirst.mockResolvedValue(notifyRow());
     prisma.leadActivity.create.mockResolvedValue({});
     const fetchSpy = jest.spyOn(global, 'fetch');
 
     const result = await WhatsappNotifyService.processRow('notif-1');
     expect(result.status).toBe('FAILED');
-    expect(result.error).toMatch(/project_name/);
+    expect(result.error).toMatch(/property_name/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

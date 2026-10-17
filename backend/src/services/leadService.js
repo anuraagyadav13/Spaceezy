@@ -1539,16 +1539,28 @@ class LeadService {
 
     // --- Duplicates ---
 
-    static async getDuplicates(organizationId, query) {
+    static async getDuplicates(organizationId, query, userRole, userId) {
         // Simple heuristic: Find leads with matching phone or email
         // A more advanced approach would use grouping in Prisma, but for this CRM phase:
-        const rawDuplicates = await prisma.$queryRaw`
-            SELECT "phone", COUNT(*) as count 
-            FROM "Lead" 
-            WHERE "organizationId" = ${organizationId} AND "phone" IS NOT NULL AND "phone" != ''
-            GROUP BY "phone" 
-            HAVING COUNT(*) > 1
-        `;
+        // Restricted roles only ever see their own leads (same rule as the
+        // main list), and every returned lead passes through maskContact so
+        // this endpoint can no longer leak org-wide PII.
+        const isRestricted = userRole === 'SALES_EXECUTIVE' || userRole === 'CHANNEL_PARTNER';
+        const rawDuplicates = isRestricted
+            ? await prisma.$queryRaw`
+                SELECT "phone", COUNT(*) as count 
+                FROM "Lead" 
+                WHERE "organizationId" = ${organizationId} AND "assignedToId" = ${userId} AND "phone" IS NOT NULL AND "phone" != ''
+                GROUP BY "phone" 
+                HAVING COUNT(*) > 1
+            `
+            : await prisma.$queryRaw`
+                SELECT "phone", COUNT(*) as count 
+                FROM "Lead" 
+                WHERE "organizationId" = ${organizationId} AND "phone" IS NOT NULL AND "phone" != ''
+                GROUP BY "phone" 
+                HAVING COUNT(*) > 1
+            `;
 
         const duplicatePhones = rawDuplicates.map(r => r.phone);
 
@@ -1557,7 +1569,8 @@ class LeadService {
         const leads = await prisma.lead.findMany({
             where: {
                 organizationId,
-                phone: { in: duplicatePhones }
+                phone: { in: duplicatePhones },
+                ...(isRestricted ? { assignedToId: userId } : {})
             },
             include: { assignedTo: { select: { name: true } } },
             orderBy: { phone: 'asc' }
@@ -1567,12 +1580,12 @@ class LeadService {
         const groups = {};
         for (const lead of leads) {
             if (!groups[lead.phone]) groups[lead.phone] = [];
-            groups[lead.phone].push(lead);
+            groups[lead.phone].push(maskContact(lead, userRole));
         }
 
         return Object.entries(groups).map(([phone, duplicates]) => ({
             type: 'Phone Match',
-            value: phone,
+            value: maskContact({ phone }, userRole).phone,
             leads: duplicates
         }));
     }

@@ -1,5 +1,10 @@
 const { asyncHandler, AppError } = require('../utils/errors');
 const QuotationService = require('../services/quotationService');
+const { maskContact } = require('../utils/pii');
+
+const withMaskedLead = (q, role) => (
+    q && q.lead ? { ...q, lead: maskContact(q.lead, role) } : q
+);
 
 const getQuotations = asyncHandler(async (req, res, next) => {
     const { organizationId, role, userId } = req.auth;
@@ -7,20 +12,20 @@ const getQuotations = asyncHandler(async (req, res, next) => {
 
     res.status(200).json({
         success: true,
-        data: result,
+        data: { ...result, quotations: (result.quotations || []).map((q) => withMaskedLead(q, role)) },
         message: 'Quotations fetched successfully'
     });
 });
 
 const getQuotationById = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
-    const { organizationId } = req.auth;
+    const { organizationId, role } = req.auth;
 
     const quotation = await QuotationService.getQuotationById(id, organizationId);
 
     res.status(200).json({
         success: true,
-        data: quotation,
+        data: withMaskedLead(quotation, role),
         message: 'Quotation fetched successfully'
     });
 });

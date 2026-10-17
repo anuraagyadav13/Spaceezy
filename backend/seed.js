@@ -2,6 +2,13 @@ require('dotenv').config();
 const prisma = require('./src/db/prisma');
 const argon2 = require('argon2');
 
+// Guard: this demo seeder plants known weak credentials. Never allow it to run
+// against a production database. Override only via explicit env flag.
+if (process.env.ALLOW_DEMO_SEED !== 'true' || process.env.NODE_ENV === 'production') {
+    console.error('Refusing to run demo seed. Set ALLOW_DEMO_SEED=true (and NODE_ENV != production) if you really intend to.');
+    process.exit(1);
+}
+
 async function main() {
     console.log('Starting seed...');
 

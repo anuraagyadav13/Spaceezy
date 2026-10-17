@@ -9,6 +9,22 @@ export default function DashboardShell({ children }) {
     const { user, isLoading } = useAuth();
     const router = useRouter();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    // Desktop collapse preference (mobile slide-over is unaffected).
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        try {
+            return window.localStorage.getItem("spaceezy-sidebar-collapsed") === "1";
+        } catch {
+            return false;
+        }
+    });
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem("spaceezy-sidebar-collapsed", isCollapsed ? "1" : "0");
+        } catch {
+            // Private mode etc. — preference simply won't persist.
+        }
+    }, [isCollapsed]);
 
     useEffect(() => {
         if (!isLoading && !user) {
@@ -26,10 +42,14 @@ export default function DashboardShell({ children }) {
 
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
-            <AppSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+            <AppSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} collapsed={isCollapsed} />
 
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-                <AppHeader toggleSidebar={() => setIsSidebarOpen(true)} />
+                <AppHeader
+                    onOpenSidebar={() => setIsSidebarOpen(true)}
+                    onToggleCollapse={() => setIsCollapsed((v) => !v)}
+                    collapsed={isCollapsed}
+                />
                 <div className="flex-1 overflow-y-auto">
                     {children}
                 </div>

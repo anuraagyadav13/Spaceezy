@@ -117,11 +117,11 @@ export default function BrowserSoftphonePage() {
                                         value={searchInput}
                                         onChange={(e) => setSearchInput(e.target.value)}
                                         placeholder="Search leads by name or phone"
-                                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-purple-500"
+                                        className="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-purple-500"
                                     />
                                     <button
                                         type="submit"
-                                        className="px-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                        className="px-3 shrink-0 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
                                         aria-label="Search leads"
                                     >
                                         <Search size={16} />
@@ -137,14 +137,14 @@ export default function BrowserSoftphonePage() {
                                         <button
                                             key={lead.id}
                                             onClick={() => setSelectedLeadId(lead.id)}
-                                            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                                            className={`w-full min-w-0 text-left px-4 py-3 rounded-xl border transition-colors ${
                                                 selectedLead?.id === lead.id
                                                     ? "border-emerald-400 bg-emerald-50"
                                                     : "border-gray-200 bg-white hover:bg-gray-50"
                                             }`}
                                         >
-                                            <p className="text-sm font-bold text-gray-900">{lead.name}</p>
-                                            <p className="text-xs text-gray-500">
+                                            <p className="text-sm font-bold text-gray-900 truncate">{lead.name}</p>
+                                            <p className="text-xs text-gray-500 truncate">
                                                 {lead.phone}
                                                 {lead.status ? ` · ${String(lead.status).toLowerCase()}` : ""}
                                                 {lead.piiMasked ? " · masked" : ""}
@@ -153,18 +153,18 @@ export default function BrowserSoftphonePage() {
                                     ))}
                                 </div>
 
-                                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                                    <div className="min-w-0">
+                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                                    <div className="min-w-0 flex-1">
                                         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Calling as</p>
-                                        <p className="text-sm font-bold text-gray-900">
+                                        <p className="text-sm font-bold text-gray-900 truncate">
                                             {selectedLead ? selectedLead.name : "No lead selected"}
                                         </p>
-                                        <p className="text-xs text-gray-500">{selectedLead?.phone || "—"}</p>
+                                        <p className="text-xs text-gray-500 truncate">{selectedLead?.phone || "—"}</p>
                                     </div>
                                     <button
                                         onClick={handleStartCall}
                                         disabled={!selectedLead || initiateCall.isPending}
-                                        className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg hover:bg-emerald-700 transition-all disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="w-16 h-16 shrink-0 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg hover:bg-emerald-700 transition-all disabled:cursor-not-allowed disabled:opacity-40"
                                         aria-label="Start call"
                                     >
                                         <PhoneCall size={26} />

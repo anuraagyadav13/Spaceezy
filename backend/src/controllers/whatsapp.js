@@ -4,7 +4,8 @@ const WhatsappSettingsService = require('../services/whatsappSettingsService');
 const WhatsappNotifyService = require('../services/whatsappNotifyService');
 
 const getStatus = asyncHandler(async (req, res) => {
-    const data = await WhatsAppService.getStatus();
+    const { organizationId } = req.auth;
+    const data = await WhatsAppService.getStatus(organizationId);
     res.status(200).json({ success: true, data, message: 'WhatsApp status fetched' });
 });
 

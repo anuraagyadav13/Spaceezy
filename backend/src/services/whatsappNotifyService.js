@@ -20,16 +20,20 @@ const { getCatalogEntry } = require('./templateCatalog');
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [5000, 30000];
+// Resolvers feed INTERNAL owner/team alerts only (never customer sends), so
+// missing lead data falls back to a safe generic string instead of failing the
+// send: a lead with no project/assignment/source must still alert the team.
+// Meta templates require a non-empty string per variable.
 const NOTIFY_VARIABLES = {
-    customer_name: (lead) => lead.name,
-    lead_name: (lead) => lead.name,
-    lead_source: (lead) => lead.source,
-    source: (lead) => lead.source,
-    project_name: (lead) => (lead.project ? lead.project.name : null),
-    project: (lead) => (lead.project ? lead.project.name : null),
-    assigned_employee: (lead) => (lead.assignedTo ? lead.assignedTo.name : null),
-    salesperson: (lead) => (lead.assignedTo ? lead.assignedTo.name : null),
-    salesperson_name: (lead) => (lead.assignedTo ? lead.assignedTo.name : null),
+    customer_name: (lead) => lead.name || 'Customer',
+    lead_name: (lead) => lead.name || 'Customer',
+    lead_source: (lead) => lead.source || 'Direct',
+    source: (lead) => lead.source || 'Direct',
+    project_name: (lead) => (lead.project ? lead.project.name : 'a project'),
+    project: (lead) => (lead.project ? lead.project.name : 'a project'),
+    assigned_employee: (lead) => (lead.assignedTo ? lead.assignedTo.name : 'Sales Team'),
+    salesperson: (lead) => (lead.assignedTo ? lead.assignedTo.name : 'Sales Team'),
+    salesperson_name: (lead) => (lead.assignedTo ? lead.assignedTo.name : 'Sales Team'),
 };
 
 function normalizeRecipient(phone) {
@@ -162,9 +166,69 @@ class WhatsappNotifyService {
             }
             void WhatsappNotifyService.processPending(organizationId, leadId).catch(() => {});
             return { queued: rows.length, rows: rows.map((r) => r.id) };
-        } catch {
+        } catch (err) {
+            // Contained so lead creation never breaks, but never silent: ops
+            // can see exactly why no notification will exist for this lead
+            // (previously the skip reason was swallowed entirely).
+            console.error('[whatsapp-notify] enqueue failed', {
+                organizationId,
+                leadId,
+                error: (err && err.message) || 'unknown',
+            });
             return { skipped: 'error', rows: [] };
         }
+    }
+
+    // Save-time guard: enabling new-lead notifications must reference a real
+    // template whose every variable the alert resolvers can fill — otherwise
+    // every future lead would be silently skipped (QA P1). Throws AppError.
+    static async validateNotifyTemplateConfig(organizationId, templateName) {
+        if (!templateName) {
+            throw new AppError(
+                'Pick a notification template before enabling new-lead notifications',
+                400,
+                'VALIDATION_ERROR'
+            );
+        }
+        const resolvable = new Set(Object.keys(NOTIFY_VARIABLES));
+        const entry = getCatalogEntry(templateName);
+        let variables;
+        if (entry) {
+            variables = Array.isArray(entry.variables) ? entry.variables : [];
+        } else {
+            const row = await prisma.whatsAppTemplate.findFirst({
+                where: { organizationId, name: templateName },
+                select: { variables: true },
+            });
+            if (!row) throw new AppError('Notification template not found', 404, 'NOT_FOUND');
+            variables = Array.isArray(row.variables) ? row.variables : [];
+        }
+        const missing = variables.filter((v) => !resolvable.has(v));
+        if (missing.length > 0) {
+            throw new AppError(
+                `Template "${templateName}" needs lead data that cannot fill a new-lead alert (${missing.join(', ')}). Pick a simpler template.`,
+                400,
+                'VALIDATION_ERROR'
+            );
+        }
+    }
+
+    // Recovery sweep: in-memory setTimeout retries die with the process, so a
+    // boot-time + periodic sweep re-picks PENDING rows older than the longest
+    // retry delay. MAX_ATTEMPTS still bounds retries (exhausted rows flip to
+    // FAILED); the 60s age filter avoids racing live retry timers.
+    static async sweepPending() {
+        const cutoff = new Date(Date.now() - 60000);
+        const rows = await prisma.whatsappNotification.findMany({
+            where: { status: 'PENDING', updatedAt: { lt: cutoff } },
+            select: { id: true },
+            orderBy: { updatedAt: 'asc' },
+            take: 50,
+        });
+        for (const { id } of rows) {
+            await WhatsappNotifyService.processRow(id).catch(() => {});
+        }
+        return rows.length;
     }
 
     static async processPending(organizationId, leadId) {
@@ -210,24 +274,16 @@ class WhatsappNotifyService {
                     { permanent: true }
                 );
             }
-            const effective = await WhatsappSettingsService.getEffectiveConfig(row.organizationId);
-            const useDbMeta = effective.source === 'db' && effective.providerMode === 'meta';
-            const credentials = useDbMeta
-                ? {
-                    phoneNumberId: effective.phoneNumberId,
-                    accessToken: effective.accessToken,
-                    appSecret: effective.appSecret,
-                    graphVersion: effective.graphVersion,
-                    wabaId: effective.wabaId,
-                }
-                : undefined;
-            if (useDbMeta) {
-                if (!effective.accessToken || !effective.phoneNumberId) {
+            const t = await WhatsappSettingsService.resolveTransport(row.organizationId);
+            const effective = { source: t.source, providerMode: t.mode };
+            const credentials = t.credentials;
+            if (t.source === 'db' && t.mode === 'meta') {
+                if (!credentials || !credentials.accessToken || !credentials.phoneNumberId) {
                     throw Object.assign(new AppError('WhatsApp credentials are incomplete', 409, 'WHATSAPP_NOT_CONFIGURED'), { permanent: true });
                 }
                 await WhatsappNotifyService.verifyTemplateApproval(credentials, template.name);
             }
-            const provider = useDbMeta ? new MetaWhatsAppProvider() : getWhatsAppProvider();
+            const provider = t.provider;
             const result = await provider.sendMessage({
                 to: row.recipient,
                 body: `[notify: ${template.name}]`,
@@ -330,24 +386,15 @@ class WhatsappNotifyService {
             throw new AppError('Test recipient must be one of the configured recipients', 400, 'INVALID_RECIPIENT');
         }
         const template = await WhatsappNotifyService.resolveTemplate(organizationId, settings.notifyTemplateName);
-        const effective = await WhatsappSettingsService.getEffectiveConfig(organizationId);
-        const useDbMeta = effective.source === 'db' && effective.providerMode === 'meta';
-        const credentials = useDbMeta
-            ? {
-                phoneNumberId: effective.phoneNumberId,
-                accessToken: effective.accessToken,
-                appSecret: effective.appSecret,
-                graphVersion: effective.graphVersion,
-                wabaId: effective.wabaId,
-            }
-            : undefined;
-        if (useDbMeta) {
-            if (!effective.accessToken || !effective.phoneNumberId) {
+        const t = await WhatsappSettingsService.resolveTransport(organizationId);
+        const credentials = t.credentials;
+        if (t.source === 'db' && t.mode === 'meta') {
+            if (!credentials || !credentials.accessToken || !credentials.phoneNumberId) {
                 throw new AppError('WhatsApp credentials are incomplete', 409, 'WHATSAPP_NOT_CONFIGURED');
             }
             await WhatsappNotifyService.verifyTemplateApproval(credentials, template.name);
         }
-        const provider = useDbMeta ? new MetaWhatsAppProvider() : getWhatsAppProvider();
+        const provider = t.provider;
         const testValues = (Array.isArray(template.variables) ? template.variables : []).map(() => '[TEST]');
         const result = await provider.sendMessage({
             to: target.phone,

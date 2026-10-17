@@ -1,7 +1,7 @@
 import { useAuth } from "./useAuth";
 
 // Mirrors backend requirePermission() role matrix in src/middleware/auth.js
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
     SUPER_ADMIN: [
         "lead:view", "lead:create", "lead:update", "lead:delete", "lead:assign", "lead:merge",
         "employee:view", "employee:create", "employee:update", "employee:delete",
@@ -17,7 +17,7 @@ const ROLE_PERMISSIONS = {
         "call:view", "call:create", "call:update",
         "whatsapp:view", "whatsapp:create", "whatsapp:manage",
         "marketing:view", "marketing:manage",
-        "recording:view", "pii:view"
+        "recording:view", "pii:view", "audit:view"
     ],
     ADMIN: [
         "lead:view", "lead:create", "lead:update", "lead:assign", "lead:merge",
@@ -34,7 +34,7 @@ const ROLE_PERMISSIONS = {
         "call:view", "call:create", "call:update",
         "whatsapp:view", "whatsapp:create", "whatsapp:manage",
         "marketing:view", "marketing:manage",
-        "recording:view", "pii:view"
+        "recording:view", "pii:view", "audit:view"
     ],
     SALES_MANAGER: [
         "lead:view", "lead:create", "lead:update", "lead:assign", "lead:merge",

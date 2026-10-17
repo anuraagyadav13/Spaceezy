@@ -1,25 +1,32 @@
 const { asyncHandler, AppError } = require('../utils/errors');
 const BookingService = require('../services/bookingService');
+const { maskContact } = require('../utils/pii');
 
 const getBookings = asyncHandler(async (req, res) => {
     const { organizationId, role, userId } = req.auth;
     const result = await BookingService.getBookings(organizationId, req.query, role, userId);
 
+    // Mask customer phone for roles without pii:view (list already scopes
+    // restricted roles, but the include still carries the contact field).
+    const bookings = (result.bookings || []).map((b) => (
+        b.customer ? { ...b, customer: maskContact(b.customer, role) } : b
+    ));
+
     res.status(200).json({
         success: true,
-        data: result,
+        data: { ...result, bookings },
         message: 'Bookings fetched successfully'
     });
 });
 
 const getBookingById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { organizationId } = req.auth;
+    const { organizationId, role } = req.auth;
     const booking = await BookingService.getBookingById(id, organizationId);
 
     res.status(200).json({
         success: true,
-        data: booking,
+        data: booking && booking.customer ? { ...booking, customer: maskContact(booking.customer, role) } : booking,
         message: 'Booking fetched successfully'
     });
 });

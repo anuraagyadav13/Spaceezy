@@ -10,7 +10,9 @@
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "seed:demo": "node seed.js",
+    "check:secrets": "node scripts/check-secrets.js"
   },
   "keywords": [],
   "author": "",

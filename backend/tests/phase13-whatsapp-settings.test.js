@@ -450,14 +450,26 @@ describe('Phase 13: DB-backed webhook secrets and number routing', () => {
     );
   });
 
-  test('rejects unknown sender numbers when settings exist (400)', async () => {
+  test('unknown sender numbers fail closed with the generic signature error (no pre-auth oracle)', async () => {
     prisma.whatsappSettings.findMany.mockResolvedValue([
       { organizationId: ORG, phoneNumberId: '1411466198708019', wabaId: null },
     ]);
 
     const res = await postMeta(metaEnvelope('999000111222'), 'db-secret');
-    expect(res.status).toBe(400);
-    expect(res.body.code).toBe('UNKNOWN_SENDER');
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('WEBHOOK_SIGNATURE_INVALID');
+    expect(prisma.whatsAppMessage.create).not.toHaveBeenCalled();
+  });
+
+  test('ambiguous sender routing also fails closed with the generic signature error', async () => {
+    prisma.whatsappSettings.findMany.mockResolvedValue([
+      { organizationId: ORG, phoneNumberId: '1411466198708019', wabaId: null },
+      { organizationId: 'org-2', phoneNumberId: '1411466198708019', wabaId: null },
+    ]);
+
+    const res = await postMeta(metaEnvelope('1411466198708019'), 'db-secret');
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('WEBHOOK_SIGNATURE_INVALID');
     expect(prisma.whatsAppMessage.create).not.toHaveBeenCalled();
   });
 

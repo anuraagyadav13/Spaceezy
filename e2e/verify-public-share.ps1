@@ -72,7 +72,12 @@ function Wait-WebContains($path, $needle, $secs) {
 Write-Output '=== SETUP ==='
 $sb = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $script:sb = $sb
-$loginR = Invoke-WebRequest -Uri "$base/auth/login" -Method Post -ContentType 'application/json' -Body '{"email":"admin@spaceezy.com","password":"password123"}' -UseBasicParsing -WebSession $sb
+# Credentials come from the environment — never hard-code them in the repo.
+$qaUser = if ($env:E2E_USER) { $env:E2E_USER } else { 'admin@spaceezy.com' }
+$qaPass = $env:E2E_PASS
+if (-not $qaPass) { throw 'E2E_PASS env var is required (demo-admin password). Refusing to run without it.' }
+$loginBody = @{ email = $qaUser; password = $qaPass } | ConvertTo-Json -Compress
+$loginR = Invoke-WebRequest -Uri "$base/auth/login" -Method Post -ContentType 'application/json' -Body $loginBody -UseBasicParsing -WebSession $sb
 Check 'S1 admin login' ($loginR.StatusCode -eq 200) "status=$($loginR.StatusCode)"
 $script:cookie = (($sb.Cookies.GetCookies($apiOrigin) | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join '; ')
 $ids = Get-Content 'C:\Users\anute\AppData\Local\Temp\opencode\demo-ids.txt'

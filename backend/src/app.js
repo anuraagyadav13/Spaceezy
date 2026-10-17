@@ -153,6 +153,7 @@ const locationRoutes = require('./routes/locations');
 const uploadRoutes = require('./routes/uploads');
 const mediaRoutes = require('./routes/media');
 const metaAdsRoutes = require('./routes/metaAds');
+const auditLogRoutes = require('./routes/auditLogs');
 const webhookRoutes = require('./controllers/webhooks');
 
 app.use('/api/v1/auth', authRoutes);
@@ -172,6 +173,7 @@ app.use('/api/v1/activities', activityRoutes);
 app.use('/api/v1/locations', locationRoutes);
 app.use('/api/v1/uploads', uploadRoutes);
 app.use('/api/v1/meta-ads', metaAdsRoutes);
+app.use('/api/v1/audit-logs', auditLogRoutes);
 // Public image delivery from the private media bucket (no auth, images only).
 app.use('/media', mediaRoutes);
 

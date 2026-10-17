@@ -43,4 +43,11 @@ const maskContact = (obj, role, fields = ['phone', 'email']) => {
     return out;
 };
 
-module.exports = { canSeePII, maskPhone, maskEmail, maskContact };
+// Masks a contact nested under `key` (e.g. a visit's lead or a customer's
+// booking). Returns the object unchanged when the key is absent.
+const maskNestedContact = (obj, role, key, fields = ['phone', 'email']) => {
+    if (!obj || !obj[key]) return obj;
+    return { ...obj, [key]: maskContact(obj[key], role, fields) };
+};
+
+module.exports = { canSeePII, maskPhone, maskEmail, maskContact, maskNestedContact };

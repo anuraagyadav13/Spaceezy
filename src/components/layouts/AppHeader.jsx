@@ -1,19 +1,28 @@
 "use client";
-import { Menu, Search, Bell } from "lucide-react";
+import { Menu, PanelLeftClose, PanelLeftOpen, Search, Bell } from "lucide-react";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import Image from "next/image";
 
-export default function AppHeader({ toggleSidebar }) {
+export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }) {
     const { user } = useAuth();
     
     return (
         <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 shrink-0 sticky top-0 z-30">
             <div className="flex items-center gap-4">
-                <button 
-                    onClick={toggleSidebar}
+                <button
+                    onClick={onOpenSidebar}
+                    aria-label="Open sidebar"
                     className="lg:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-xl"
                 >
                     <Menu size={20} />
+                </button>
+                <button
+                    onClick={onToggleCollapse}
+                    aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
+                    title={collapsed ? "Show sidebar" : "Hide sidebar"}
+                    className="hidden lg:block p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-xl"
+                >
+                    {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
                 </button>
                 <div className="hidden sm:flex items-center bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100 w-64">
                     <Search size={16} className="text-gray-400 mr-2" />

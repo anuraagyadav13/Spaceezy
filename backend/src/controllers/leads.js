@@ -210,8 +210,8 @@ const bulkAssignLeads = asyncHandler(async (req, res, next) => {
 });
 
 const getDuplicates = asyncHandler(async (req, res, next) => {
-    const { organizationId } = req.auth;
-    const result = await LeadService.getDuplicates(organizationId, req.query);
+    const { organizationId, role, userId } = req.auth;
+    const result = await LeadService.getDuplicates(organizationId, req.query, role, userId);
     
     res.status(200).json({
         success: true,

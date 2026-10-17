@@ -173,7 +173,7 @@ function NavGroup({ group, pathname, setIsOpen }) {
     );
 }
 
-export default function AppSidebar({ isOpen, setIsOpen }) {
+export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
     const pathname = usePathname();
     const { logout } = useAuth();
     const [mounted, setMounted] = useState(false);
@@ -183,7 +183,7 @@ export default function AppSidebar({ isOpen, setIsOpen }) {
         return () => clearTimeout(timer);
     }, []);
 
-    if (!mounted) return <div className="w-72 border-r border-gray-100 bg-white hidden lg:block" />; 
+    if (!mounted) return <div className={`w-72 border-r border-gray-100 bg-white ${collapsed ? "hidden" : "hidden lg:block"}`} />; 
 
     return (
         <>
@@ -194,7 +194,7 @@ export default function AppSidebar({ isOpen, setIsOpen }) {
                 />
             )}
 
-            <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+            <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"} ${collapsed ? "lg:hidden" : ""}`}>
                 <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100 shrink-0">
                     <Link href="/dashboard" className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600">
                         SpaceEzy CRM
