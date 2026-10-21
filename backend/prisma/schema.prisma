@@ -211,6 +211,16 @@ model Lead {
 
   interestedUnitType String?
 
+  // Free-text enquiry context captured from the public site.
+  // `enquiryLocation` is the area the visitor wants to buy in — deliberately a
+  // plain string, not part of the structured `preferredLocations` relation
+  // below, because visitors type arbitrary text that can't be resolved to a
+  // state/district/region. `requestedProjectName` records a project they named
+  // by hand when theirs isn't in the dropdown; projectId stays NULL there, so
+  // the two must never be conflated.
+  enquiryLocation      String?
+  requestedProjectName String?
+
   preferredVisitDate DateTime? // Stored in UTC
   preferredVisitTime String?
 

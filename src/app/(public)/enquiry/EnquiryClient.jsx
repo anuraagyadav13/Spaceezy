@@ -73,16 +73,17 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
         };
         if (form.email.trim()) payload.email = form.email.trim();
 
-        // The backend enquiry schema is `.strict()`, so it rejects any field it
-        // doesn't declare. Location and a hand-typed project have no dedicated
-        // column, so we fold them into the free-text `message` the backend
-        // already accepts. This keeps the change 100% frontend-only and unable
-        // to break submissions.
-        const notes = [];
-        if (form.location.trim()) notes.push(`Location: ${form.location.trim()}`);
-        if (!projectSlug && form.projectOther.trim()) notes.push(`Interested Project: ${form.projectOther.trim()}`);
-        if (form.message.trim()) notes.push(form.message.trim());
-        if (notes.length) payload.message = notes.join("\n");
+        // Enquiry context the visitor states in their own words. These are real
+        // columns on Lead, so they stay filterable and reportable instead of
+        // being buried in the free-text `message`.
+        if (form.location.trim()) payload.enquiryLocation = form.location.trim();
+        // Only meaningful when no project was resolved: a dropdown pick (or a
+        // deep link) already yields projectId server-side. `form.projectOther`
+        // persists after a later dropdown pick, so guard on both.
+        if (!projectSlug && !form.projectSlug && form.projectOther.trim()) {
+            payload.requestedProjectName = form.projectOther.trim();
+        }
+        if (form.message.trim()) payload.message = form.message.trim();
 
         if (form.projectSlug) payload.projectSlug = form.projectSlug;
         if (propertyToken) payload.propertyToken = propertyToken;

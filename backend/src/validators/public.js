@@ -33,6 +33,11 @@ const publicEnquirySchema = {
             .optional().nullable(),
         preferredVisitTime: z.string().max(50).optional().nullable(),
         interestedUnitType: z.string().max(100).optional().nullable(),
+        // Enquiry context the visitor states in their own words. Kept as real
+        // columns (not folded into `message`) so leads stay filterable and
+        // reportable by area and by the project they actually asked for.
+        enquiryLocation: z.string().max(200).optional().nullable(),
+        requestedProjectName: z.string().max(200).optional().nullable(),
         source: z.string().max(50).optional().nullable(),
         campaign: z.string().max(200).optional().nullable(),
         landingPage: z.string().max(500).optional().nullable()

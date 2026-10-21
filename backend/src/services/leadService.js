@@ -941,6 +941,10 @@ class LeadService {
                     where: { id: existingLead.id },
                     data: {
                         message: data.message ? `${existingLead.message || ''}\n\nNew Enquiry: ${data.message}` : existingLead.message,
+                        // A repeat enquiry refreshes these when the visitor
+                        // supplies them again; otherwise keep what we already know.
+                        enquiryLocation: data.enquiryLocation || existingLead.enquiryLocation,
+                        requestedProjectName: data.requestedProjectName || existingLead.requestedProjectName,
                         projectId: resolvedProjectId,
                         propertyId: resolvedPropertyId,
                         configurationId: resolvedConfigurationId,
@@ -971,6 +975,8 @@ class LeadService {
                         propertyId,
                         configurationId,
                         message: data.message,
+                        enquiryLocation: data.enquiryLocation || null,
+                        requestedProjectName: data.requestedProjectName || null,
                         status: 'NEW',
                         preferredVisitDate: data.preferredVisitDate ? new Date(data.preferredVisitDate) : null,
                         preferredVisitTime: data.preferredVisitTime,
