@@ -24,6 +24,8 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
         phone: "",
         email: "",
         projectSlug: projectSlug || "",
+        projectOther: "",
+        location: "",
         date: "",
         time: "10:00",
         unitType: configuration || "",
@@ -70,7 +72,18 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
             source: "Website",
         };
         if (form.email.trim()) payload.email = form.email.trim();
-        if (form.message.trim()) payload.message = form.message.trim();
+
+        // The backend enquiry schema is `.strict()`, so it rejects any field it
+        // doesn't declare. Location and a hand-typed project have no dedicated
+        // column, so we fold them into the free-text `message` the backend
+        // already accepts. This keeps the change 100% frontend-only and unable
+        // to break submissions.
+        const notes = [];
+        if (form.location.trim()) notes.push(`Location: ${form.location.trim()}`);
+        if (!projectSlug && form.projectOther.trim()) notes.push(`Interested Project: ${form.projectOther.trim()}`);
+        if (form.message.trim()) notes.push(form.message.trim());
+        if (notes.length) payload.message = notes.join("\n");
+
         if (form.projectSlug) payload.projectSlug = form.projectSlug;
         if (propertyToken) payload.propertyToken = propertyToken;
         if (isVisit && form.date) payload.preferredVisitDate = form.date;
@@ -168,7 +181,7 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                             />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-phone">Phone *</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-phone">WhatsApp Number *</label>
                             <input
                                 id="enquiry-phone"
                                 required
@@ -205,8 +218,31 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                                     <option key={project.slug} value={project.slug}>{project.name}</option>
                                 ))}
                             </select>
+                            {!form.projectSlug && (
+                                <>
+                                    <p className="text-xs text-gray-400 mt-2">If your project isn't listed, type it below.</p>
+                                    <input
+                                        id="enquiry-project-other"
+                                        value={form.projectOther}
+                                        onChange={(e) => setForm({ ...form, projectOther: e.target.value })}
+                                        className="mt-2 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                        placeholder="Type your project name"
+                                    />
+                                </>
+                            )}
                         </div>
                     )}
+
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-location">Location (Optional)</label>
+                        <input
+                            id="enquiry-location"
+                            value={form.location}
+                            onChange={(e) => setForm({ ...form, location: e.target.value })}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                            placeholder="City / locality you're interested in"
+                        />
+                    </div>
 
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-unit-type">Interested Unit Type (Optional)</label>

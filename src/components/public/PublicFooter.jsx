@@ -55,7 +55,18 @@ export function PublicFooter() {
                 </div>
                 
                 <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-gray-800/50 text-xs text-gray-500">
-                    <p>&copy; {new Date().getFullYear()} SpaceEzy Real Estate. All rights reserved.</p>
+                    <div className="flex flex-col items-center md:items-start gap-1">
+                        <p>&copy; {new Date().getFullYear()} SpaceEzy Real Estate. All rights reserved.</p>
+                        <a
+                            href="https://wa.me/919267903565"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-purple-400 transition-colors"
+                            aria-label="Developed by Sharnex — chat on WhatsApp"
+                        >
+                            Developed by <span className="font-semibold text-gray-300 hover:text-purple-400">Sharnex</span>
+                        </a>
+                    </div>
                     <div className="flex gap-4 mt-4 md:mt-0">
                         <Link href="/login" className="hover:text-white transition-colors">Partner/Employee Portal</Link>
                     </div>

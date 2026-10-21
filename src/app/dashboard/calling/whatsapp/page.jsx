@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
     MessageSquare, MessageCircle, Send, AlertCircle, RefreshCw, Link2, Search,
     Check, CheckCheck, Clock, Phone, Video, MoreVertical, Paperclip, Plus,
-    List, Settings, Signal, ExternalLink, CalendarPlus, FileText, Wallet, KeyRound
+    List, Settings, Signal, ExternalLink, CalendarPlus, FileText, KeyRound
 } from "lucide-react";
 import { fetchLeads, fetchLeadById } from "../../../../lib/api/leads";
 import { fetchPropertyById } from "../../../../lib/api/properties";
@@ -649,13 +649,6 @@ function WhatsAppCenterPageInner() {
                                 <FileText size={14} className="shrink-0" />
                                 <span className="truncate">Share Brochure</span>
                             </button>
-                            <button
-                                onClick={() => selectTemplateByName("Price Details")}
-                                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition-colors min-w-0 text-left"
-                            >
-                                <Wallet size={14} className="shrink-0" />
-                                <span className="truncate">Send Payment Plan</span>
-                            </button>
                             <Link
                                 href="/dashboard/bookings/wizard"
                                 className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-colors min-w-0"
@@ -809,9 +802,23 @@ function WhatsAppCenterPageInner() {
                                     Approved Template
                                 </button>
                             </div>
-                            <a href="#wa-template-browser" className="ml-auto hidden sm:flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-gray-700">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    // The browser only mounts when its tab is active, so a plain
+                                    // #hash anchor had no target to scroll to. Switch the tab first.
+                                    setMode("template");
+                                    setRightTab("templates");
+                                    requestAnimationFrame(() => {
+                                        document.getElementById("wa-template-browser")
+                                            ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                                    });
+                                }}
+                                aria-haspopup="true"
+                                className="ml-auto hidden sm:flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-gray-700"
+                            >
                                 <List size={13} /> Templates
-                            </a>
+                            </button>
                         </div>
                         {sharePropertyId && mode === "text" && (
                             <div className="flex items-center gap-1.5 text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5 w-fit max-w-full">

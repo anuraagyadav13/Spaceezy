@@ -9,6 +9,7 @@ const { canSeePII, maskContact } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { generatePublicToken, buildPublicPropertyUrl, publicAvailability } = require('../utils/publicLink');
 const WhatsappNotifyService = require('./whatsappNotifyService');
+const NotificationService = require('./notificationService');
 const { isExecRole } = require('../utils/roles');
 const { assertOwnership } = require('../utils/roles');
 const { parseBudgetValue } = require('../utils/budgetParser');
@@ -543,6 +544,14 @@ class LeadService {
         // the transaction above — enqueue failures never break creation.
         void WhatsappNotifyService.enqueueForLead(organizationId, created.id).catch(() => {});
 
+        // In-app assignment alert (fire-and-forget): only if the lead was
+        // created already assigned to someone.
+        if (created.assignedToId) {
+            void NotificationService.notifyLeadAssigned(organizationId, created, created.assignedToId, {
+                performedById: createdById,
+            });
+        }
+
         return created;
     }
 
@@ -813,6 +822,12 @@ class LeadService {
                         previousAssignedToId: existing.assignedToId
                     }
                 }
+            });
+
+            // In-app assignment alert (fire-and-forget) for the new assignee.
+            void NotificationService.notifyLeadAssigned(organizationId, updated, payload.assignedToId, {
+                performedById: userId,
+                previousAssignedToId: existing.assignedToId,
             });
         }
 
@@ -1459,14 +1474,18 @@ class LeadService {
 
         const isRestrictedRole = isExecRole(userRole);
 
-        return await prisma.$transaction(async (tx) => {
+        let leadsForNotify = [];
+
+        const result = await prisma.$transaction(async (tx) => {
             const leads = await tx.lead.findMany({
                 where: {
                     id: { in: leadIds },
                     organizationId
                 },
-                select: { id: true, assignedToId: true }
+                select: { id: true, name: true, assignedToId: true }
             });
+
+            leadsForNotify = leads;
 
             const foundIds = new Set(leads.map(l => l.id));
             const missing = leadIds.filter(id => !foundIds.has(id));
@@ -1505,6 +1524,18 @@ class LeadService {
 
             return { count: leadIds.length };
         });
+
+        // In-app assignment alerts (fire-and-forget) after commit, one per
+        // lead that actually changed assignee.
+        for (const lead of leadsForNotify) {
+            if (lead.assignedToId === assignedToId) continue; // unchanged
+            void NotificationService.notifyLeadAssigned(organizationId, lead, assignedToId, {
+                performedById: userId,
+                previousAssignedToId: lead.assignedToId,
+            });
+        }
+
+        return result;
     }
 
     // --- Duplicates ---

@@ -36,6 +36,7 @@ model Organization {
   whatsappTemplates     WhatsAppTemplate[]
   whatsappSettings      WhatsappSettings?
   whatsappNotifications WhatsappNotification[]
+  notifications         Notification[]
   auditLogs   AuditLog[]
 }
 
@@ -81,6 +82,7 @@ model User {
   calls              Call[]         @relation("UserCalls")
   createdQuotations  Quotation[]    @relation("CreatedQuotations")
   sentWhatsAppMessages WhatsAppMessage[]
+  notifications      Notification[]
 
   @@unique([organizationId, email])
 }
@@ -988,4 +990,27 @@ model AuditLog {
 
   @@index([organizationId, createdAt])
   @@index([organizationId, action])
+}
+
+// In-app notification (e.g. "a lead was assigned to you"). Scoped to the
+// recipient user; only the recipient ever reads/marks their own rows.
+model Notification {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    String // e.g. LEAD_ASSIGNED
+  title   String
+  body    String?
+  leadId  String? // optional link target (no FK — a deleted lead must not destroy notifications)
+  link    String? // client-side route to open on click
+  read    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
+  @@index([organizationId, userId])
 }
