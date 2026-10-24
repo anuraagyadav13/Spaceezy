@@ -54,7 +54,7 @@ export function PublicHeader() {
             <div className="container mx-auto px-6 md:px-12 flex justify-between items-center">
                 <Link href="/" className="flex items-center gap-2.5">
                     <span className="relative h-10 w-10 md:h-11 md:w-11 shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white/50">
-                        <Image src="/images/logo.jpg" alt="SpaceEzy logo" fill sizes="44px" className="object-cover" priority />
+                        <Image src="/images/logo.jpg" alt="Spaceezy logo" fill sizes="44px" className="object-cover" priority />
                     </span>
                     <span className={`font-bold text-2xl tracking-tighter transition-colors ${isSolid ? "text-gray-900" : "text-white drop-shadow-md"}`}>
                         Spaceezy<span className="text-purple-500">.</span>
@@ -109,7 +109,7 @@ export function PublicHeader() {
                     <div className="flex justify-between items-center p-6">
                         <Link href="/" className="flex items-center gap-2.5" onClick={() => setMobileMenuOpen(false)}>
                             <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-purple-100">
-                                <Image src="/images/logo.jpg" alt="SpaceEzy logo" fill sizes="40px" className="object-cover" />
+                                <Image src="/images/logo.jpg" alt="Spaceezy logo" fill sizes="40px" className="object-cover" />
                             </span>
                             <span className="font-bold text-2xl tracking-tighter text-gray-900">Spaceezy<span className="text-purple-500">.</span></span>
                         </Link>

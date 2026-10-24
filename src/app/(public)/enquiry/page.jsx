@@ -1,22 +1,22 @@
 import EnquiryClient from "./EnquiryClient";
 
 export const metadata = {
-    title: "Enquire | Talk to SpaceEzy",
+    title: "Enquire | Talk to Spaceezy",
     description:
-        "Send an enquiry or schedule a site visit for any SpaceEzy project or property. Our property experts will get back to you shortly.",
+        "Send an enquiry or schedule a site visit for any Spaceezy project or property. Our property experts will get back to you shortly.",
     alternates: { canonical: "/enquiry" },
     openGraph: {
-        title: "Enquire | Talk to SpaceEzy",
+        title: "Enquire | Talk to Spaceezy",
         description:
-            "Send an enquiry or schedule a site visit for any SpaceEzy project or property.",
+            "Send an enquiry or schedule a site visit for any Spaceezy project or property.",
         url: "/enquiry",
         type: "website",
         images: [{ url: "/images/og-default.jpg" }],
     },
     twitter: {
         card: "summary_large_image",
-        title: "Enquire | Talk to SpaceEzy",
-        description: "Send an enquiry or schedule a site visit for any SpaceEzy project or property.",
+        title: "Enquire | Talk to Spaceezy",
+        description: "Send an enquiry or schedule a site visit for any Spaceezy project or property.",
     },
 };
 

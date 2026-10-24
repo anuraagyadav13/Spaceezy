@@ -12,7 +12,7 @@ export default function DashboardShell({ children }) {
     // Desktop collapse preference (mobile slide-over is unaffected).
     const [isCollapsed, setIsCollapsed] = useState(() => {
         try {
-            return window.localStorage.getItem("spaceezy-sidebar-collapsed") === "1";
+            return window.localStorage.getItem("Spaceezy-sidebar-collapsed") === "1";
         } catch {
             return false;
         }
@@ -20,7 +20,7 @@ export default function DashboardShell({ children }) {
 
     useEffect(() => {
         try {
-            window.localStorage.setItem("spaceezy-sidebar-collapsed", isCollapsed ? "1" : "0");
+            window.localStorage.setItem("Spaceezy-sidebar-collapsed", isCollapsed ? "1" : "0");
         } catch {
             // Private mode etc. — preference simply won't persist.
         }

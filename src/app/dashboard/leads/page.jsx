@@ -402,7 +402,7 @@ function LeadsListContent({ isExecutive = false }) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `spaceezy-leads-page${page}.csv`;
+        a.download = `Spaceezy-leads-page${page}.csv`;
         a.click();
         URL.revokeObjectURL(url);
     };

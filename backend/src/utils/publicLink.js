@@ -44,6 +44,17 @@ function buildPublicProjectUrl(slug) {
     return `${base}/projects/${encodeURIComponent(slug)}`;
 }
 
+// Canonical public API origin for links the outside world must fetch on its
+// own (WhatsApp document attachments, broker previews). PUBLIC_API_URL
+// overrides local dev where app and API run on different ports; production
+// falls back to FRONTEND_URL + /api/v1 (nginx routes /api to the API).
+function buildPublicApiUrl(pathAndQuery) {
+    const configured = (process.env.PUBLIC_API_URL || '').replace(/\/+$/, '');
+    const base = configured
+        || `${(process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '')}/api/v1`;
+    return `${base}${pathAndQuery}`;
+}
+
 // Canonical public availability wording — single source of truth used by every
 // public DTO so the website and the WhatsApp share message never drift.
 function publicAvailability(status) {
@@ -76,6 +87,7 @@ module.exports = {
     generatePublicSlug,
     buildPublicPropertyUrl,
     buildPublicProjectUrl,
+    buildPublicApiUrl,
     publicAvailability,
     publicImages
 };

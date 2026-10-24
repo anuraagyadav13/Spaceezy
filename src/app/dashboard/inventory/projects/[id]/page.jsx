@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
     Loader2, AlertCircle, Building2, Layers, Plus, Trash2, Pencil, Save,
-    Search, ArrowLeft, Archive, CheckCircle2, Home, Globe, GlobeLock, ExternalLink
+    Search, ArrowLeft, Archive, CheckCircle2, Home, Globe, GlobeLock, ExternalLink,
+    FileText, Upload
 } from "lucide-react";
-import { fetchProjectById, updateProject, deleteProject } from "../../../../../lib/api/projects";
+import { fetchProjectById, updateProject, deleteProject, uploadProjectBrochure, removeProjectBrochure } from "../../../../../lib/api/projects";
 import {
     fetchConfigurations, createConfiguration, deleteConfiguration,
     updateConfigurationInventory
@@ -23,6 +24,18 @@ import ImageUploader from "../../../../../components/shared/ImageUploader";
 const inputClass =
     "w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all";
 const labelClass = "block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1";
+
+// Authenticated API origin for the brochure preview link (streamed by
+// GET /projects/:id/brochure — the file is internal-only, so the link
+// works for logged-in CRM staff, never for clients or the public).
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const MAX_BROCHURE_MB = 15;
+
+// Same /brochure/i rule the WhatsApp composer and the backend apply when
+// reading the project's documents JSON.
+const isBrochureDoc = (d) => Boolean(
+    d && typeof d === "object" && /brochure/i.test(String(d.name || d.label || d.type || ""))
+);
 
 const STATUS_BADGES = {
     UPCOMING: "bg-blue-50 text-blue-700",
@@ -117,6 +130,55 @@ export default function ProjectDetailPage() {
         },
         onError: (err) => showToast(err?.message || "Failed to update project", "error")
     });
+
+    // The optional brochure is a stored upload, not a generated document.
+    // It is derived from the project's documents JSON (single source of
+    // truth) and mutated immediately on pick/remove — the save form above
+    // is never involved.
+    const brochure = useMemo(() => {
+        const docs = Array.isArray(project?.documents) ? project.documents : [];
+        return docs.find(isBrochureDoc) || null;
+    }, [project]);
+
+    const uploadBrochure = useMutation({
+        mutationFn: (file) => uploadProjectBrochure(projectId, file),
+        onSuccess: (entry) => {
+            showToast("Brochure uploaded");
+            queryClient.setQueryData(["project", projectId], (old) => (old
+                ? { ...old, documents: [...(Array.isArray(old.documents) ? old.documents : []).filter((d) => !isBrochureDoc(d)), entry] }
+                : old));
+            invalidate();
+        },
+        onError: (err) => showToast(err?.message || "Brochure upload failed", "error")
+    });
+
+    const removeBrochure = useMutation({
+        mutationFn: () => removeProjectBrochure(projectId),
+        onSuccess: () => {
+            showToast("Brochure removed");
+            queryClient.setQueryData(["project", projectId], (old) => (old
+                ? { ...old, documents: (Array.isArray(old.documents) ? old.documents : []).filter((d) => !isBrochureDoc(d)) }
+                : old));
+            invalidate();
+        },
+        onError: (err) => showToast(err?.message || "Could not remove the brochure", "error")
+    });
+
+    const onPickBrochure = (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = ""; // allow re-picking the same file
+        if (!file) return;
+        const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+        if (!isPdf) {
+            showToast("The brochure must be a PDF file", "error");
+            return;
+        }
+        if (file.size > MAX_BROCHURE_MB * 1024 * 1024) {
+            showToast(`The brochure is larger than ${MAX_BROCHURE_MB} MB`, "error");
+            return;
+        }
+        uploadBrochure.mutate(file);
+    };
 
     const archiveProject = useMutation({
         mutationFn: () => deleteProject(projectId),
@@ -531,6 +593,54 @@ export default function ProjectDetailPage() {
                                     disabled={saveProject.isPending}
                                     altPrefix="Project"
                                 />
+                            </div>
+                            <div className="sm:col-span-2 lg:col-span-3">
+                                <label className={labelClass}>Brochure PDF · optional · up to {MAX_BROCHURE_MB} MB</label>
+                                {brochure ? (
+                                    <div className="flex items-center gap-2 min-w-0 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                                        <FileText size={15} className="text-emerald-600 shrink-0" />
+                                        <span className="text-xs font-bold text-emerald-800 truncate min-w-0">
+                                            Brochure on file{Number(brochure.size) > 0
+                                                ? ` · ${Number(brochure.size) < 1024 * 1024
+                                                    ? `${Math.max(1, Math.round(Number(brochure.size) / 1024))} KB`
+                                                    : `${(Number(brochure.size) / (1024 * 1024)).toFixed(1)} MB`}`
+                                                : ""}
+                                        </span>
+                                        <a
+                                            href={`${API_BASE}/projects/${projectId}/brochure`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[11px] font-bold text-indigo-600 hover:underline shrink-0 inline-flex items-center gap-1"
+                                        >
+                                            <ExternalLink size={11} /> Preview
+                                        </a>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeBrochure.mutate()}
+                                            disabled={removeBrochure.isPending}
+                                            className="ml-auto text-[11px] font-bold text-red-600 hover:underline shrink-0 inline-flex items-center gap-1 disabled:opacity-50"
+                                        >
+                                            {removeBrochure.isPending ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />} Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label className="flex items-center gap-2 cursor-pointer w-fit bg-white border border-dashed border-gray-300 hover:border-purple-400 rounded-xl px-3 py-2 transition-colors">
+                                        {uploadBrochure.isPending
+                                            ? <Loader2 size={15} className="animate-spin text-purple-500" />
+                                            : <Upload size={15} className="text-gray-400" />}
+                                        <span className="text-xs font-bold text-gray-600">Upload brochure PDF (optional)</span>
+                                        <input
+                                            type="file"
+                                            accept="application/pdf,.pdf"
+                                            className="hidden"
+                                            onChange={onPickBrochure}
+                                            disabled={uploadBrochure.isPending}
+                                        />
+                                    </label>
+                                )}
+                                <p className="text-[10px] text-gray-400 mt-1">
+                                    Internal reference only — brochure sending to clients was removed, so it is never sent out from here. Staff can preview or download it above. PDF only, up to {MAX_BROCHURE_MB} MB · uploads immediately, no need to save the form.
+                                </p>
                             </div>
                             <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
                                 <button

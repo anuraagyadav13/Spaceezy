@@ -1,6 +1,5 @@
-"use client";
-import ProductivityPage from "../../productivity/page";
+import { redirect } from "next/navigation";
 
 export default function SalesReportsPage() {
-    return <ProductivityPage />;
+    redirect("/dashboard/reports?tab=sales");
 }

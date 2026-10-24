@@ -91,7 +91,7 @@ export default function DashboardInventoryPage() {
                         </Link>
                         <PermissionGate permission="inventory:create">
                             <Link
-                                href="/dashboard/inventory/import"
+                                href="/dashboard/inventory/grid"
                                 className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-all inline-flex items-center gap-2"
                             >
                                 <UploadCloud size={16} /> Bulk Import

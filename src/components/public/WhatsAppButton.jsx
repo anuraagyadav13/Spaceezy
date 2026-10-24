@@ -1,15 +1,15 @@
 "use client";
 
 import { Phone } from "lucide-react";
+import { PHONE_TEL, WHATSAPP_NUMBER } from "../../lib/seo/site";
 
-const WHATSAPP_NUMBER = "917827267897";
-const WHATSAPP_TEXT = "Hi SpaceEzy! I'm interested in your properties.";
+const WHATSAPP_TEXT = "Hi Spaceezy! I'm interested in your properties.";
 
 export function WhatsAppButton() {
     return (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-center gap-3">
             <a
-                href="tel:+917827267897"
+                href={`tel:${PHONE_TEL}`}
                 aria-label="Call us"
                 className="flex h-14 w-14 items-center justify-center rounded-full bg-purple-600 shadow-lg shadow-purple-500/30 transition-transform hover:scale-110 hover:bg-purple-700"
             >

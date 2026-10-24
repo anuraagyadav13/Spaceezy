@@ -6,6 +6,7 @@ import {
     fetchPublicProjects,
     fetchPublicConfigurations,
     fetchPublicProperty,
+    fetchPublicLocations,
     submitPublicEnquiry,
 } from "../../../lib/api/publicSite";
 import { formatPrice } from "../../../utils/format";
@@ -19,11 +20,18 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
     const [projects, setProjects] = useState([]);
     const [unitTypes, setUnitTypes] = useState([]);
     const [property, setProperty] = useState(null);
+    // State -> District -> Region master, fetched once from the public
+    // locations endpoint (no login needed). Drives the cascading selects.
+    const [states, setStates] = useState([]);
     const [form, setForm] = useState({
         name: "",
         phone: "",
         email: "",
         projectSlug: projectSlug || "",
+        projectOther: "",
+        stateId: "",
+        districtId: "",
+        regionId: "",
         date: "",
         time: "10:00",
         unitType: configuration || "",
@@ -45,6 +53,11 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                 if (active) setUnitTypes(Array.isArray(list) ? list : []);
             })
             .catch(() => {});
+        fetchPublicLocations()
+            .then((list) => {
+                if (active) setStates(Array.isArray(list) ? list : []);
+            })
+            .catch(() => {});
         if (propertyToken) {
             fetchPublicProperty(propertyToken)
                 .then((detail) => {
@@ -59,6 +72,16 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
 
     const selectedProject = projects.find((project) => project.slug === (projectSlug || form.projectSlug));
 
+    // Cascading location picks -> one readable string ("Region, District,
+    // State"), deepest choice first. Every level is optional, so a skipped
+    // level simply drops out of the label.
+    const selectedState = states.find((state) => state.id === form.stateId) || null;
+    const selectedDistrict = selectedState?.districts?.find((d) => d.id === form.districtId) || null;
+    const selectedRegion = selectedDistrict?.regions?.find((r) => r.id === form.regionId) || null;
+    const locationLabel = [selectedRegion?.name, selectedDistrict?.name, selectedState?.name]
+        .filter(Boolean)
+        .join(", ");
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
@@ -70,7 +93,19 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
             source: "Website",
         };
         if (form.email.trim()) payload.email = form.email.trim();
+
+        // Enquiry context the visitor states in their own words. These are real
+        // columns on Lead, so they stay filterable and reportable instead of
+        // being buried in the free-text `message`.
+        if (locationLabel) payload.enquiryLocation = locationLabel;
+        // Only meaningful when no project was resolved: a dropdown pick (or a
+        // deep link) already yields projectId server-side. `form.projectOther`
+        // persists after a later dropdown pick, so guard on both.
+        if (!projectSlug && !form.projectSlug && form.projectOther.trim()) {
+            payload.requestedProjectName = form.projectOther.trim();
+        }
         if (form.message.trim()) payload.message = form.message.trim();
+
         if (form.projectSlug) payload.projectSlug = form.projectSlug;
         if (propertyToken) payload.propertyToken = propertyToken;
         if (isVisit && form.date) payload.preferredVisitDate = form.date;
@@ -168,7 +203,7 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                             />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-phone">Phone *</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-phone">WhatsApp Number *</label>
                             <input
                                 id="enquiry-phone"
                                 required
@@ -205,8 +240,76 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                                     <option key={project.slug} value={project.slug}>{project.name}</option>
                                 ))}
                             </select>
+                            {!form.projectSlug && (
+                                <>
+                                    <p className="text-xs text-gray-400 mt-2">If your project isn&apos;t listed, type it below.</p>
+                                    <input
+                                        id="enquiry-project-other"
+                                        value={form.projectOther}
+                                        onChange={(e) => setForm({ ...form, projectOther: e.target.value })}
+                                        className="mt-2 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                        placeholder="Type your project name"
+                                    />
+                                </>
+                            )}
                         </div>
                     )}
+
+                    <div>
+                        <span className="text-xs font-bold text-gray-500 uppercase mb-2 block">Location (Optional)</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label className="sr-only" htmlFor="enquiry-state">State</label>
+                                <select
+                                    id="enquiry-state"
+                                    value={form.stateId}
+                                    onChange={(e) => setForm({ ...form, stateId: e.target.value, districtId: "", regionId: "" })}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                >
+                                    <option value="">Select state</option>
+                                    {states.map((state) => (
+                                        <option key={state.id} value={state.id}>{state.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="sr-only" htmlFor="enquiry-district">District</label>
+                                <select
+                                    id="enquiry-district"
+                                    disabled={!form.stateId}
+                                    value={form.districtId}
+                                    onChange={(e) => setForm({ ...form, districtId: e.target.value, regionId: "" })}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <option value="">{form.stateId ? "Select district" : "Select state first"}</option>
+                                    {(selectedState?.districts || []).map((district) => (
+                                        <option key={district.id} value={district.id}>{district.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="sr-only" htmlFor="enquiry-region">Region</label>
+                                <select
+                                    id="enquiry-region"
+                                    disabled={!form.districtId}
+                                    value={form.regionId}
+                                    onChange={(e) => setForm({ ...form, regionId: e.target.value })}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <option value="">
+                                        {!form.districtId
+                                            ? "Select district first"
+                                            : (selectedDistrict?.regions || []).length
+                                                ? "Select region"
+                                                : "No regions listed"}
+                                    </option>
+                                    {(selectedDistrict?.regions || []).map((region) => (
+                                        <option key={region.id} value={region.id}>{region.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
 
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-unit-type">Interested Unit Type (Optional)</label>
