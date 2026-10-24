@@ -184,7 +184,7 @@ export async function LandingPage({ data }) {
 
                 {/* RELATED / INTERNAL LINKS */}
                 <section className="py-12">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-5">Explore more on SpaceEzy</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-5">Explore more on Spaceezy</h2>
                     <ul className="flex flex-wrap gap-3">
                         {links.map((l) => (
                             <li key={l.href}>
@@ -201,7 +201,7 @@ export async function LandingPage({ data }) {
                                 href="/contact"
                                 className="inline-block rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 hover:border-purple-300 hover:text-purple-700 transition-colors"
                             >
-                                Contact SpaceEzy
+                                Contact Spaceezy
                             </Link>
                         </li>
                     </ul>
@@ -212,7 +212,7 @@ export async function LandingPage({ data }) {
                     <div className="bg-gray-900 rounded-[32px] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6">
                         <div>
                             <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Need help narrowing it down?</h2>
-                            <p className="text-gray-400">Talk to the SpaceEzy team — we are on the ground in Ghaziabad.</p>
+                            <p className="text-gray-400">Talk to the Spaceezy team — we are on the ground in Ghaziabad.</p>
                         </div>
                         <div className="flex flex-wrap gap-3">
                             <a href={`tel:${PHONE_TEL}`} className="inline-flex items-center gap-2 bg-white text-gray-900 px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-colors">

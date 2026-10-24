@@ -3,19 +3,21 @@
 // with zero matching inventory are rendered with an honest empty state and
 // served noindex (see landing.js) — never invented listings.
 
+import { PHONE_DISPLAY } from "./site";
+
 const WAVE_CITY = { state: "Uttar Pradesh", district: "Ghaziabad", region: "Wave City" };
 const GHAZIABAD = { state: "Uttar Pradesh", district: "Ghaziabad" };
 
 export const LANDING_PAGES = {
     "properties-in-wave-city": {
-        title: "Property in Wave City, Ghaziabad | Flats, Plots, Homes & Commercial Spaces | SpaceEzy",
+        title: "Property in Wave City, Ghaziabad | Flats, Plots, Homes & Commercial Spaces | Spaceezy",
         h1: "Property in Wave City, Ghaziabad",
         description:
             "Browse property in Wave City, Ghaziabad — flats, plots, homes and commercial spaces with live prices and availability.",
         scope: WAVE_CITY,
         filters: {},
         intro: [
-            "Wave City on NH-24 is one of Ghaziabad's fastest-growing integrated townships, and this page brings together every property SpaceEzy has live there — residential flats, open plots, independent homes and commercial spaces in one place.",
+            "Wave City on NH-24 is one of Ghaziabad's fastest-growing integrated townships, and this page brings together every property Spaceezy has live there — residential flats, open plots, independent homes and commercial spaces in one place.",
             "Listings below come straight from our inventory: prices, configurations and availability are what our team has published today. Pick a listing to see full details, or contact us to plan a site visit anywhere in Wave City.",
         ],
         related: [
@@ -28,32 +30,32 @@ export const LANDING_PAGES = {
         faq: [
             {
                 q: "What types of property are available in Wave City?",
-                a: "SpaceEzy lists residential and commercial inventory in Wave City — flats, plots, homes and shops — published directly by our team, so the listings on this page reflect current availability.",
+                a: "Spaceezy lists residential and commercial inventory in Wave City — flats, plots, homes and shops — published directly by our team, so the listings on this page reflect current availability.",
             },
             {
                 q: "How do I enquire about a property in Wave City?",
-                a: "Open any listing and use the Enquire Now button, call +91 78272 67897, or message us on WhatsApp. We respond with pricing, floor plans and site-visit slots.",
+                a: `Open any listing and use the Enquire Now button, call ${PHONE_DISPLAY}, or message us on WhatsApp. We respond with pricing, floor plans and site-visit slots.`,
             },
             {
-                q: "Does SpaceEzy charge brokerage?",
-                a: "No. Listings on SpaceEzy are zero-brokerage — you enquire directly through our team and deal with the project on transparent, published prices.",
+                q: "Does Spaceezy charge brokerage?",
+                a: "No. Listings on Spaceezy are zero-brokerage — you enquire directly through our team and deal with the project on transparent, published prices.",
             },
             {
-                q: "Where is the SpaceEzy office in Wave City?",
+                q: "Where is the Spaceezy office in Wave City?",
                 a: "Office No. 04, 1st Floor, Wave Galleria, Sector-3, Wave City, Ghaziabad 201002 — walk-ins are welcome.",
             },
         ],
     },
 
     "properties-in-ghaziabad": {
-        title: "Properties in Ghaziabad | Flats, Plots & Homes for Sale | SpaceEzy",
+        title: "Properties in Ghaziabad | Flats, Plots & Homes for Sale | Spaceezy",
         h1: "Properties in Ghaziabad",
         description:
             "Explore properties in Ghaziabad — residential projects, flats, plots and commercial listings across the city's top localities.",
         scope: GHAZIABAD,
         filters: {},
         intro: [
-            "Ghaziabad is one of the National Capital Region's largest residential markets, covering localities such as Wave City, Vaishali, Indirapuram, Raj Nagar Extension and Crossings Republik. This page aggregates every property and project SpaceEzy has published in the district.",
+            "Ghaziabad is one of the National Capital Region's largest residential markets, covering localities such as Wave City, Vaishali, Indirapuram, Raj Nagar Extension and Crossings Republik. This page aggregates every property and project Spaceezy has published in the district.",
             "Compare live prices, configurations and availability below — or jump to a focused page like flats for sale or plots for sale if you already know what you are looking for.",
         ],
         related: [
@@ -66,10 +68,10 @@ export const LANDING_PAGES = {
     },
 
     "flats-for-sale": {
-        title: "Flats for Sale | Buy Flats in Ghaziabad & Top Cities | SpaceEzy",
+        title: "Flats for Sale | Buy Flats in Ghaziabad & Top Cities | Spaceezy",
         h1: "Flats for Sale",
         description:
-            "Browse flats for sale with prices, configurations and photos — live inventory across Ghaziabad and top cities on SpaceEzy.",
+            "Browse flats for sale with prices, configurations and photos — live inventory across Ghaziabad and top cities on Spaceezy.",
         scope: {},
         filters: { propertyType: "Residential", forSale: true },
         intro: [
@@ -85,10 +87,10 @@ export const LANDING_PAGES = {
     },
 
     "plots-for-sale": {
-        title: "Plots for Sale | Residential Plots for Sale | SpaceEzy",
+        title: "Plots for Sale | Residential Plots for Sale | Spaceezy",
         h1: "Plots for Sale",
         description:
-            "Browse residential and commercial plots for sale with sizes, prices and live availability on SpaceEzy.",
+            "Browse residential and commercial plots for sale with sizes, prices and live availability on Spaceezy.",
         scope: {},
         filters: { propertyType: "Plot", forSale: true },
         intro: [
@@ -104,24 +106,24 @@ export const LANDING_PAGES = {
     },
 
     "commercial-properties": {
-        title: "Commercial Properties for Sale & Lease | SpaceEzy",
+        title: "Commercial Properties for Sale & Lease | Spaceezy",
         h1: "Commercial Properties",
         description:
-            "Find commercial properties for sale — offices, shops and retail spaces with live availability on SpaceEzy.",
+            "Find commercial properties for sale — offices, shops and retail spaces with live availability on Spaceezy.",
         scope: {},
         filters: { propertyType: "Commercial", projectTypes: ["Commercial"] },
         intro: [
-            "From high-street shops to office floors, this page collects the commercial projects and units SpaceEzy has published — with real pricing and vacancy information maintained by our team.",
+            "From high-street shops to office floors, this page collects the commercial projects and units Spaceezy has published — with real pricing and vacancy information maintained by our team.",
             "Commercial inventory moves fast; enquire from a listing or call us to get current availability, floor plans and rental-vs-buy options for a specific location.",
         ],
         related: ["commercial-property-in-wave-city", "residential-properties", "properties-in-ghaziabad"],
     },
 
     "residential-properties": {
-        title: "Residential Properties | Flats, Homes & Villas | SpaceEzy",
+        title: "Residential Properties | Flats, Homes & Villas | Spaceezy",
         h1: "Residential Properties",
         description:
-            "Browse residential properties — flats, homes and villas with prices, configurations and live availability on SpaceEzy.",
+            "Browse residential properties — flats, homes and villas with prices, configurations and live availability on Spaceezy.",
         scope: {},
         filters: { propertyType: "Residential", projectTypes: ["Residential"] },
         intro: [
@@ -132,7 +134,7 @@ export const LANDING_PAGES = {
     },
 
     "flats-in-wave-city": {
-        title: "Flats in Wave City, Ghaziabad | Top Projects | SpaceEzy",
+        title: "Flats in Wave City, Ghaziabad | Top Projects | Spaceezy",
         h1: "Flats in Wave City, Ghaziabad",
         description:
             "Browse flats in Wave City, Ghaziabad with prices, configurations and availability from live project inventory.",
@@ -151,10 +153,10 @@ export const LANDING_PAGES = {
     },
 
     "flats-for-sale-in-wave-city": {
-        title: "Flats for Sale in Wave City | Ready & New Builds | SpaceEzy",
+        title: "Flats for Sale in Wave City | Ready & New Builds | Spaceezy",
         h1: "Flats for Sale in Wave City",
         description:
-            "Find flats for sale in Wave City, Ghaziabad — live inventory with prices and configurations on SpaceEzy.",
+            "Find flats for sale in Wave City, Ghaziabad — live inventory with prices and configurations on Spaceezy.",
         scope: WAVE_CITY,
         filters: { propertyType: "Residential", forSale: true },
         intro: [
@@ -165,9 +167,9 @@ export const LANDING_PAGES = {
     },
 
     "2-bhk-flats-in-wave-city": {
-        title: "2 BHK Flats in Wave City, Ghaziabad | SpaceEzy",
+        title: "2 BHK Flats in Wave City, Ghaziabad | Spaceezy",
         h1: "2 BHK Flats in Wave City, Ghaziabad",
-        description: "Browse 2 BHK flats in Wave City, Ghaziabad with prices, sizes and live availability on SpaceEzy.",
+        description: "Browse 2 BHK flats in Wave City, Ghaziabad with prices, sizes and live availability on Spaceezy.",
         scope: WAVE_CITY,
         filters: { propertyType: "Residential", bhk: 2 },
         intro: [
@@ -178,9 +180,9 @@ export const LANDING_PAGES = {
     },
 
     "3-bhk-flats-in-wave-city": {
-        title: "3 BHK Flats in Wave City, Ghaziabad | SpaceEzy",
+        title: "3 BHK Flats in Wave City, Ghaziabad | Spaceezy",
         h1: "3 BHK Flats in Wave City, Ghaziabad",
-        description: "Browse 3 BHK flats in Wave City, Ghaziabad with prices, sizes and live availability on SpaceEzy.",
+        description: "Browse 3 BHK flats in Wave City, Ghaziabad with prices, sizes and live availability on Spaceezy.",
         scope: WAVE_CITY,
         filters: { propertyType: "Residential", bhk: 3 },
         intro: [
@@ -191,9 +193,9 @@ export const LANDING_PAGES = {
     },
 
     "4-bhk-flats-in-wave-city": {
-        title: "4 BHK Flats in Wave City, Ghaziabad | SpaceEzy",
+        title: "4 BHK Flats in Wave City, Ghaziabad | Spaceezy",
         h1: "4 BHK Flats in Wave City, Ghaziabad",
-        description: "Browse 4 BHK flats in Wave City, Ghaziabad with prices, sizes and live availability on SpaceEzy.",
+        description: "Browse 4 BHK flats in Wave City, Ghaziabad with prices, sizes and live availability on Spaceezy.",
         scope: WAVE_CITY,
         filters: { propertyType: "Residential", bhk: 4 },
         intro: [
@@ -204,9 +206,9 @@ export const LANDING_PAGES = {
     },
 
     "plots-in-wave-city": {
-        title: "Plots in Wave City, Ghaziabad | Residential Plots | SpaceEzy",
+        title: "Plots in Wave City, Ghaziabad | Residential Plots | Spaceezy",
         h1: "Plots in Wave City, Ghaziabad",
-        description: "Browse plots in Wave City, Ghaziabad with sizes, prices and live availability on SpaceEzy.",
+        description: "Browse plots in Wave City, Ghaziabad with sizes, prices and live availability on Spaceezy.",
         scope: WAVE_CITY,
         filters: { propertyType: "Plot" },
         intro: [
@@ -217,9 +219,9 @@ export const LANDING_PAGES = {
     },
 
     "plots-for-sale-in-wave-city": {
-        title: "Plots for Sale in Wave City, Ghaziabad | SpaceEzy",
+        title: "Plots for Sale in Wave City, Ghaziabad | Spaceezy",
         h1: "Plots for Sale in Wave City",
-        description: "Find plots for sale in Wave City, Ghaziabad — live inventory with sizes and prices on SpaceEzy.",
+        description: "Find plots for sale in Wave City, Ghaziabad — live inventory with sizes and prices on Spaceezy.",
         scope: WAVE_CITY,
         filters: { propertyType: "Plot", forSale: true },
         intro: [
@@ -230,9 +232,9 @@ export const LANDING_PAGES = {
     },
 
     "villas-in-wave-city": {
-        title: "Villas in Wave City, Ghaziabad | Luxury Villas | SpaceEzy",
+        title: "Villas in Wave City, Ghaziabad | Luxury Villas | Spaceezy",
         h1: "Villas in Wave City, Ghaziabad",
-        description: "Browse villas in Wave City, Ghaziabad with prices, sizes and live availability on SpaceEzy.",
+        description: "Browse villas in Wave City, Ghaziabad with prices, sizes and live availability on Spaceezy.",
         scope: WAVE_CITY,
         filters: { textMatch: "villa" },
         intro: [
@@ -243,7 +245,7 @@ export const LANDING_PAGES = {
     },
 
     "commercial-property-in-wave-city": {
-        title: "Commercial Property in Wave City, Ghaziabad | SpaceEzy",
+        title: "Commercial Property in Wave City, Ghaziabad | Spaceezy",
         h1: "Commercial Property in Wave City, Ghaziabad",
         description:
             "Find commercial property in Wave City, Ghaziabad — shops, offices and retail spaces with live availability.",
@@ -257,10 +259,10 @@ export const LANDING_PAGES = {
     },
 
     "property-for-sale-in-wave-city": {
-        title: "Property for Sale in Wave City, Ghaziabad | SpaceEzy",
+        title: "Property for Sale in Wave City, Ghaziabad | Spaceezy",
         h1: "Property for Sale in Wave City, Ghaziabad",
         description:
-            "Browse property for sale in Wave City, Ghaziabad — flats, plots and homes with live prices on SpaceEzy.",
+            "Browse property for sale in Wave City, Ghaziabad — flats, plots and homes with live prices on Spaceezy.",
         scope: WAVE_CITY,
         filters: { forSale: true },
         intro: [

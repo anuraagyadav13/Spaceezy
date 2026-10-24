@@ -1196,9 +1196,11 @@ class LeadService {
             const project = property.project;
             const configuration = property.configuration || (property.config && property.config.name) || '—';
             const area = property.areaSaleable || property.area || null;
+            // House numbers never go into WhatsApp text — tower, area, price
+            // and availability distinguish the units instead.
             return [
                 `• ${project ? project.name : '—'} — ${configuration}`,
-                `  Tower: ${property.tower || '—'} | Unit: ${property.unitNumber || '—'}${area ? ` | Area: ${area} sq.ft` : ''}`,
+                `  Tower: ${property.tower || '—'}${area ? ` | Area: ${area} sq.ft` : ''}`,
                 `  Location: ${locationOf(property)}`,
                 `  Price: ${property.price != null ? formatPrice(property.price) : 'On request'} | Availability: ${property.status}`
             ].join('\n');

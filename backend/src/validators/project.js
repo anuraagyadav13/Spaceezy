@@ -154,8 +154,25 @@ const updateProjectSchema = {
     })
 };
 
+// Params-only schema for the brochure upload/remove routes — the upload
+// body is raw PDF bytes (no JSON schema applies to it).
+const projectBrochureParamsSchema = {
+    params: z.object({
+        id: z.string().uuid('id must be a valid UUID')
+    })
+};
+
+// Params-only schema for GET /:id/brochure (authenticated download).
+const projectParamsSchema = {
+    params: z.object({
+        id: z.string().uuid('id must be a valid UUID')
+    })
+};
+
 module.exports = {
     getProjectsQuerySchema,
     createProjectSchema,
-    updateProjectSchema
+    updateProjectSchema,
+    projectBrochureParamsSchema,
+    projectParamsSchema
 };

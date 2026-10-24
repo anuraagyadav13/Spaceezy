@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, PanelLeftClose, PanelLeftOpen, Search, Bell, CheckCheck } from "lucide-react";
+import { Menu, PanelLeftClose, PanelLeftOpen, Bell, CheckCheck } from "lucide-react";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import { useNotifications } from "../../features/notifications/hooks/useNotifications";
 import { useMarkNotificationRead, useMarkAllNotificationsRead } from "../../features/notifications/hooks/useMarkNotificationsRead";
@@ -66,14 +66,6 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
                 >
                     {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
                 </button>
-                <div className="hidden sm:flex items-center bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100 w-64">
-                    <Search size={16} className="text-gray-400 mr-2" />
-                    <input 
-                        type="text" 
-                        placeholder="Search anything..." 
-                        className="bg-transparent border-none text-sm focus:outline-none w-full text-gray-700"
-                    />
-                </div>
             </div>
 
             <div className="flex items-center gap-4 sm:gap-6">

@@ -5,8 +5,8 @@ import { AuthProvider } from "../features/auth/providers/AuthProvider";
 import ToastContainer from "../components/shared/ToastContainer";
 
 export const metadata = {
-  title: "SpaceEzy CRM",
-  description: "Owner and Employee CRM for SpaceEzy real estate",
+  title: "Spaceezy CRM",
+  description: "Owner and Employee CRM for Spaceezy real estate",
 };
 
 export default function RootLayout({ children }) {

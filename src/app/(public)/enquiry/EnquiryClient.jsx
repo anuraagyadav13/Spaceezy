@@ -6,6 +6,7 @@ import {
     fetchPublicProjects,
     fetchPublicConfigurations,
     fetchPublicProperty,
+    fetchPublicLocations,
     submitPublicEnquiry,
 } from "../../../lib/api/publicSite";
 import { formatPrice } from "../../../utils/format";
@@ -19,13 +20,18 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
     const [projects, setProjects] = useState([]);
     const [unitTypes, setUnitTypes] = useState([]);
     const [property, setProperty] = useState(null);
+    // State -> District -> Region master, fetched once from the public
+    // locations endpoint (no login needed). Drives the cascading selects.
+    const [states, setStates] = useState([]);
     const [form, setForm] = useState({
         name: "",
         phone: "",
         email: "",
         projectSlug: projectSlug || "",
         projectOther: "",
-        location: "",
+        stateId: "",
+        districtId: "",
+        regionId: "",
         date: "",
         time: "10:00",
         unitType: configuration || "",
@@ -47,6 +53,11 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                 if (active) setUnitTypes(Array.isArray(list) ? list : []);
             })
             .catch(() => {});
+        fetchPublicLocations()
+            .then((list) => {
+                if (active) setStates(Array.isArray(list) ? list : []);
+            })
+            .catch(() => {});
         if (propertyToken) {
             fetchPublicProperty(propertyToken)
                 .then((detail) => {
@@ -60,6 +71,16 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
     }, [propertyToken]);
 
     const selectedProject = projects.find((project) => project.slug === (projectSlug || form.projectSlug));
+
+    // Cascading location picks -> one readable string ("Region, District,
+    // State"), deepest choice first. Every level is optional, so a skipped
+    // level simply drops out of the label.
+    const selectedState = states.find((state) => state.id === form.stateId) || null;
+    const selectedDistrict = selectedState?.districts?.find((d) => d.id === form.districtId) || null;
+    const selectedRegion = selectedDistrict?.regions?.find((r) => r.id === form.regionId) || null;
+    const locationLabel = [selectedRegion?.name, selectedDistrict?.name, selectedState?.name]
+        .filter(Boolean)
+        .join(", ");
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -76,7 +97,7 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
         // Enquiry context the visitor states in their own words. These are real
         // columns on Lead, so they stay filterable and reportable instead of
         // being buried in the free-text `message`.
-        if (form.location.trim()) payload.enquiryLocation = form.location.trim();
+        if (locationLabel) payload.enquiryLocation = locationLabel;
         // Only meaningful when no project was resolved: a dropdown pick (or a
         // deep link) already yields projectId server-side. `form.projectOther`
         // persists after a later dropdown pick, so guard on both.
@@ -221,7 +242,7 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                             </select>
                             {!form.projectSlug && (
                                 <>
-                                    <p className="text-xs text-gray-400 mt-2">If your project isn't listed, type it below.</p>
+                                    <p className="text-xs text-gray-400 mt-2">If your project isn&apos;t listed, type it below.</p>
                                     <input
                                         id="enquiry-project-other"
                                         value={form.projectOther}
@@ -235,14 +256,59 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                     )}
 
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-location">Location (Optional)</label>
-                        <input
-                            id="enquiry-location"
-                            value={form.location}
-                            onChange={(e) => setForm({ ...form, location: e.target.value })}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                            placeholder="City / locality you're interested in"
-                        />
+                        <span className="text-xs font-bold text-gray-500 uppercase mb-2 block">Location (Optional)</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label className="sr-only" htmlFor="enquiry-state">State</label>
+                                <select
+                                    id="enquiry-state"
+                                    value={form.stateId}
+                                    onChange={(e) => setForm({ ...form, stateId: e.target.value, districtId: "", regionId: "" })}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                >
+                                    <option value="">Select state</option>
+                                    {states.map((state) => (
+                                        <option key={state.id} value={state.id}>{state.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="sr-only" htmlFor="enquiry-district">District</label>
+                                <select
+                                    id="enquiry-district"
+                                    disabled={!form.stateId}
+                                    value={form.districtId}
+                                    onChange={(e) => setForm({ ...form, districtId: e.target.value, regionId: "" })}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <option value="">{form.stateId ? "Select district" : "Select state first"}</option>
+                                    {(selectedState?.districts || []).map((district) => (
+                                        <option key={district.id} value={district.id}>{district.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="sr-only" htmlFor="enquiry-region">Region</label>
+                                <select
+                                    id="enquiry-region"
+                                    disabled={!form.districtId}
+                                    value={form.regionId}
+                                    onChange={(e) => setForm({ ...form, regionId: e.target.value })}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <option value="">
+                                        {!form.districtId
+                                            ? "Select district first"
+                                            : (selectedDistrict?.regions || []).length
+                                                ? "Select region"
+                                                : "No regions listed"}
+                                    </option>
+                                    {(selectedDistrict?.regions || []).map((region) => (
+                                        <option key={region.id} value={region.id}>{region.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <div>

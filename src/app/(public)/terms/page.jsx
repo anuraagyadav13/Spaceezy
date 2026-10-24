@@ -1,6 +1,6 @@
 export const metadata = {
-    title: "Terms of Service | SpaceEzy",
-    description: "Terms of service for using the SpaceEzy real estate platform and enquiry services.",
+    title: "Terms of Service | Spaceezy",
+    description: "Terms of service for using the Spaceezy real estate platform and enquiry services.",
     alternates: { canonical: "/terms" },
     robots: { index: true, follow: true },
 };
@@ -15,13 +15,13 @@ export default function Terms() {
                     <p>Last updated: January 2026</p>
                     
                     <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">1. Acceptance of Terms</h2>
-                    <p>By accessing and using SpaceEzy&apos;s website and services, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by these terms, please do not use this service.</p>
+                    <p>By accessing and using Spaceezy&apos;s website and services, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by these terms, please do not use this service.</p>
                     
                     <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">2. Real Estate Information</h2>
                     <p>All property prices, availability, and specifications provided on this website are for informational purposes only. While we strive to keep information accurate and up-to-date, we do not guarantee the accuracy, completeness, or timeliness of any information on the site. Prices and availability are subject to change without notice.</p>
 
                     <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">3. Brokerage and Transactions</h2>
-                    <p>SpaceEzy acts as a facilitator for real estate transactions. We are not responsible for any disputes arising between buyers, sellers, and developers. All formal agreements will be executed directly between the transacting parties.</p>
+                    <p>Spaceezy acts as a facilitator for real estate transactions. We are not responsible for any disputes arising between buyers, sellers, and developers. All formal agreements will be executed directly between the transacting parties.</p>
                 </div>
             </div>
         </div>

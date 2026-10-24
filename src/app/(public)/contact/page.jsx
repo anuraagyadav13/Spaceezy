@@ -2,6 +2,7 @@
 import { Mail, Phone, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { PHONE_DISPLAY, PHONE_TEL, WHATSAPP_NUMBER } from "../../../lib/seo/site";
 
 export default function ContactPage() {
     return (
@@ -21,9 +22,9 @@ export default function ContactPage() {
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">Phone</h3>
                         <p className="text-gray-500 mb-4">Mon-Sat from 9am to 6pm.</p>
-                        <a href="tel:+917827267897" className="text-purple-600 font-bold text-lg hover:underline">+91 78272 67897</a>
+                        <a href={`tel:${PHONE_TEL}`} className="text-purple-600 font-bold text-lg hover:underline">{PHONE_DISPLAY}</a>
                         <a
-                            href="https://wa.me/917827267897?text=Hi%20SpaceEzy!%20I'm%20interested%20in%20your%20properties."
+                            href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hi Spaceezy! I'm interested in your properties.")}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="mt-3 inline-block bg-[#25D366] text-white text-sm font-bold px-5 py-2 rounded-full hover:bg-[#1EBE5A] transition-colors"
@@ -38,7 +39,7 @@ export default function ContactPage() {
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">Email</h3>
                         <p className="text-gray-500 mb-4">We usually respond within 24 hours.</p>
-                        <a href="mailto:admin@spaceezy.com" className="text-purple-600 font-bold text-lg hover:underline">admin@spaceezy.com</a>
+                        <a href="mailto:admin@Spaceezy.com" className="text-purple-600 font-bold text-lg hover:underline">admin@Spaceezy.com</a>
                     </div>
                     
                     <div className="bg-gray-50 rounded-[32px] p-8 text-center flex flex-col items-center border border-gray-100">

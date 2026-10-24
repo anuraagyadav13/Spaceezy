@@ -886,6 +886,12 @@ model WhatsAppMessage {
 
   providerMessageId String?
 
+  // Companion document metadata (generated brochure PDF delivered alongside
+  // the message). Columns added by migration
+  // 20261021130000_whatsapp_message_attachment.
+  attachmentUrl   String?
+  attachmentName String?
+
   sentById String?
   sentBy   User?   @relation(fields: [sentById], references: [id], onDelete: SetNull)
 
