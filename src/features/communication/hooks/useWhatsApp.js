@@ -5,6 +5,9 @@ import {
     createConversation,
     fetchMessages,
     sendWhatsAppMessage,
+    updateConversationStatus,
+    assignConversation,
+    markConversationRead,
     fetchWhatsAppTemplates,
     fetchTemplateLibrary,
     createWhatsAppTemplate,
@@ -32,6 +35,9 @@ export const useConversations = (params = {}, options = {}) =>
         queryKey: ["whatsapp-conversations", params],
         queryFn: () => fetchConversations(params),
         enabled: options.enabled !== false,
+        // Optional background polling for the shared inbox (callers opt in;
+        // default keeps the previous no-poll behaviour for other pages).
+        refetchInterval: options.refetchInterval,
         retry: 1
     });
 
@@ -66,6 +72,40 @@ export const useSendMessage = () => {
             queryClient.invalidateQueries({ queryKey: ["whatsapp-conversations"] });
         },
         onSettled: () => invalidateComm(queryClient)
+    });
+};
+
+// Close / reopen a conversation (server scope-checks the caller).
+export const useUpdateConversationStatus = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: updateConversationStatus,
+        onSettled: () => invalidateComm(queryClient)
+    });
+};
+
+// Assign a conversation — reuses lead assignment server-side, so the lead
+// detail panel must refetch too (same owner, shown in both places).
+export const useAssignConversation = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: assignConversation,
+        onSuccess: (data) => {
+            if (data?.leadId) {
+                queryClient.invalidateQueries({ queryKey: ["lead", data.leadId] });
+                queryClient.invalidateQueries({ queryKey: ["leads"] });
+            }
+        },
+        onSettled: () => invalidateComm(queryClient)
+    });
+};
+
+// Reset the shared unread counter when a thread is opened.
+export const useMarkConversationRead = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: markConversationRead,
+        onSettled: () => queryClient.invalidateQueries({ queryKey: ["whatsapp-conversations"] })
     });
 };
 

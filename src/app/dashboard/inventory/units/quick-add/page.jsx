@@ -350,7 +350,9 @@ export default function QuickAddWizard() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div>
                             <h3 className="text-[13px] font-bold uppercase tracking-[0.18em] text-gray-700">Unit type <span className="text-violet-600">*</span></h3>
-                            <div className="mt-5 grid grid-cols-3 gap-4">
+                            {/* Stack on phones so the fixed-width illustrations keep their
+                                proportions (grid-cols-3 squeezed them to ~45% at 375px). */}
+                            <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 {UNIT_TYPES.map((unit) => {
                                     const selected = formData.type === unit.name;
                                     return (

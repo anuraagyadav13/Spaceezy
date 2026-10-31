@@ -812,11 +812,12 @@ describe('Phase 17: house-number-free template catalog contract', () => {
     expect(getCatalogEntry('Visit Reminder').body).toContain('{{project_name}}');
   });
 
-  test('Property Quotation entry carries quotation_url in body and variables', () => {
+  test('Property Quotation entry links the short project page, never a giant quote url', () => {
     const entry = getCatalogEntry('Property Quotation');
     expect(entry).toBeTruthy();
-    expect(entry.variables).toEqual(['customer_name', 'project_name', 'quotation_url', 'salesperson_name']);
-    expect(entry.body).toContain('{{quotation_url}}');
+    expect(entry.variables).toEqual(['customer_name', 'project_name', 'project_url', 'salesperson_name']);
+    expect(entry.body).toContain('{{project_url}}');
+    expect(entry.body).not.toContain('{{quotation_url}}');
     expect(entry.body).not.toMatch(/\{\{\s*property_name\s*\}\}/);
   });
 

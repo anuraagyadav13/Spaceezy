@@ -5,6 +5,9 @@ const {
     listConversations,
     createConversation,
     getMessages,
+    updateConversation,
+    assignConversation,
+    markConversationRead,
     sendMessage,
     listTemplates,
     listLibrary,
@@ -24,6 +27,9 @@ const {
     idParamsSchema,
     createConversationSchema,
     listConversationsQuerySchema,
+    updateConversationSchema,
+    assignConversationSchema,
+    markReadSchema,
     listMessagesQuerySchema,
     sendMessageSchema,
     createTemplateSchema,
@@ -48,13 +54,33 @@ const settingsLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+// Shared-inbox mutations (send, close/reopen, assign, mark-read) share one
+// generous per-IP budget: comfortably above what an agent produces in an
+// active session, still enough to stop scripted abuse of the write paths
+// (audit rows, provider calls). Same response shape as settingsLimiter.
+const conversationActionLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 120,
+    message: { success: false, message: 'Too many messaging actions, please slow down and try again shortly.', code: 'TOO_MANY_REQUESTS' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 const adminOnly = () => requireRole(['SUPER_ADMIN', 'ADMIN']);
 
 router.get('/status', requirePermission('whatsapp:view'), getStatus);
 router.get('/conversations', requirePermission('whatsapp:view'), validate(listConversationsQuerySchema), listConversations);
 router.post('/conversations', requirePermission('whatsapp:create'), validate(createConversationSchema), createConversation);
 router.get('/conversations/:id', requirePermission('whatsapp:view'), validate({ ...idParamsSchema, ...listMessagesQuerySchema }), getMessages);
-router.post('/conversations/:id/messages', requirePermission('whatsapp:create'), validate(sendMessageSchema), sendMessage);
+router.post('/conversations/:id/messages', requirePermission('whatsapp:create'), conversationActionLimiter, validate(sendMessageSchema), sendMessage);
+// Shared-inbox conversation management (all scope-checked inside the service):
+// close/reopen needs whatsapp:create (executives: own threads only);
+// assignment reuses lead assignment → lead:assign (admins/managers only);
+// mark-read needs whatsapp:view + conversation scope. All three share the
+// send route's mutation budget.
+router.patch('/conversations/:id', requirePermission('whatsapp:create'), conversationActionLimiter, validate({ ...idParamsSchema, ...updateConversationSchema }), updateConversation);
+router.post('/conversations/:id/assign', requirePermission('lead:assign'), conversationActionLimiter, validate({ ...idParamsSchema, ...assignConversationSchema }), assignConversation);
+router.post('/conversations/:id/read', requirePermission('whatsapp:view'), conversationActionLimiter, validate({ ...idParamsSchema, ...markReadSchema }), markConversationRead);
 router.get('/templates', requirePermission('whatsapp:view'), validate(listTemplatesQuerySchema), listTemplates);
 router.get('/templates/library', requirePermission('whatsapp:view'), listLibrary);
 router.post('/templates', requirePermission('whatsapp:manage'), validate(createTemplateSchema), createTemplate);

@@ -16,8 +16,35 @@ const listConversationsQuerySchema = {
     query: z.object({
         leadId: z.string().uuid().optional(),
         status: z.enum(['ACTIVE', 'CLOSED']).optional(),
-        limit: z.string().regex(/^\d+$/).optional()
+        limit: z.string().regex(/^\d+$/).optional(),
+        // Shared-inbox filters (all optional — older clients unchanged):
+        // text search over the conversation's lead name/phone.
+        q: z.string().trim().max(100).optional(),
+        // Assignee filter: a user UUID, or the literal 'unassigned'
+        // (lead.assignedToId IS NULL). Restricted roles ignore it — the
+        // service still forces them onto their own leads.
+        assignedToId: z.union([z.string().uuid(), z.literal('unassigned')]).optional()
     })
+};
+
+// Close / reopen a conversation. Intentionally scoped to the status field
+// only — assignment and read state have their own endpoints.
+const updateConversationSchema = {
+    body: z.object({
+        status: z.enum(['ACTIVE', 'CLOSED'])
+    })
+};
+
+// Assign a conversation to an employee (or unassign with null).
+// Assignment reuses the lead's assignedToId — see assignConversation().
+const assignConversationSchema = {
+    body: z.object({
+        assignedToId: z.string().uuid('assignedToId must be a valid UUID').nullable()
+    })
+};
+
+const markReadSchema = {
+    body: z.object({}).optional()
 };
 
 const listMessagesQuerySchema = {
@@ -187,6 +214,9 @@ module.exports = {
     idParamsSchema,
     createConversationSchema,
     listConversationsQuerySchema,
+    updateConversationSchema,
+    assignConversationSchema,
+    markReadSchema,
     listMessagesQuerySchema,
     sendMessageSchema,
     createTemplateSchema,

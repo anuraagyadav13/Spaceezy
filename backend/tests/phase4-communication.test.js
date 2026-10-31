@@ -1391,11 +1391,26 @@ describe('Phase 4 - Meta Cloud API provider (stubbed transport, no network)', ()
     expect(JSON.parse(init.body)).toMatchObject({
       type: 'template',
       template: {
-        name: 'Visit Reminder',
+        // display name normalized at the provider boundary: Meta only
+        // accepts lowercase_snake_case template names
+        name: 'visit_reminder',
         language: { code: 'en' },
         components: [{ type: 'body', parameters: [{ type: 'text', text: 'Rohit' }, { type: 'text', text: '12 Oct' }] }],
       },
     });
+  });
+
+  test('checkConnection probes the sender with a GET and a single path id', async () => {
+    const spy = stubGraph({ display_phone_number: '+1 555-651-6254', verified_name: 'Test Number' });
+    const provider = new MetaWhatsAppProvider();
+
+    const result = await provider.checkConnection();
+
+    expect(result).toEqual({ ok: true, displayPhoneNumber: '+1 555-651-6254', verifiedName: 'Test Number' });
+    expect(spy).toHaveBeenCalledTimes(1);
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe('https://graph.facebook.com/v21.0/1411466198708019?fields=display_phone_number%2Cverified_name');
+    expect(init.method).toBe('GET');
   });
 
   test('Meta API errors and network failures surface as 502, never fake success', async () => {

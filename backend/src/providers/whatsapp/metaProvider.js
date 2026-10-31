@@ -1,5 +1,6 @@
 const { AppError } = require('../../utils/errors');
 const { verifyHmacSha256 } = require('../../utils/hmac');
+const { normalizeMetaTemplateName } = require('../../utils/metaTemplateName');
 
 // Official WhatsApp Business Platform (Cloud API) transport.
 //
@@ -58,8 +59,18 @@ async function graphRequest(path, payload, credentials) {
         throw new AppError('WhatsApp API returned a non-JSON response', 502, 'WHATSAPP_PROVIDER_ERROR');
     }
     if (!res.ok) {
-        const metaMessage = data && data.error && data.error.message ? String(data.error.message) : `HTTP ${res.status}`;
-        throw new AppError(`WhatsApp API error: ${metaMessage}`, 502, 'WHATSAPP_PROVIDER_ERROR');
+        const metaError = (data && data.error) || {};
+        const metaMessage = metaError.message ? String(metaError.message) : `HTTP ${res.status}`;
+        const metaDetail = metaError.code
+            ? ` (Meta code ${metaError.code}${metaError.type ? `, ${metaError.type}` : ''})`
+            : '';
+        // Code 190 / OAuthException = Meta rejected the stored access token —
+        // in practice an expired or revoked temporary token. Name the fix
+        // instead of surfacing a cryptic one-liner.
+        const hint = (metaError.code === 190 || /authentication/i.test(metaMessage))
+            ? ' — the saved WhatsApp access token is invalid or expired; generate a new token in Meta Business Manager and save it in WhatsApp Settings'
+            : '';
+        throw new AppError(`WhatsApp API error: ${metaMessage}${metaDetail}${hint}`, 502, 'WHATSAPP_PROVIDER_ERROR');
     }
     return data;
 }
@@ -113,7 +124,12 @@ class MetaWhatsAppProvider {
 
     async sendTemplate({ to, templateName, variables = [], language = 'en', credentials }) {
         const recipient = normalizeRecipient(to);
-        if (!templateName || !String(templateName).trim()) {
+        // Local library rows carry display names ("Property Quotation"); Meta
+        // only accepts lowercase_snake_case template names, so normalize at
+        // the boundary — the same slug we tell the user to create in
+        // WhatsApp Manager, keeping CRM name and Meta name always in sync.
+        const name = normalizeMetaTemplateName(templateName);
+        if (!name) {
             throw new AppError('Template name is required', 400, 'VALIDATION_ERROR');
         }
         const parameters = (Array.isArray(variables) ? variables : []).map((value) => ({
@@ -121,8 +137,8 @@ class MetaWhatsAppProvider {
             text: String(value ?? '')
         }));
         const template = {
-            name: String(templateName).trim(),
-            language: { code: language || 'en' }
+            name,
+            language: { code: language || 'en_US' }
         };
         if (parameters.length > 0) {
             template.components = [{ type: 'body', parameters }];
@@ -235,9 +251,14 @@ class MetaWhatsAppProvider {
     // action: resolves the sender number object. Never sends messages,
     // registers numbers, or changes Meta state. Returns display-safe fields.
     async checkConnection(credentials) {
-        const data = await graphRequest(
-            `/${(credentials && credentials.phoneNumberId) || config(credentials).phoneNumberId}?fields=display_phone_number,verified_name`,
-            undefined,
+        // GET the sender object itself. graphRequest always POSTs and
+        // prefixes the phone number id — using it here would hit
+        // /{id}/{id} with a POST, which Meta rejects as "Unknown path
+        // components". graphGet takes a full path after the version.
+        const phoneNumberId = (credentials && credentials.phoneNumberId) || config(credentials).phoneNumberId;
+        const data = await this.graphGet(
+            phoneNumberId,
+            { fields: 'display_phone_number,verified_name' },
             credentials
         );
         return {
