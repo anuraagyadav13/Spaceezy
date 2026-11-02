@@ -1,4 +1,5 @@
 const { AppError } = require('../../utils/errors');
+const { TEMPLATE_LANGUAGE } = require('../../constants/whatsapp');
 const MockWhatsAppProvider = require('./mockProvider');
 
 // Generic HTTP WhatsApp Business API gateway.
@@ -64,7 +65,7 @@ class GenericHttpWhatsAppProvider {
             messaging_product: 'whatsapp',
             to,
             type: 'template',
-            template: { name, language: { code: language || 'en' }, ...(components ? { components } : {}) }
+            template: { name, language: { code: language || TEMPLATE_LANGUAGE }, ...(components ? { components } : {}) }
         });
         return {
             providerMessageId: data.messages?.[0]?.id || data.id || null,

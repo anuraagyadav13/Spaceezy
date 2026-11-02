@@ -1,5 +1,6 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { TEMPLATE_LANGUAGE } = require('../constants/whatsapp');
 const { getWhatsAppProvider } = require('../providers/whatsapp');
 const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
 const WhatsappSettingsService = require('./whatsappSettingsService');
@@ -836,7 +837,7 @@ class WhatsAppService {
                     organizationId,
                     name: entry.name,
                     providerTemplateId: null,
-                    language: 'en_US',
+                    language: TEMPLATE_LANGUAGE,
                     category: entry.metaCategory,
                     description: entry.description,
                     body: entry.body,
@@ -876,7 +877,7 @@ class WhatsAppService {
                 organizationId,
                 name: data.name,
                 providerTemplateId: data.providerTemplateId || null,
-                language: data.language || 'en_US',
+                language: data.language || TEMPLATE_LANGUAGE,
                 category: data.category || 'UTILITY',
                 description: data.description || null,
                 body: data.body || null,
