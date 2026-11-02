@@ -36,6 +36,56 @@ const sendMessageSchema = {
         // page it promotes (tracked on the lead timeline).
         share: z.object({
             propertyId: z.string().uuid('propertyId must be a valid UUID')
+        }).optional(),
+        // Optional companion media, opt-in per send: the server resolves the
+        // employee-uploaded brochure PDF, the two-page itemised quotation,
+        // and/or the property's gallery images — each delivered as its own
+        // message alongside the text. Nothing is ever generated: the
+        // brochure is exactly the file an employee uploaded.
+        attachment: z.object({
+            projectId: z.string().uuid('projectId must be a valid UUID'),
+            propertyId: z.string().uuid('propertyId must be a valid UUID').optional(),
+            // Include the PDF (default true — older clients that never send
+            // the flag keep the old behaviour).
+            pdf: z.boolean().optional(),
+            // Which document(s) `pdf` carries — 'brochure' and 'quotation'
+            // are independent options (tick either, or both in one send).
+            kind: z.enum(['brochure', 'quotation']).optional(),
+            // Full ordered list when more than one document rides the send.
+            // WhatsApp carries one document per message, so the service
+            // delivers each as its own message and files one thread row per
+            // file. Falls back to `kind` for older single-PDF clients.
+            kinds: z.array(z.enum(['brochure', 'quotation'])).max(2).optional(),
+            // Per-send add-on values printed on the quotation (floor rise,
+            // upgrades …) and summed into its total. Re-validated again by
+            // sanitizeAddons before anything renders or persists.
+            addons: z.array(z.object({
+                name: z.string().trim().min(1).max(60),
+                amount: z.number().positive().max(999999999)
+            })).max(8).optional(),
+            // The full editable quotation sheet: cost rows (name / basis /
+            // amount), the brokerage % of the net base value, the GST % on
+            // that brokerage and the payout-schedule ratios. The renderer
+            // re-validates every field (sanitizeQuote) — raising the
+            // brokerage % reprices the fee, its GST and each instalment.
+            quote: z.object({
+                rows: z.array(z.object({
+                    name: z.string().trim().min(1).max(60),
+                    basis: z.string().trim().max(90).optional(),
+                    amount: z.number().min(0).max(999999999)
+                })).max(12).optional(),
+                brokerPct: z.number().min(0).max(100).optional(),
+                gstPct: z.number().min(0).max(100).optional(),
+                payouts: z.array(z.object({
+                    label: z.string().trim().min(1).max(90),
+                    ratio: z.number().min(0).max(100)
+                })).max(6).optional(),
+                // Builder-direct flats carry no commission: false pulls the
+                // fee, its GST and the payout schedule off the printed sheet.
+                brokerageOn: z.boolean().optional()
+            }).optional(),
+            // Also send the unit's (or project's) gallery images.
+            images: z.boolean().optional()
         }).optional()
     }).refine(
         (b) => (b.templateName && b.templateName.trim()) || (b.body && b.body.trim()),

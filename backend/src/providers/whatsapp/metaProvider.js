@@ -141,6 +141,61 @@ class MetaWhatsAppProvider {
         return { providerMessageId: wamid, status: 'SENT' };
     }
 
+    // Companion document message for brochure attachments. Template (HSM)
+    // messages cannot carry files, so the PDF goes out as its own `document`
+    // message from the same number; `link` must be a public HTTPS URL Meta
+    // can fetch (the brochure route qualifies).
+    async sendDocument({ to, attachment, caption, credentials }) {
+        const recipient = normalizeRecipient(to);
+        if (!attachment || !attachment.url) {
+            throw new AppError('Attachment URL is required', 400, 'VALIDATION_ERROR');
+        }
+        const document = {
+            link: String(attachment.url),
+            filename: String(attachment.filename || attachment.name || 'brochure.pdf').slice(0, 128)
+        };
+        if (caption) document.caption = String(caption).slice(0, 1024);
+        const data = await graphRequest('/messages', {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: recipient,
+            type: 'document',
+            document
+        }, credentials);
+        const wamid = data && data.messages && data.messages[0] && data.messages[0].id;
+        if (!wamid) {
+            throw new AppError('WhatsApp API accepted the document but returned no message id', 502, 'WHATSAPP_PROVIDER_ERROR');
+        }
+        return { providerMessageId: wamid, status: 'SENT' };
+    }
+
+    // Companion image message for property photos. Same rules as documents:
+    // `link` must be a public HTTPS URL Meta can fetch, and free-form media
+    // is only accepted inside the 24-hour service window (the service gates
+    // that before calling in).
+    async sendImage({ to, image, caption, credentials }) {
+        const recipient = normalizeRecipient(to);
+        if (!image || !image.url) {
+            throw new AppError('Image URL is required', 400, 'VALIDATION_ERROR');
+        }
+        const media = {
+            link: String(image.url)
+        };
+        if (caption) media.caption = String(caption).slice(0, 200);
+        const data = await graphRequest('/messages', {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: recipient,
+            type: 'image',
+            image: media
+        }, credentials);
+        const wamid = data && data.messages && data.messages[0] && data.messages[0].id;
+        if (!wamid) {
+            throw new AppError('WhatsApp API accepted the image but returned no message id', 502, 'WHATSAPP_PROVIDER_ERROR');
+        }
+        return { providerMessageId: wamid, status: 'SENT' };
+    }
+
     // Authenticated GET helper for read-only Meta queries (approval checks,
     // connection probes). Same error mapping and timeout discipline as sends.
     async graphGet(path, params, credentials) {

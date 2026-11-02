@@ -26,16 +26,19 @@ const TEMPLATE_LIBRARY = [
         name: 'Property Snapshot',
         group: 'Property Information',
         description: 'Key details of a property for an interested buyer.',
-        body: 'Hi {{customer_name}}, here is a quick snapshot of {{property_name}} at {{project_name}}, {{location}}: {{configuration}}, priced at {{price_range}}. Reply here and I will arrange the complete details. - {{salesperson_name}}',
-        variables: ['customer_name', 'property_name', 'project_name', 'location', 'configuration', 'price_range', 'salesperson_name'],
+        // No {{property_name}}: unit titles ARE the apartment numbers
+        // (A-101 / A-102) and house numbers never go out in WhatsApp text.
+        // The project + configuration identify the offering instead.
+        body: 'Hi {{customer_name}}, here is a quick snapshot of {{project_name}}, {{location}}: {{configuration}}, priced at {{price_range}}. Reply here and I will arrange the complete details. - {{salesperson_name}}',
+        variables: ['customer_name', 'project_name', 'location', 'configuration', 'price_range', 'salesperson_name'],
         metaCategory: 'UTILITY'
     },
     {
         name: 'Price Details',
         group: 'Property Information',
         description: 'Share the price position of a property on request.',
-        body: 'Hi {{customer_name}}, as requested, {{property_name}} is currently priced at {{price_range}}. Happy to walk you through payment options whenever convenient. - {{salesperson_name}}',
-        variables: ['customer_name', 'property_name', 'price_range', 'salesperson_name'],
+        body: 'Hi {{customer_name}}, as requested, {{project_name}} is currently priced at {{price_range}}. Happy to walk you through payment options whenever convenient. - {{salesperson_name}}',
+        variables: ['customer_name', 'project_name', 'price_range', 'salesperson_name'],
         metaCategory: 'UTILITY'
     },
     {
@@ -55,6 +58,14 @@ const TEMPLATE_LIBRARY = [
         metaCategory: 'UTILITY'
     },
     {
+        name: 'Property Quotation',
+        group: 'Floor Plan & Brochure',
+        description: 'Send an itemised price quotation with the payment schedule.',
+        body: 'Hi {{customer_name}}, here is the detailed quotation for {{project_name}} with the full cost breakdown and payment schedule: {{quotation_url}}. Happy to walk you through the terms whenever you like. - {{salesperson_name}}',
+        variables: ['customer_name', 'project_name', 'quotation_url', 'salesperson_name'],
+        metaCategory: 'UTILITY'
+    },
+    {
         name: 'Enquiry Follow-up',
         group: 'New Enquiry Follow-up',
         description: 'Re-engage a new enquiry that went quiet.',
@@ -66,8 +77,10 @@ const TEMPLATE_LIBRARY = [
         name: 'Visit Reminder',
         group: 'Site Visit Reminder',
         description: 'Remind a lead of a scheduled site visit.',
-        body: 'Hi {{customer_name}}, a friendly reminder of your site visit to {{property_name}} on {{visit_date}} at {{visit_time}}. Site address: {{site_address}}. Reply here if you need to reschedule. - {{salesperson_name}}',
-        variables: ['customer_name', 'property_name', 'visit_date', 'visit_time', 'site_address', 'salesperson_name'],
+        // {{project_name}}, never {{property_name}} — house numbers stay out
+        // of WhatsApp text; {{site_address}} already carries where to go.
+        body: 'Hi {{customer_name}}, a friendly reminder of your site visit to {{project_name}} on {{visit_date}} at {{visit_time}}. Site address: {{site_address}}. Reply here if you need to reschedule. - {{salesperson_name}}',
+        variables: ['customer_name', 'project_name', 'visit_date', 'visit_time', 'site_address', 'salesperson_name'],
         metaCategory: 'UTILITY'
     },
     {

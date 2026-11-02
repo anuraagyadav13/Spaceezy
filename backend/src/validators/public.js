@@ -33,6 +33,11 @@ const publicEnquirySchema = {
             .optional().nullable(),
         preferredVisitTime: z.string().max(50).optional().nullable(),
         interestedUnitType: z.string().max(100).optional().nullable(),
+        // Enquiry context the visitor states in their own words. Kept as real
+        // columns (not folded into `message`) so leads stay filterable and
+        // reportable by area and by the project they actually asked for.
+        enquiryLocation: z.string().max(200).optional().nullable(),
+        requestedProjectName: z.string().max(200).optional().nullable(),
         source: z.string().max(50).optional().nullable(),
         campaign: z.string().max(200).optional().nullable(),
         landingPage: z.string().max(500).optional().nullable()
@@ -92,10 +97,42 @@ const publicPropertyParamSchema = {
     })
 };
 
+// Project documents (the employee-uploaded brochure PDF): `projectId` is an
+// internal UUID delivered to customers via WhatsApp links only — the public
+// project list does NOT expose ids. The controller still verifies the project
+// is public, active and in this organization before serving anything. The file
+// itself lives in the private storage bucket / local uploads dir — this route
+// is the delivery path WhatsApp/Meta fetches.
+const publicDocumentQuerySchema = {
+    query: z.object({
+        projectId: z.string().uuid('projectId must be a valid UUID')
+    })
+};
+
+// Quotation PDF: same shape as the documents query. `by` (salesperson) and
+// `customer` are display-only names printed on the document — they are
+// sanitized again at render time and never trusted for anything else.
+// `addons` is a legacy JSON array of per-send add-on values. `quote` is the
+// full editable sheet (cost rows + brokerage % + GST % + payout ratios) as
+// JSON; both are fully re-validated at render time (count, name length,
+// bounded amounts/percentages) — nothing from the URL is trusted.
+const publicQuotationQuerySchema = {
+    query: z.object({
+        projectId: z.string().uuid('projectId must be a valid UUID'),
+        unit: z.string().uuid('unit must be a valid UUID').optional(),
+        by: z.string().max(60).optional(),
+        customer: z.string().max(60).optional(),
+        addons: z.string().max(2000).optional(),
+        quote: z.string().max(4000).optional()
+    })
+};
+
 module.exports = {
     publicEnquirySchema,
     listPublicProjectsQuerySchema,
     listPublicPropertiesQuerySchema,
     publicProjectParamSchema,
-    publicPropertyParamSchema
+    publicPropertyParamSchema,
+    publicDocumentQuerySchema,
+    publicQuotationQuerySchema
 };

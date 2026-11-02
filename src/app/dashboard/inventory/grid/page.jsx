@@ -3,13 +3,14 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
-    Building2, Layers, Search, Loader2, AlertCircle, Plus, LayoutGrid
+    Building2, Layers, Search, Loader2, AlertCircle, Plus, LayoutGrid, UploadCloud, X
 } from "lucide-react";
 import { fetchProjects } from "../../../../lib/api/projects";
 import { fetchProperties, updateProperty } from "../../../../lib/api/properties";
 import { PermissionGate } from "../../../../features/auth/components/PermissionGate";
 import { showToast } from "../../../../lib/toast";
 import { formatCurrency } from "../../../../features/pipeline/helpers";
+import BulkImportInventory from "../../../../components/BulkImportInventory";
 
 const STATUS_META = {
     AVAILABLE: { label: "Available", badge: "bg-emerald-500 text-white", dot: "bg-emerald-500" },
@@ -33,6 +34,9 @@ export default function InventoryGridPage() {
     const [selectedStatus, setSelectedStatus] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
     const [activeUnit, setActiveUnit] = useState(null);
+    // Bulk import merged in from the old standalone page: opens as a dialog
+    // right here, so imported units land straight in this matrix.
+    const [importOpen, setImportOpen] = useState(false);
 
     const { data: projects } = useQuery({
         queryKey: ["projects", "filter-options"],
@@ -131,6 +135,14 @@ export default function InventoryGridPage() {
                         >
                             <Plus size={14} /> Quick Add Unit
                         </Link>
+                    </PermissionGate>
+                    <PermissionGate permission="inventory:create">
+                        <button
+                            onClick={() => setImportOpen(true)}
+                            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 inline-flex items-center gap-1.5"
+                        >
+                            <UploadCloud size={14} /> Bulk Import
+                        </button>
                     </PermissionGate>
                     <Link
                         href="/dashboard/inventory"
@@ -322,6 +334,35 @@ export default function InventoryGridPage() {
                             >
                                 Open full editor →
                             </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk import dialog — the whole flow from the old
+                /dashboard/inventory/import page, hosted here so a successful
+                import refreshes this matrix immediately. */}
+            {importOpen && (
+                <div className="fixed inset-0 z-50 bg-gray-900/50 overflow-y-auto" onClick={() => setImportOpen(false)}>
+                    <div className="min-h-full flex items-start justify-center p-4 sm:p-8">
+                        <div
+                            className="w-full max-w-5xl bg-white rounded-3xl border border-gray-200 shadow-xl my-4"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-100">
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-900">Bulk Import Inventory Units</h2>
+                                    <p className="text-xs text-gray-500 mt-0.5">Upload a CSV of units — validate with a dry run, then import in one transaction.</p>
+                                </div>
+                                <button
+                                    onClick={() => setImportOpen(false)}
+                                    aria-label="Close bulk import"
+                                    className="p-2 rounded-full hover:bg-gray-100 text-gray-500 shrink-0"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <BulkImportInventory initialProjectId={selectedProject} onImported={invalidate} />
                         </div>
                     </div>
                 </div>

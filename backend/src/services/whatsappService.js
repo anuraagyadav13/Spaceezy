@@ -4,10 +4,12 @@ const { getWhatsAppProvider } = require('../providers/whatsapp');
 const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
 const WhatsappSettingsService = require('./whatsappSettingsService');
 const WhatsappNotifyService = require('./whatsappNotifyService');
-const { getCatalogEntry, listCatalog } = require('./templateCatalog');
+const { getCatalogEntry, listCatalog, renderPreview } = require('./templateCatalog');
 const { canSeePII, maskPhone } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
-const { buildPublicPropertyUrl } = require('../utils/publicLink');
+const { buildPublicPropertyUrl, buildPublicApiUrl, slugify } = require('../utils/publicLink');
+const { findBrochureDocument } = require('./storageService');
+const { buildQuotationUrl, sanitizeAddons, sanitizeQuote, VALIDITY_DAYS: QUOTATION_VALIDITY_DAYS } = require('./quotationPdf');
 const { isExecRole } = require('../utils/roles');
 const { assertOwnership } = require('../utils/roles');
 
@@ -180,6 +182,10 @@ class WhatsAppService {
         let templateName = null;
         let variables = null;
         let templateLanguage = null;
+        // What gets stored on the message row. For template sends this is the
+        // fully rendered text, so the thread shows the real message instead of
+        // a "[template: X]" tag; plain sends store their body unchanged.
+        let storedBody = null;
 
         if (data.templateName) {
             let template = await prisma.whatsAppTemplate.findFirst({
@@ -204,6 +210,27 @@ class WhatsAppService {
             if (!template) throw new AppError('Template not found', 404, 'NOT_FOUND');
             if (!template.active) throw new AppError('This template is inactive', 409, 'TEMPLATE_INACTIVE');
 
+            // The row is only a local provisioning copy of the code-owned
+            // catalog (no Meta provider id yet). When the catalog evolves —
+            // e.g. {{property_name}} was removed so house numbers never go
+            // out — a send speaking the CURRENT catalog contract (its
+            // variable count matches the catalog exactly) must validate,
+            // render and store against the catalog, not the stale copy.
+            // Any other count means the caller speaks the row's own
+            // contract (customized rows keep winning) — positionally it is
+            // already aligned with the stored body. In-memory only: the row
+            // itself is untouched (the composer also hides rows that shadow
+            // a catalog name, so no stale variable list is ever sent).
+            const catalogCurrent = getCatalogEntry(data.templateName);
+            const providedNow = Array.isArray(data.variables) ? data.variables : [];
+            if (catalogCurrent && !template.providerTemplateId
+                && typeof template.body === 'string'
+                && providedNow.length === catalogCurrent.variables.length
+                && (template.body !== catalogCurrent.body
+                    || JSON.stringify(template.variables || []) !== JSON.stringify(catalogCurrent.variables))) {
+                template = { ...template, body: catalogCurrent.body, variables: [...catalogCurrent.variables] };
+            }
+
             const required = Array.isArray(template.variables) ? template.variables : [];
             const provided = Array.isArray(data.variables) ? data.variables : [];
             if (provided.length < required.length) {
@@ -217,11 +244,170 @@ class WhatsAppService {
             variables = provided;
             templateLanguage = template.language || null;
             body = template.name; // placeholder body for previews; provider renders template
+            // Render the template's {{placeholders}} against the positional
+            // values (order comes from template.variables — the same contract
+            // the provider uses) so the saved message reads like the actual
+            // text that went out. Templates without preview text keep the
+            // readable tag as a fallback.
+            const declaredNames = Array.isArray(template.variables) ? template.variables : [];
+            const renderValues = {};
+            declaredNames.forEach((name, index) => { renderValues[name] = provided[index]; });
+            storedBody = template.body
+                ? renderPreview(template.body, renderValues).text
+                : `[template: ${template.name}]`;
         } else {
             if (!body || !String(body).trim()) {
                 throw new AppError('Message body is required', 400, 'VALIDATION_ERROR');
             }
             body = String(body).trim();
+        }
+
+        // Optional companion media (all opt-in per send): resolve the target
+        // project within the organization and derive the public PDF link +
+        // filename server-side. The row always records the PDF link so the
+        // CRM thread renders the attachment even on providers that do not
+        // deliver documents (mock/none); providers that do (meta) fetch the
+        // link below. `attachment.kinds` (falling back to the single
+        // `attachment.kind`) picks the document(s), and the two are
+        // INDEPENDENT — both can ride one send: 'brochure' attaches the
+        // employee-uploaded brochure PDF (never generated — 404 NO_BROCHURE
+        // when none is on file) and 'quotation' attaches the itemised
+        // quotation, which also files a Quotation record (see the
+        // transaction below) and may carry per-send add-on values. Each
+        // requested document travels as its own message (WhatsApp carries
+        // one document per message) with one thread row per file, so one
+        // click in the CRM can deliver brochure + quotation together.
+        let attachments = []; // [{ kind, url, name }] in send order
+        let imageUrls = [];
+        let quotationRecord = null;
+        if (data.attachment && data.attachment.projectId) {
+            const requestedKinds = [
+                ...new Set(
+                    (Array.isArray(data.attachment.kinds) && data.attachment.kinds.length > 0
+                        ? data.attachment.kinds
+                        : (data.attachment.kind ? [data.attachment.kind] : [])
+                    ).filter((k) => k === 'brochure' || k === 'quotation')
+                )
+            ];
+            const wantsBrochure = data.attachment.pdf !== false && requestedKinds.includes('brochure');
+            const wantsQuotation = data.attachment.pdf !== false && requestedKinds.includes('quotation');
+            const project = await prisma.project.findFirst({
+                where: { id: data.attachment.projectId, organizationId },
+                select: { id: true, name: true, images: true, startingPrice: true, documents: true }
+            });
+            if (!project) throw new AppError('Project not found', 404, 'NOT_FOUND');
+            let unitImages = null;
+            let unitPrice = null;
+            if (data.attachment.propertyId) {
+                const unit = await prisma.property.findFirst({
+                    where: { id: data.attachment.propertyId, organizationId, projectId: project.id },
+                    select: { id: true, images: true, price: true }
+                });
+                if (!unit) throw new AppError('Unit not found', 404, 'NOT_FOUND');
+                unitImages = Array.isArray(unit.images) ? unit.images : [];
+                unitPrice = Number(unit.price) > 0 ? Number(unit.price) : null;
+            }
+            if (wantsBrochure) {
+                // Brochure = the employee-uploaded PDF and nothing else.
+                // It is delivered through the public documents route (the
+                // bucket is private); when no brochure is on file the send
+                // is refused with a message that says how to fix it.
+                const brochure = findBrochureDocument(project.documents);
+                if (!brochure) {
+                    throw new AppError(
+                        'No brochure PDF is uploaded for this project yet. Upload one in the composer (PDF, up to 15 MB) and resend.',
+                        400,
+                        'NO_BROCHURE'
+                    );
+                }
+                // `v` versions the link per upload — WhatsApp caches media
+                // BY URL, so without a changing token the client keeps
+                // receiving the first bytes ever fetched from the unversioned
+                // link even after the brochure was replaced (the "stale
+                // blank preview PDF" complaint). The public documents route
+                // reads only projectId, so the same route serves the
+                // current file. Same token the composer link uses.
+                const version = String(brochure.uploadedAt || brochure.size || brochure.key || '').trim();
+                attachments.push({
+                    kind: 'brochure',
+                    url: buildPublicApiUrl(`/public/documents?projectId=${encodeURIComponent(project.id)}${version ? `&v=${encodeURIComponent(version)}` : ''}`),
+                    name: `${slugify(project.name) || 'project'}-brochure.pdf`
+                });
+            }
+            if (wantsQuotation) {
+                // Display-only names printed on the quotation: the
+                // sender's CRM name and the lead's name — sanitized
+                // again by the URL builder, never trusted further.
+                const sender = await prisma.user.findFirst({
+                    where: { id: userId },
+                    select: { name: true }
+                });
+                // Per-send values (legacy add-ons, or the full editable
+                // sheet: rows / brokerage % / GST % / payout ratios) —
+                // re-validated by sanitizeAddons / sanitizeQuote inside the
+                // URL builder.
+                const addons = sanitizeAddons(data.attachment.addons);
+                const quote = sanitizeQuote(data.attachment.quote);
+                attachments.push({
+                    kind: 'quotation',
+                    url: buildQuotationUrl(project.id, data.attachment.propertyId || null, {
+                        by: sender ? sender.name : null,
+                        customer: conversation.lead && conversation.lead.name
+                            ? conversation.lead.name
+                            : null,
+                        addons,
+                        quote
+                    }),
+                    name: `${slugify(project.name) || 'project'}-quotation.pdf`
+                });
+                // The Quotation record carries the net property value the
+                // PDF prints: the edited rows when the employee supplied
+                // them, else the unit's own price (or the project's
+                // starting price) plus any legacy add-ons. Without a base
+                // price the document still goes out ("On request") but no
+                // record is filed.
+                const baseAmount = unitPrice != null
+                    ? unitPrice
+                    : (Number(project.startingPrice) > 0 ? Number(project.startingPrice) : null);
+                const editedTotal = quote && Array.isArray(quote.rows) && quote.rows.length > 0
+                    ? quote.rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+                    : null;
+                const totalAmount = editedTotal != null
+                    ? editedTotal
+                    : (baseAmount != null
+                        ? baseAmount + addons.reduce((sum, a) => sum + a.amount, 0)
+                        : null);
+                if (totalAmount != null && conversation.leadId) {
+                    quotationRecord = {
+                        projectId: project.id,
+                        propertyId: data.attachment.propertyId || null,
+                        totalAmount,
+                        validUntil: new Date(Date.now() + QUOTATION_VALIDITY_DAYS * 24 * 60 * 60 * 1000),
+                        // Human-readable trace of the printed commercial terms.
+                        addonsNote: [
+                            addons.length > 0
+                                ? `add-ons: ${addons.map((a) => `${a.name} Rs ${a.amount}`).join(', ')}`
+                                : '',
+                            quote
+                                ? (quote.brokerageOn === false
+                                    ? 'no brokerage (builder direct)'
+                                    : `brokerage ${quote.brokerPct ?? 1}%${quote.gstPct != null ? ` + GST ${quote.gstPct}%` : ''}`)
+                                : ''
+                        ].filter(Boolean).join('; ')
+                    };
+                }
+            }
+            // Property photos: the unit's own gallery when a unit was picked
+            // and has one, else the project gallery. Only absolute http(s)
+            // links go out (Meta must be able to fetch them) and the run is
+            // capped so one send can never turn into a flood.
+            if (data.attachment.images) {
+                const source = (unitImages && unitImages.length > 0) ? unitImages : (Array.isArray(project.images) ? project.images : []);
+                imageUrls = source
+                    .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url.trim()))
+                    .map((url) => url.trim())
+                    .slice(0, 6);
+            }
         }
 
         const result = await provider.sendMessage({
@@ -237,7 +423,86 @@ class WhatsAppService {
             credentials: t.credentials
         });
 
+        // Companion document sends for PDF attachments (brochure and/or
+        // quotation). Cloud API cannot attach files to a template message, so
+        // each PDF travels as its own message from the same number — one
+        // click in the CRM still delivers both files back to back. A
+        // document failure never rolls back the text that already went out —
+        // it is recorded on the row instead.
+        let attachmentError = null;
+        const attachmentFailures = new Map(); // index -> reason for that file
+        let attachmentHeldBack = null;
+        if (attachments.length > 0 && typeof provider.sendDocument === 'function') {
+            // Meta only accepts free-form documents inside the 24-hour
+            // customer service window (opened by the customer's last inbound
+            // message; a template send does NOT open it). Outside the window
+            // the call is a guaranteed rejection, so skip it and record the
+            // reason — _deliverPendingAttachment sends the PDF as soon as the
+            // customer replies. Simulated transports ignore the window.
+            const windowChecked = provider.name === 'meta' && provider.simulated !== true;
+            const windowOpen = !windowChecked || await WhatsAppService._serviceWindowOpen(conversation.id);
+            if (!windowOpen) {
+                attachmentHeldBack = "PDF not delivered yet: WhatsApp accepts documents only inside the 24-hour chat window. The link is already in the message text — the PDF goes out automatically on the customer's first reply.";
+                attachmentError = attachmentHeldBack;
+            } else {
+                let captioned = false;
+                for (let i = 0; i < attachments.length; i += 1) {
+                    try {
+                        await provider.sendDocument({
+                            to,
+                            attachment: { url: attachments[i].url, name: attachments[i].name },
+                            // Only the first file carries the message text as
+                            // its caption; the rest go out bare so the text
+                            // is not duplicated on the customer's phone.
+                            caption: captioned ? null : (storedBody || body || '').slice(0, 1024),
+                            credentials: t.credentials
+                        });
+                        captioned = true;
+                    } catch (err) {
+                        const reason = (err && err.message) || 'PDF attachment failed to send';
+                        const full = provider.name === 'meta'
+                            ? `${reason} The link is in the message text; the PDF is re-sent automatically on the customer's next reply.`
+                            : reason;
+                        attachmentFailures.set(i, full);
+                        attachmentError = [attachmentError, full].filter(Boolean).join(' ');
+                    }
+                }
+            }
+        }
+
+        // Companion image sends for property photos — same contract as the
+        // PDF above: window gated, never rolls back the text that already
+        // went out, failures recorded on the row. The first image carries
+        // the message as its caption; the rest go out bare.
+        if (imageUrls.length > 0 && typeof provider.sendImage === 'function') {
+            const windowChecked = provider.name === 'meta' && provider.simulated !== true;
+            const windowOpen = !windowChecked || await WhatsAppService._serviceWindowOpen(conversation.id);
+            if (!windowOpen) {
+                attachmentError = [attachmentError, `Property photos not delivered: WhatsApp accepts images only inside the 24-hour chat window (${imageUrls.length} held back).`].filter(Boolean).join(' ');
+            } else {
+                let captioned = false;
+                for (const url of imageUrls) {
+                    try {
+                        await provider.sendImage({
+                            to,
+                            image: { url },
+                            caption: captioned ? null : (storedBody || body || '').slice(0, 200),
+                            credentials: t.credentials
+                        });
+                        captioned = true;
+                    } catch (err) {
+                        const reason = (err && err.message) || 'Property photo failed to send';
+                        attachmentError = [attachmentError, reason].filter(Boolean).join(' ');
+                    }
+                }
+            }
+        }
+
         const message = await prisma.$transaction(async (tx) => {
+            const primary = attachments[0] || null;
+            const primaryError = primary
+                ? (attachmentFailures.get(0) || attachmentHeldBack || null)
+                : null;
             const created = await tx.whatsAppMessage.create({
                 data: {
                     organizationId,
@@ -245,13 +510,37 @@ class WhatsAppService {
                     leadId: conversation.leadId,
                     direction: 'OUTBOUND',
                     status: result.status === 'QUEUED' ? 'QUEUED' : 'SENT',
-                    body: templateName ? `[template: ${templateName}]` : body,
+                    body: storedBody || body,
                     templateName,
                     variables: variables || shareContext || null,
                     providerMessageId: result.providerMessageId || null,
+                    attachmentUrl: primary ? primary.url : null,
+                    attachmentName: primary ? primary.name : null,
+                    ...(primaryError ? { error: primaryError } : {}),
                     sentById: userId
                 }
             });
+            // A second PDF (brochure + quotation in one send) gets its own
+            // row: WhatsApp carries one document per message, so the thread
+            // truthfully shows both files, and the pending-retry on the
+            // customer's next reply picks each row up on its own.
+            for (let i = 1; i < attachments.length; i += 1) {
+                const rowError = attachmentFailures.get(i) || attachmentHeldBack || null;
+                await tx.whatsAppMessage.create({
+                    data: {
+                        organizationId,
+                        conversationId: conversation.id,
+                        leadId: conversation.leadId,
+                        direction: 'OUTBOUND',
+                        status: result.status === 'QUEUED' ? 'QUEUED' : 'SENT',
+                        body: '',
+                        attachmentUrl: attachments[i].url,
+                        attachmentName: attachments[i].name,
+                        ...(rowError ? { error: rowError } : {}),
+                        sentById: userId
+                    }
+                });
+            }
             await tx.whatsAppConversation.update({
                 where: { id: conversation.id },
                 data: { lastMessageAt: new Date() }
@@ -269,10 +558,33 @@ class WhatsAppService {
                         conversationId: conversation.id,
                         messageId: created.id,
                         templateName,
-                        ...(shareContext ? { share: shareContext } : {})
+                        ...(shareContext ? { share: shareContext } : {}),
+                        ...(attachments.length
+                            ? { attachment: { url: attachments[0].url, name: attachments[0].name }, attachments: attachments.length }
+                            : {}),
+                        ...(imageUrls.length ? { images: imageUrls.length } : {})
                     }
                 }
             });
+            // A quotation send also files the Quotation record (existing
+            // pipeline entity — booking conversion reads it) so the lead's
+            // quotation list reflects what actually went out on WhatsApp.
+            if (quotationRecord) {
+                const quotationAttachment = attachments.find((a) => a.kind === 'quotation');
+                await tx.quotation.create({
+                    data: {
+                        organizationId,
+                        leadId: conversation.leadId,
+                        projectId: quotationRecord.projectId,
+                        propertyId: quotationRecord.propertyId,
+                        totalAmount: quotationRecord.totalAmount,
+                        validUntil: quotationRecord.validUntil,
+                        status: 'SENT',
+                        notes: `WhatsApp quotation sent: ${quotationAttachment ? quotationAttachment.name : 'quotation.pdf'}${quotationRecord.addonsNote ? ` — ${quotationRecord.addonsNote}` : ''}`,
+                        createdById: userId
+                    }
+                });
+            }
             return created;
         });
 
@@ -281,10 +593,76 @@ class WhatsAppService {
             leadId: conversation.leadId,
             channel: 'text',
             templateName,
-            ...(shareContext ? { propertyId: shareContext.propertyId, publicUrl: shareContext.publicUrl } : {})
+            ...(shareContext ? { propertyId: shareContext.propertyId, publicUrl: shareContext.publicUrl } : {}),
+            ...(attachments.length
+                ? {
+                    attachment: attachments.map((a) => a.name).join(', '),
+                    attachmentUrls: attachments.map((a) => a.url)
+                }
+                : {}),
+            ...(imageUrls.length ? { images: imageUrls.length } : {}),
+            ...(attachmentError ? { attachmentError } : {})
         });
 
-        return message;
+        // attachmentError also rides on the response (it is already persisted
+        // on the affected row's `error` column) so the composer can toast the
+        // partial failure immediately instead of failing silently.
+        return attachmentError ? { ...message, attachmentError } : message;
+    }
+
+    // True while the customer's last inbound message is inside WhatsApp's
+    // 24-hour service window — the only window where Meta's Cloud API
+    // accepts free-form document messages such as the quotation PDF.
+    static async _serviceWindowOpen(conversationId) {
+        const lastInbound = await prisma.whatsAppMessage.findFirst({
+            where: { conversationId, direction: 'INBOUND' },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true }
+        });
+        if (!lastInbound) return false;
+        return Date.now() - new Date(lastInbound.createdAt).getTime() <= 24 * 60 * 60 * 1000;
+    }
+
+    // Best-effort delivery of a PDF attachment that was held back (window
+    // closed) or rejected on the original send. The customer's reply re-opens
+    // the 24-hour window, so the pending PDF goes out now. Silently swallows
+    // failures — the reason stays on the row's `error` for the next reply.
+    static async _deliverPendingAttachment(organizationId, conversation, lead) {
+        try {
+            const pending = await prisma.whatsAppMessage.findFirst({
+                where: {
+                    conversationId: conversation.id,
+                    direction: 'OUTBOUND',
+                    attachmentUrl: { not: null },
+                    error: { not: null },
+                    status: { not: 'FAILED' },
+                    createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+            if (!pending) return null;
+
+            const t = await WhatsappSettingsService.resolveTransport(organizationId);
+            if (!t.configured || typeof t.provider.sendDocument !== 'function') return null;
+            const to = conversation.providerContactId || (lead && lead.phone);
+            if (!to) return null;
+
+            await t.provider.sendDocument({
+                to,
+                attachment: {
+                    url: pending.attachmentUrl,
+                    name: pending.attachmentName || 'document.pdf'
+                },
+                caption: String(pending.body || '').slice(0, 1024),
+                credentials: t.credentials
+            });
+            return await prisma.whatsAppMessage.update({
+                where: { id: pending.id },
+                data: { error: null }
+            });
+        } catch (err) {
+            return null;
+        }
     }
 
     // --- Templates ---
@@ -647,6 +1025,11 @@ class WhatsAppService {
             conversationId: conversation.id,
             leadId: lead.id
         });
+
+        // The customer's reply re-opens WhatsApp's 24-hour window — deliver
+        // any PDF attachment (quotation) that was held back or rejected on
+        // the original send. Best-effort by design: never fails the save.
+        await WhatsAppService._deliverPendingAttachment(lead.organizationId, conversation, lead);
 
         return { ok: true, messageId: message.id };
     }

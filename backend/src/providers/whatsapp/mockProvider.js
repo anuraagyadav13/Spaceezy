@@ -28,6 +28,26 @@ class MockWhatsAppProvider {
         return { providerMessageId: `mockwa_${crypto.randomUUID()}`, status: 'SENT' };
     }
 
+    // Simulated companion document delivery (brochure PDFs). No network —
+    // mirrors sendMessage's fake-id contract so tests can assert the call
+    // happened with the right link and filename.
+    async sendDocument({ attachment }) {
+        if (!attachment || !attachment.url) {
+            throw new AppError('Attachment URL is required', 400, 'VALIDATION_ERROR');
+        }
+        return { providerMessageId: `mockwa_doc_${crypto.randomUUID()}`, status: 'SENT' };
+    }
+
+    // Simulated companion image delivery (property photos). Same fake-id
+    // contract as sendDocument so tests can assert the call happened with
+    // the right link.
+    async sendImage({ image }) {
+        if (!image || !image.url) {
+            throw new AppError('Image URL is required', 400, 'VALIDATION_ERROR');
+        }
+        return { providerMessageId: `mockwa_img_${crypto.randomUUID()}`, status: 'SENT' };
+    }
+
     verifyWebhookSignature(rawBody, signature) {
         return MockWhatsAppProvider.verify(rawBody, signature, process.env.WHATSAPP_WEBHOOK_SECRET);
     }

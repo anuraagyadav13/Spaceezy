@@ -44,7 +44,7 @@ export default function LoginPage() {
                     <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
                         <div className="w-4 h-4 bg-white rounded-full"></div>
                     </div>
-                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">SpaceEzy CRM</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Spaceezy CRM</h1>
                     <p className="text-gray-500 mt-2">Sign in to your account</p>
                 </div>
 

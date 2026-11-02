@@ -1,16 +1,22 @@
 "use client";
+// Bulk inventory import — extracted from the old standalone
+// /dashboard/inventory/import page and merged INTO the Inventory Grid as a
+// dialog (the grid header's "Bulk Import" button). Same flow: pick the
+// target project, upload a CSV, dry-run to validate, import in one
+// transaction. `initialProjectId` seeds the project select from the grid's
+// current filter; `onImported` fires after a successful real import so the
+// host can refresh its view.
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import {
     UploadCloud, FileText, Loader2, AlertCircle, CheckCircle2,
-    XCircle, ArrowLeft, PlayCircle, Download
+    XCircle, PlayCircle, Download
 } from "lucide-react";
-import { fetchProjects } from "../../../../lib/api/projects";
-import { fetchConfigurations } from "../../../../lib/api/configurations";
-import { bulkImportProperties } from "../../../../lib/api/properties";
-import { PermissionGate } from "../../../../features/auth/components/PermissionGate";
-import { showToast } from "../../../../lib/toast";
+import { fetchProjects } from "../lib/api/projects";
+import { fetchConfigurations } from "../lib/api/configurations";
+import { bulkImportProperties } from "../lib/api/properties";
+import { PermissionGate } from "../features/auth/components/PermissionGate";
+import { showToast } from "../lib/toast";
 
 const CSV_HEADERS = [
     "unitNumber", "tower", "floor", "configuration", "bhk",
@@ -53,10 +59,10 @@ const inputClass =
     "w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all";
 const labelClass = "block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1";
 
-export default function BulkImportInventoryPage() {
+export default function BulkImportInventory({ initialProjectId = "", onImported } = {}) {
     const queryClient = useQueryClient();
     const fileRef = useRef(null);
-    const [projectId, setProjectId] = useState("");
+    const [projectId, setProjectId] = useState(initialProjectId || "");
     const [fileName, setFileName] = useState("");
     const [rows, setRows] = useState([]);
     const [parseError, setParseError] = useState("");
@@ -93,6 +99,7 @@ export default function BulkImportInventoryPage() {
                     queryClient.invalidateQueries({ queryKey: ["projects"] });
                     queryClient.invalidateQueries({ queryKey: ["properties"] });
                     if (projectId) queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+                    onImported?.(data);
                     setRows([]);
                     setFileName("");
                     if (fileRef.current) fileRef.current.value = "";
@@ -128,15 +135,8 @@ export default function BulkImportInventoryPage() {
     const canRun = !!projectId && rows.length > 0 && !importMutation.isPending;
 
     return (
-        <div className="flex flex-col h-full overflow-y-auto bg-gray-50/50 p-4 sm:p-8 space-y-6 custom-scrollbar">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <Link href="/dashboard/inventory" className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 mb-2">
-                        <ArrowLeft size={14} /> Inventory
-                    </Link>
-                    <h1 className="text-2xl font-bold text-gray-900">Bulk Import Inventory Units</h1>
-                    <p className="text-sm text-gray-500">Upload a CSV of units: validate with a dry run, then import in one transaction.</p>
-                </div>
+        <div className="p-6 space-y-6">
+            <div className="flex items-center justify-end">
                 <button
                     onClick={() => {
                         const csv = `${CSV_HEADERS.join(",")}\nA-101,A,1,2 BHK,2,950,700,950,East,4500000,Sale\nA-102,A,1,2 BHK,2,950,700,950,West,4600000,Sale`;

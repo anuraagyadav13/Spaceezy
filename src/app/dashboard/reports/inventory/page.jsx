@@ -1,6 +1,5 @@
-"use client";
-import InventoryGridPage from "../../inventory/grid/page";
+import { redirect } from "next/navigation";
 
 export default function InventoryReportsPage() {
-    return <InventoryGridPage />;
+    redirect("/dashboard/reports?tab=inventory");
 }

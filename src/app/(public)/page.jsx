@@ -4,9 +4,9 @@ import { realEstateAgentJsonLd } from "../../lib/seo/site";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
-const HOME_TITLE = "SpaceEzy – Real Estate Properties in Ghaziabad | Buy & Sell Property";
+const HOME_TITLE = "Spaceezy – Real Estate Properties in Ghaziabad | Buy & Sell Property";
 const HOME_DESCRIPTION =
-    "SpaceEzy lists real estate properties in Ghaziabad — flats, plots, homes and commercial spaces across Wave City and top localities. Browse live inventory with zero brokerage.";
+    "Spaceezy lists real estate properties in Ghaziabad — flats, plots, homes and commercial spaces across Wave City and top localities. Browse live inventory with zero brokerage.";
 
 // Regenerate with live CRM data at most every 60s.
 export const revalidate = 60;

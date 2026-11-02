@@ -351,6 +351,9 @@ export default function LeadProfile() {
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Lead Requirements</h3>
                     <div className="space-y-4">
                         <DetailRow label="Interested In" value={projectName || "Any"} />
+                        {lead.requestedProjectName && (
+                            <DetailRow label="Requested Project" value={lead.requestedProjectName} />
+                        )}
                         {lead.property && (
                             <DetailRow
                                 label="Interested Unit"
@@ -359,6 +362,9 @@ export default function LeadProfile() {
                         )}
                         <DetailRow label="Budget" value={lead.budget || "Not specified"} className="text-emerald-600 font-black" />
                         <DetailRow label="Location" value={lead.project?.city || "Not specified"} />
+                        {lead.enquiryLocation && (
+                            <DetailRow label="Enquiry Location" value={lead.enquiryLocation} />
+                        )}
                         <DetailRow
                             label="Next Follow-up"
                             value={lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt).toLocaleString() : "None scheduled"}

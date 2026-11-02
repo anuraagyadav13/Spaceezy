@@ -11,7 +11,7 @@ export default function AboutPage() {
                     <span className="text-purple-600 font-bold tracking-wider uppercase text-sm mb-2 block">Our Story</span>
                     <h1 className="text-4xl md:text-6xl font-bold text-gray-900 tracking-tight mb-6">Redefining real estate discovery.</h1>
                     <p className="text-xl text-gray-600 leading-relaxed">
-                        SpaceEzy was founded with a single mission: to make the journey of finding a home as beautiful and transparent as the home itself.
+                        Spaceezy was founded with a single mission: to make the journey of finding a home as beautiful and transparent as the home itself.
                     </p>
                 </motion.div>
 
@@ -22,7 +22,7 @@ export default function AboutPage() {
                     <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
                         <h2 className="text-3xl font-bold text-gray-900 mb-6">Built on trust and transparency.</h2>
                         <p className="text-lg text-gray-600 mb-6 leading-relaxed">
-                            The real estate market is often complex and overwhelming. We built SpaceEzy to cut through the noise, providing our clients with curated options, honest advice, and end-to-end support.
+                            The real estate market is often complex and overwhelming. We built Spaceezy to cut through the noise, providing our clients with curated options, honest advice, and end-to-end support.
                         </p>
                         <p className="text-lg text-gray-600 mb-8 leading-relaxed">
                             Whether you&apos;re looking for a luxury penthouse in the city center or a peaceful villa in the suburbs, our expert advisors work tirelessly to match you with a property that perfectly aligns with your lifestyle and investment goals.
@@ -46,14 +46,14 @@ export default function AboutPage() {
                     className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center mb-24"
                 >
                     <div className="relative h-[440px] rounded-[40px] overflow-hidden order-1">
-                        <Image src="/images/founder.jpg" alt="Kamal, Founder of SpaceEzy" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
+                        <Image src="/images/founder.jpg" alt="Kamal, Founder of Spaceezy" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
                     </div>
                     <div className="order-2">
                         <span className="text-purple-600 font-bold tracking-wider uppercase text-sm mb-2 block">Founder&apos;s Message</span>
                         <h2 className="text-3xl font-bold text-gray-900 mb-6">A promise from our founder.</h2>
                         <p className="text-lg text-gray-600 mb-5 leading-relaxed">
-                            &ldquo;Building SpaceEzy has been a promise to every family that trusts us with one of the biggest decisions of their lives.
-                            Real estate has long been complicated — opaque pricing, scattered inventory, and slow communication. We started SpaceEzy
+                            &ldquo;Building Spaceezy has been a promise to every family that trusts us with one of the biggest decisions of their lives.
+                            Real estate has long been complicated — opaque pricing, scattered inventory, and slow communication. We started Spaceezy
                             to change that: one transparent platform where builders, brokers, and buyers meet on the same page.&rdquo;
                         </p>
                         <p className="text-lg text-gray-600 mb-8 leading-relaxed">
@@ -62,7 +62,7 @@ export default function AboutPage() {
                         </p>
                         <div>
                             <p className="text-xl font-bold text-gray-900">Kamal</p>
-                            <p className="text-purple-600 font-semibold">Founder &amp; CEO, SpaceEzy</p>
+                            <p className="text-purple-600 font-semibold">Founder &amp; CEO, Spaceezy</p>
                         </div>
                     </div>
                 </motion.div>

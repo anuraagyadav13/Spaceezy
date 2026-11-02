@@ -153,7 +153,7 @@ export default function CancellationsPage() {
                             Keep booking
                         </button>
                         <button
-                            onClick={() => cancelMutation.mutate(target.id)}
+                            onClick={() => cancelMutation.mutate(target?.id)}
                             disabled={cancelMutation.isPending}
                             className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-60"
                         >

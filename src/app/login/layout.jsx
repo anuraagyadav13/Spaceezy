@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "Login | SpaceEzy CRM",
+    title: "Login | Spaceezy CRM",
     robots: { index: false, follow: false },
 };
 

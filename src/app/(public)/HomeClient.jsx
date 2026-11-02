@@ -11,7 +11,7 @@ import { formatPrice } from "../../utils/format";
 const HERO_IMAGES = [
     { src: "/images/luxury-living-room-city-view-ghaziabad.png", alt: "Luxury living room with floor-to-ceiling windows overlooking the Ghaziabad skyline at sunset" },
     { src: "/images/modern-villa-infinity-pool-sunset.png", alt: "Modern villa with infinity pool and city view at sunset" },
-    { src: "/images/property-site-visit-family-ghaziabad.png", alt: "SpaceEzy agent showing a luxury apartment to a family during a site visit" },
+    { src: "/images/property-site-visit-family-ghaziabad.png", alt: "Spaceezy agent showing a luxury apartment to a family during a site visit" },
 ];
 const HERO_ROTATE_MS = 5000;
 
@@ -138,9 +138,9 @@ export default function HomeClient({ projects, properties, locations }) {
             {/* SEO LINK CLUSTER — crawlable paths to the main landing pages */}
             <section className="container mx-auto px-6 md:px-12 pb-10">
                 <div className="max-w-4xl">
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Explore real estate in Ghaziabad with SpaceEzy</h2>
+                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Explore real estate in Ghaziabad with Spaceezy</h2>
                     <p className="text-gray-600 leading-relaxed mb-5">
-                        SpaceEzy is a real estate marketplace for Ghaziabad and the NCR region. Compare live inventory
+                        Spaceezy is a real estate marketplace for Ghaziabad and the NCR region. Compare live inventory
                         of flats, plots and commercial properties, or jump straight to a focused listing page:
                     </p>
                     <ul className="flex flex-wrap gap-3">
@@ -322,7 +322,7 @@ export default function HomeClient({ projects, properties, locations }) {
                 </section>
             )}
 
-            {/* WHY SPACEEZY / TRUST */}
+            {/* WHY Spaceezy / TRUST */}
             <section className="py-32 bg-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-1/2 h-full bg-gray-50 rounded-l-[100px] z-0 hidden lg:block"></div>
                 <div className="container mx-auto px-6 md:px-12 relative z-10 flex flex-col lg:flex-row gap-16 items-center">

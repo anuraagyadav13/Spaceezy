@@ -183,7 +183,7 @@ export default function BrowserSoftphonePage() {
                         <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Recent Calls</h3>
-                                <Link href="/dashboard/calling/history" className="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1">
+                                <Link href="/dashboard/calling/calls" className="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1">
                                     Full history <ExternalLink size={12} />
                                 </Link>
                             </div>

@@ -1429,8 +1429,9 @@ describe('Phase 4 - Meta Cloud API provider (stubbed transport, no network)', ()
 
   test('Meta envelope ingests a text message and upgrades a status', async () => {
     prisma.whatsAppMessage.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'msg-old', status: 'SENT' });
+      .mockResolvedValueOnce(null) // inbound idempotency check
+      .mockResolvedValueOnce(null) // pending-brochure retry lookup (none pending)
+      .mockResolvedValueOnce({ id: 'msg-old', status: 'SENT' }); // status upgrade
     prisma.lead.findFirst.mockResolvedValue(lead());
     prisma.whatsAppConversation.findFirst.mockResolvedValue(null);
     prisma.whatsAppConversation.create.mockResolvedValue({ id: CONV_ID });

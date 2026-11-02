@@ -107,7 +107,7 @@ function LeadAssignmentContent() {
                                     </td>
                                     <td className="p-4 font-black text-purple-600">{l.id}</td>
                                     <td className="p-4 font-bold text-gray-900">{l.name}</td>
-                                    <td className="p-4 text-gray-600">{l.project || l.projectId || "—"}</td>
+                                    <td className="p-4 text-gray-600">{l.project?.name || l.projectId || "—"}</td>
                                     <td className="p-4 font-bold text-gray-800">{emp?.name || l.assignedTo?.name || "Unassigned"}</td>
                                     <td className="p-4"><span className="bg-purple-50 text-purple-700 font-bold px-2 py-0.5 rounded">{l.status || l.stage}</span></td>
                                 </tr>

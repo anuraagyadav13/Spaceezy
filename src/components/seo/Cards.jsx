@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { MapPin, ImageOff, Building2 } from "lucide-react";
 import { formatPrice } from "../../utils/format";
 
@@ -13,7 +14,7 @@ export function ProjectCard({ project }) {
         >
             <div className="relative h-48 bg-gray-100 overflow-hidden">
                 {project.image ? (
-                    <img src={project.image} alt={project.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                    <Image src={project.image} alt={project.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" fill />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">
                         <ImageOff size={32} />

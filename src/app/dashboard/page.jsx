@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import {
     PhoneCall, CheckSquare, AlertTriangle, MessageSquare,
-    CalendarCheck, FileSignature, Home, Users, ArrowRight, Clock
+    CalendarCheck, FileSignature, Home, Users, ArrowRight, Clock,
+    CheckCircle2
 } from "lucide-react";
 import {
     useProductivity,
@@ -34,7 +35,12 @@ export default function DashboardOverview() {
     }
 
     if (isLoading) {
-        return <div className="p-8 text-center text-gray-500">Loading owner overview...</div>;
+        return (
+            <div className="h-full flex flex-col items-center justify-center gap-3 p-8">
+                <span className="w-8 h-8 rounded-full border-2 border-gray-200 border-t-purple-600 animate-spin" />
+                <p className="text-sm font-medium text-gray-400">Loading owner overview...</p>
+            </div>
+        );
     }
 
     if (error) {
@@ -55,16 +61,16 @@ export default function DashboardOverview() {
     const counts = agenda?.counts || {};
 
     const cards = [
-        { label: "Calls (30d)", value: stats.calls ?? 0, icon: PhoneCall, tone: "text-emerald-600 bg-emerald-50" },
-        { label: "Connected", value: stats.connectedCalls ?? 0, icon: PhoneCall, tone: "text-blue-600 bg-blue-50" },
-        { label: "Missed", value: stats.missedCalls ?? 0, icon: AlertTriangle, tone: "text-red-600 bg-red-50" },
-        { label: "WhatsApp Sent", value: stats.whatsappMessages ?? 0, icon: MessageSquare, tone: "text-green-600 bg-green-50" },
-        { label: "Follow-ups Done", value: stats.followupsCompleted ?? 0, icon: CalendarCheck, tone: "text-indigo-600 bg-indigo-50" },
-        { label: "Overdue Follow-ups", value: stats.overdueFollowups ?? 0, icon: Clock, tone: "text-amber-600 bg-amber-50" },
-        { label: "Tasks Completed", value: stats.tasksCompleted ?? 0, icon: CheckSquare, tone: "text-sky-600 bg-sky-50" },
-        { label: "Site Visits", value: stats.siteVisits ?? 0, icon: CalendarCheck, tone: "text-violet-600 bg-violet-50" },
-        { label: "Quotations", value: stats.quotations ?? 0, icon: FileSignature, tone: "text-orange-600 bg-orange-50" },
-        { label: "Bookings", value: stats.bookings ?? 0, icon: Home, tone: "text-emerald-700 bg-emerald-100" }
+        { label: "Calls (30d)", value: stats.calls ?? 0, icon: PhoneCall, tone: "text-emerald-600 bg-emerald-50", href: "/dashboard/calling/calls?tab=history" },
+        { label: "Connected", value: stats.connectedCalls ?? 0, icon: PhoneCall, tone: "text-blue-600 bg-blue-50", href: "/dashboard/calling/calls?tab=history" },
+        { label: "Missed", value: stats.missedCalls ?? 0, icon: AlertTriangle, tone: "text-red-600 bg-red-50", href: "/dashboard/calling/calls?tab=missed", hot: "text-red-600" },
+        { label: "WhatsApp Sent", value: stats.whatsappMessages ?? 0, icon: MessageSquare, tone: "text-green-600 bg-green-50", href: "/dashboard/calling/whatsapp" },
+        { label: "Follow-ups Done", value: stats.followupsCompleted ?? 0, icon: CalendarCheck, tone: "text-indigo-600 bg-indigo-50", href: "/dashboard/agenda" },
+        { label: "Overdue Follow-ups", value: stats.overdueFollowups ?? 0, icon: Clock, tone: "text-amber-600 bg-amber-50", href: "/dashboard/activities/overdue", hot: "text-amber-600" },
+        { label: "Tasks Completed", value: stats.tasksCompleted ?? 0, icon: CheckSquare, tone: "text-sky-600 bg-sky-50", href: "/dashboard/activities/tasks" },
+        { label: "Site Visits", value: stats.siteVisits ?? 0, icon: CalendarCheck, tone: "text-violet-600 bg-violet-50", href: "/dashboard/site-visits" },
+        { label: "Quotations", value: stats.quotations ?? 0, icon: FileSignature, tone: "text-orange-600 bg-orange-50", href: "/dashboard/bookings/quotations" },
+        { label: "Bookings", value: stats.bookings ?? 0, icon: Home, tone: "text-emerald-700 bg-emerald-100", href: "/dashboard/bookings" }
     ];
 
     return (
@@ -75,19 +81,42 @@ export default function DashboardOverview() {
                         <h1 className="text-2xl font-bold text-gray-900">Owner Overview</h1>
                         <p className="text-sm text-gray-500 mt-1">
                             Real aggregates from calls, tasks, follow-ups and communications
-                            {stats.range ? ` · ${new Date(stats.range.from).toLocaleDateString()} to ${new Date(stats.range.to).toLocaleDateString()}` : ""}.
+                            {stats.range
+                                ? ` · ${new Date(stats.range.from).toLocaleDateString()} to ${new Date(stats.range.to).toLocaleDateString()}`
+                                : ""}.
                         </p>
                     </div>
-                    <div className="flex gap-2 text-xs font-bold">
-                        <span className="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-100">
+                    <div className="flex flex-wrap gap-2 text-xs font-bold">
+                        <Link
+                            href="/dashboard/agenda"
+                            className={`px-3 py-1.5 rounded-xl border transition-colors ${
+                                (counts.dueNow ?? 0) > 0
+                                    ? "bg-red-50 text-red-700 border-red-100 hover:bg-red-100"
+                                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                            }`}
+                        >
                             {counts.dueNow ?? 0} due now
-                        </span>
-                        <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-100">
+                        </Link>
+                        <Link
+                            href="/dashboard/activities/overdue"
+                            className={`px-3 py-1.5 rounded-xl border transition-colors ${
+                                (counts.overdue ?? 0) > 0
+                                    ? "bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100"
+                                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                            }`}
+                        >
                             {counts.overdue ?? 0} overdue
-                        </span>
-                        <span className="px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 border border-orange-100">
+                        </Link>
+                        <Link
+                            href="/dashboard/leads"
+                            className={`px-3 py-1.5 rounded-xl border transition-colors ${
+                                (stats.needsAttention ?? 0) > 0
+                                    ? "bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-100"
+                                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                            }`}
+                        >
                             {stats.needsAttention ?? 0} need attention
-                        </span>
+                        </Link>
                     </div>
                 </div>
 
@@ -95,14 +124,19 @@ export default function DashboardOverview() {
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
                     {cards.map((card) => {
                         const Icon = card.icon;
+                        const valueTone = card.hot && card.value > 0 ? card.hot : "text-gray-900";
                         return (
-                            <div key={card.label} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+                            <Link
+                                key={card.label}
+                                href={card.href}
+                                className="block bg-white rounded-2xl border border-gray-200 shadow-sm p-4 transition-all hover:shadow-md hover:border-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300"
+                            >
                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${card.tone}`}>
                                     <Icon size={16} />
                                 </div>
-                                <p className="text-2xl font-black text-gray-900 mt-3">{card.value}</p>
+                                <p className={`text-2xl font-black mt-3 ${valueTone}`}>{card.value}</p>
                                 <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{card.label}</p>
-                            </div>
+                            </Link>
                         );
                     })}
                 </div>
@@ -144,7 +178,12 @@ export default function DashboardOverview() {
                                             return (
                                                 <tr key={emp.id} className="hover:bg-gray-50/60">
                                                     <td className="px-5 py-3">
-                                                        <p className="font-bold text-gray-900">{emp.name}</p>
+                                                        <Link
+                                                            href={`/dashboard/team/${emp.id}`}
+                                                            className="font-bold text-gray-900 hover:text-purple-600 hover:underline"
+                                                        >
+                                                            {emp.name}
+                                                        </Link>
                                                         <p className="text-[11px] text-gray-400">{String(emp.role || "").replace(/_/g, " ").toLowerCase()}</p>
                                                     </td>
                                                     <td className="px-3 py-3 text-right font-medium">{emp.calls}</td>
@@ -177,7 +216,9 @@ export default function DashboardOverview() {
                             Active leads with no future follow-up, no pending task and no upcoming site visit.
                         </p>
                         {!needsAttention || needsAttention.length === 0 ? (
-                            <p className="text-sm text-gray-400 py-3">Every active lead is covered.</p>
+                            <p className="text-sm text-gray-400 py-3 flex items-center gap-2">
+                                <CheckCircle2 size={15} className="text-emerald-500" /> Every active lead is covered.
+                            </p>
                         ) : (
                             <ul className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
                                 {needsAttention.map((lead) => (

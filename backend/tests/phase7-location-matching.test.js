@@ -631,7 +631,10 @@ describe('Phase 7: proposal message from authoritative data', () => {
     const body = response.body.data.body;
     expect(body).toContain('Riya Verma');
     expect(body).toContain('Skyline Towers');
-    expect(body).toContain('A-101');
+    // House numbers stay out of WhatsApp message text (CRM rule); the unit
+    // is identified by tower, configuration, area and price instead.
+    expect(body).not.toContain('A-101');
+    expect(body).toContain('Tower: A');
     expect(body).toContain('2 BHK');
     expect(body).toContain('Kothrud, Pune, Maharashtra');
     expect(body).toContain('950 sq.ft');

@@ -3,7 +3,8 @@ import { useState } from "react";
 import Link from "next/link";
 import {
     Clock, CalendarCheck, AlertTriangle, CheckCircle2, Phone,
-    CalendarClock, XCircle, ArrowRight, User
+    CalendarClock, XCircle, ArrowRight, User,
+    ListTodo, MessageSquare, ChevronRight
 } from "lucide-react";
 import { useAuth } from "../../../features/auth/hooks/useAuth";
 import { useAgenda, useNeedsAttention, useTelephonyStatus, useInitiateCall } from "../../../features/communication/hooks/useCommunication";
@@ -11,6 +12,13 @@ import { useUpdateTaskStatus, useRescheduleTask } from "../../../features/commun
 import CallPanel from "../../../features/communication/components/CallPanel";
 import CallOutcomePopup from "../../../features/communication/components/CallOutcomePopup";
 import { showToast } from "../../../lib/toast";
+
+// Earliest allowed reschedule time (browser-local, captured at page load).
+// The save handler re-checks against the live clock, so this only steers the
+// date picker away from past due times that would instantly re-overdue a task.
+const RESCHEDULE_MIN = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
 
 export default function EmployeeDashboard() {
     const { user } = useAuth();
@@ -49,6 +57,10 @@ export default function EmployeeDashboard() {
 
     const handleReschedule = async (task) => {
         if (!rescheduleValue) return;
+        if (new Date(rescheduleValue).getTime() <= Date.now()) {
+            showToast("Pick a future date & time to reschedule", "error");
+            return;
+        }
         try {
             await reschedule.mutateAsync({
                 id: task.id,
@@ -88,7 +100,12 @@ export default function EmployeeDashboard() {
     };
 
     if (isLoading) {
-        return <div className="p-8 text-center text-gray-500">Loading your day...</div>;
+        return (
+            <div className="h-full flex flex-col items-center justify-center gap-3 p-8">
+                <span className="w-8 h-8 rounded-full border-2 border-gray-200 border-t-purple-600 animate-spin" />
+                <p className="text-sm font-medium text-gray-400">Loading your day...</p>
+            </div>
+        );
     }
 
     if (error) {
@@ -232,6 +249,7 @@ export default function EmployeeDashboard() {
                                                         <input
                                                             type="datetime-local"
                                                             value={rescheduleValue}
+                                                            min={RESCHEDULE_MIN}
                                                             onChange={(e) => setRescheduleValue(e.target.value)}
                                                             className="flex-1 bg-white border border-indigo-200 rounded-lg px-3 py-1.5 text-xs"
                                                         />
@@ -261,16 +279,19 @@ export default function EmployeeDashboard() {
 
                 <div className="space-y-6">
                     <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-                        <h2 className="text-sm font-black uppercase tracking-wider text-gray-700 mb-3">
-                            Needs Attention
-                        </h2>
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-sm font-black uppercase tracking-wider text-gray-700">
+                                Needs Attention
+                            </h2>
+                            <span className="text-xs font-bold text-gray-400">{needsAttention?.length ?? 0}</span>
+                        </div>
                         {!needsAttention || needsAttention.length === 0 ? (
                             <p className="text-sm text-gray-400">
                                 Every active lead has a follow-up, pending task, or upcoming visit.
                             </p>
                         ) : (
-                            <ul className="space-y-3">
-                                {needsAttention.slice(0, 6).map((lead) => (
+                            <ul className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                                {needsAttention.map((lead) => (
                                     <li key={lead.id} className="flex items-center justify-between gap-2">
                                         <div className="min-w-0">
                                             <p className="text-sm font-bold text-gray-900 truncate">{lead.name}</p>
@@ -292,11 +313,11 @@ export default function EmployeeDashboard() {
 
                     <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
                         <h2 className="text-sm font-black uppercase tracking-wider text-gray-700 mb-3">Quick Links</h2>
-                        <div className="space-y-2 text-sm">
-                            <Link href="/dashboard/activities/tasks" className="block text-purple-600 font-medium hover:underline">All tasks</Link>
-                            <Link href="/dashboard/activities/overdue" className="block text-purple-600 font-medium hover:underline">Overdue activities</Link>
-                            <Link href="/dashboard/calling/softphone" className="block text-purple-600 font-medium hover:underline">Softphone</Link>
-                            <Link href="/dashboard/calling/whatsapp" className="block text-purple-600 font-medium hover:underline">WhatsApp Center</Link>
+                        <div className="space-y-2">
+                            <QuickLink href="/dashboard/activities/tasks" icon={ListTodo} label="All tasks" />
+                            <QuickLink href="/dashboard/activities/overdue" icon={AlertTriangle} label="Overdue activities" />
+                            <QuickLink href="/dashboard/calling/softphone" icon={Phone} label="Softphone" />
+                            <QuickLink href="/dashboard/calling/whatsapp" icon={MessageSquare} label="WhatsApp Center" />
                         </div>
                     </section>
                 </div>
@@ -322,5 +343,22 @@ function StatPill({ label, value, tone }) {
         <span className={`px-3 py-1.5 rounded-xl border ${tones[tone]}`}>
             {value} {label}
         </span>
+    );
+}
+
+// Sidebar quick link with an icon and chevron so it reads as a destination,
+// not inline copy.
+function QuickLink({ href, icon: Icon, label }) {
+    return (
+        <Link
+            href={href}
+            className="group flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/60 px-3.5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300"
+        >
+            <span className="flex items-center gap-2.5 min-w-0">
+                <Icon size={15} className="shrink-0 text-purple-500" />
+                <span className="truncate">{label}</span>
+            </span>
+            <ChevronRight size={14} className="shrink-0 text-gray-300 transition-colors group-hover:text-purple-500" />
+        </Link>
     );
 }

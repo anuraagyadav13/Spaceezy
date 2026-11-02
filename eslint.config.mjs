@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "backend/**",
+    // Local tool caches (gitignored), not project source:
+    ".gitnexus/**",
   ]),
 ]);
 

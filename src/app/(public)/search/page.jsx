@@ -3,12 +3,12 @@ import SearchClient from "./SearchClient";
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export const metadata = {
-    title: "Property Search | Find Flats, Plots & Projects | SpaceEzy",
+    title: "Property Search | Find Flats, Plots & Projects | Spaceezy",
     description:
-        "Search live real estate projects and properties by keyword, location, project, configuration and budget — results straight from the SpaceEzy CRM.",
+        "Search live real estate projects and properties by keyword, location, project, configuration and budget — results straight from the Spaceezy CRM.",
     alternates: { canonical: "/search" },
     openGraph: {
-        title: "Property Search | Find Flats, Plots & Projects | SpaceEzy",
+        title: "Property Search | Find Flats, Plots & Projects | Spaceezy",
         description:
             "Search live real estate projects and properties by keyword, location, project, configuration and budget.",
         url: "/search",
@@ -17,7 +17,7 @@ export const metadata = {
     },
     twitter: {
         card: "summary_large_image",
-        title: "Property Search | Find Flats, Plots & Projects | SpaceEzy",
+        title: "Property Search | Find Flats, Plots & Projects | Spaceezy",
         description: "Search live projects and properties by keyword, location and budget.",
     },
 };

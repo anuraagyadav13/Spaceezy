@@ -5,12 +5,12 @@ import { breadcrumbJsonLd } from "../../../components/seo/Breadcrumbs";
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export const metadata = {
-    title: "Real Estate Projects | New & Under-Construction Homes | SpaceEzy",
+    title: "Real Estate Projects | New & Under-Construction Homes | Spaceezy",
     description:
         "Browse real estate projects with live pricing, configurations and availability. Filter by location, property type and budget.",
     alternates: { canonical: "/projects" },
     openGraph: {
-        title: "Real Estate Projects | New & Under-Construction Homes | SpaceEzy",
+        title: "Real Estate Projects | New & Under-Construction Homes | Spaceezy",
         description:
             "Browse real estate projects with live pricing, configurations and availability.",
         url: "/projects",
@@ -19,7 +19,7 @@ export const metadata = {
     },
     twitter: {
         card: "summary_large_image",
-        title: "Real Estate Projects | New & Under-Construction Homes | SpaceEzy",
+        title: "Real Estate Projects | New & Under-Construction Homes | Spaceezy",
         description: "Browse real estate projects with live pricing, configurations and availability.",
     },
 };

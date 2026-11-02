@@ -6,7 +6,9 @@ const {
     getPublicProperties,
     getPublicProperty,
     getPublicLocations,
-    getPublicConfigurations
+    getPublicConfigurations,
+    getPublicDocument,
+    getPublicQuotation
 } = require('../controllers/public');
 const validate = require('../middleware/validate');
 const {
@@ -14,7 +16,9 @@ const {
     listPublicProjectsQuerySchema,
     listPublicPropertiesQuerySchema,
     publicProjectParamSchema,
-    publicPropertyParamSchema
+    publicPropertyParamSchema,
+    publicDocumentQuerySchema,
+    publicQuotationQuerySchema
 } = require('../validators/public');
 
 const rateLimit = require('express-rate-limit');
@@ -48,5 +52,14 @@ router.get('/properties', readLimiter, validate(listPublicPropertiesQuerySchema)
 router.get('/properties/:token', readLimiter, validate(publicPropertyParamSchema), getPublicProperty);
 router.get('/locations', readLimiter, getPublicLocations);
 router.get('/configurations', readLimiter, getPublicConfigurations);
+
+// The project's uploaded brochure PDF (stored file — never generated).
+// Public by design: WhatsApp/Meta fetches this link to deliver the
+// attachment, exactly like the quotation route below.
+router.get('/documents', readLimiter, validate(publicDocumentQuerySchema), getPublicDocument);
+
+// On-demand quotation PDF (price list + charges + per-send add-ons ->
+// itemised document), same delivery contract as the documents route above.
+router.get('/quotations', readLimiter, validate(publicQuotationQuerySchema), getPublicQuotation);
 
 module.exports = router;

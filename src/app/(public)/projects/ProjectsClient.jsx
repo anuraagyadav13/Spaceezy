@@ -111,7 +111,7 @@ export default function ProjectsClient({ initialData, initialFilters }) {
                     <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-4">Discover Projects</h1>
                     <p className="text-gray-500 text-lg max-w-2xl">
                         Browse every published project with current prices, unit availability and configurations,
-                        synced from the SpaceEzy team&apos;s inventory. Narrow the list by state, district, property
+                        synced from the Spaceezy team&apos;s inventory. Narrow the list by state, district, property
                         type and budget — then open a project for amenities, RERA details, possession timelines and
                         ready-to-move units.
                     </p>

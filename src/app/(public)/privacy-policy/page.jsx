@@ -1,6 +1,6 @@
 export const metadata = {
-    title: "Privacy Policy | SpaceEzy",
-    description: "How SpaceEzy collects, uses and protects your personal information across our website and services.",
+    title: "Privacy Policy | Spaceezy",
+    description: "How Spaceezy collects, uses and protects your personal information across our website and services.",
     alternates: { canonical: "/privacy-policy" },
     robots: { index: true, follow: true },
 };
@@ -15,7 +15,7 @@ export default function PrivacyPolicy() {
                     <p>Last updated: January 2026</p>
                     
                     <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">1. Introduction</h2>
-                    <p>Welcome to SpaceEzy. We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you as to how we look after your personal data when you visit our website.</p>
+                    <p>Welcome to Spaceezy. We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you as to how we look after your personal data when you visit our website.</p>
                     
                     <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">2. The data we collect</h2>
                     <p>We may collect, use, store and transfer different kinds of personal data about you which we have grouped together follows:</p>

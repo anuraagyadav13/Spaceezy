@@ -6,7 +6,7 @@ import { SITE_URL, organizationJsonLd, webSiteJsonLd } from "../../lib/seo/site"
 
 export const metadata = {
     metadataBase: new URL(SITE_URL),
-    title: "SpaceEzy | Premium Real Estate",
+    title: "Spaceezy | Premium Real Estate",
     description: "Discover spaces designed for the way you want to live. Premium real estate projects and properties.",
 };
 

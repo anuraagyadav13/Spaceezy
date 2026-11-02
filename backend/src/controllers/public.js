@@ -81,6 +81,83 @@ const getPublicConfigurations = asyncHandler(async (req, res) => {
     });
 });
 
+// Serves the project's UPLOADED brochure PDF (documents JSON entry) on
+// demand. No auth: Meta's servers fetch this URL to deliver the WhatsApp
+// document message, exactly like the quotation route below. The payload is
+// the file the employee uploaded — nothing is ever generated. The bucket
+// (or local uploads dir) stays private; this route is the delivery path.
+const { AppError } = require('../utils/errors');
+const { findBrochureDocument, readDocument } = require('../services/storageService');
+const { slugify } = require('../utils/publicLink');
+
+const getPublicDocument = asyncHandler(async (req, res) => {
+    // Same visibility contract as every other public read: only a published,
+    // non-archived project of this installation's organization resolves.
+    // Without it any archived/draft/other-org project's brochure would be
+    // downloadable by anyone holding its UUID.
+    const organizationId = await PublicService.defaultOrganization();
+    const project = await prisma.project.findFirst({
+        where: { id: req.query.projectId, organizationId, ...PublicService.PUBLIC_PROJECT_WHERE },
+        select: { name: true, documents: true }
+    });
+    if (!project) throw new AppError('Project not found', 404, 'NOT_FOUND');
+
+    const brochure = findBrochureDocument(project.documents);
+    if (!brochure) {
+        throw new AppError('No brochure PDF has been uploaded for this project yet.', 404, 'NO_BROCHURE');
+    }
+    const file = await readDocument(brochure);
+    if (!file || !file.stream) {
+        throw new AppError('The brochure file is currently unavailable.', 404, 'NO_BROCHURE');
+    }
+
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${slugify(project.name) || 'project'}-brochure.pdf"`);
+    res.set('Cache-Control', 'public, max-age=3600');
+    // A broken storage stream must not crash the process mid-download.
+    file.stream.on('error', () => res.destroy());
+    file.stream.pipe(res);
+});
+
+// Renders the quotation PDF on demand from live project/unit data. Same
+// delivery contract as the brochure route: no auth, Meta's servers fetch
+// the link for the WhatsApp document message. The render is restricted to a
+// public, non-archived project of this organization (the PDF carries
+// commercial rows the public project DTOs do not expose). Any per-send
+// add-on values travel as `addons` JSON and are re-validated inside the
+// renderer (nothing from the URL is trusted).
+const { generateQuotation } = require('../services/quotationPdf');
+
+const getPublicQuotation = asyncHandler(async (req, res) => {
+    // Same visibility contract as the brochure route: only a published,
+    // non-archived project of this organization renders. The gate runs before
+    // the render because the PDF carries commercial rows the public project
+    // DTOs do not expose; the unit (if any) is then scoped to that project
+    // inside buildQuotationData.
+    const organizationId = await PublicService.defaultOrganization();
+    const visible = await prisma.project.findFirst({
+        where: { id: req.query.projectId, organizationId, ...PublicService.PUBLIC_PROJECT_WHERE },
+        select: { id: true }
+    });
+    if (!visible) throw new AppError('Project not found', 404, 'NOT_FOUND');
+
+    const { buffer, filename } = await generateQuotation({
+        organizationId,
+        projectId: req.query.projectId,
+        propertyId: req.query.unit || null,
+        by: req.query.by,
+        customer: req.query.customer,
+        addons: req.query.addons,
+        // Editable sheet from the composer: cost rows, brokerage %, GST % and
+        // payout ratios — fully re-validated inside sanitizeQuote.
+        quote: req.query.quote
+    });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.status(200).send(buffer);
+});
+
 module.exports = {
     handlePublicEnquiry,
     getPublicProjects,
@@ -88,5 +165,7 @@ module.exports = {
     getPublicProperties,
     getPublicProperty,
     getPublicLocations,
-    getPublicConfigurations
+    getPublicConfigurations,
+    getPublicDocument,
+    getPublicQuotation
 };
