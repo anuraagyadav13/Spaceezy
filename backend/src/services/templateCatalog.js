@@ -52,17 +52,23 @@ const TEMPLATE_LIBRARY = [
     {
         name: 'Brochure & Floor Plan',
         group: 'Floor Plan & Brochure',
-        description: 'Send the project brochure and floor-plan link.',
-        body: 'Hi {{customer_name}}, here is the brochure and floor plan for {{project_name}}: {{brochure_url}}. Let me know which configuration catches your eye. - {{salesperson_name}}',
-        variables: ['customer_name', 'project_name', 'brochure_url', 'salesperson_name'],
+        description: 'Share the property page with full details and photos.',
+        // The link opens the PUBLIC PROPERTY PAGE (details + photos), never
+        // the brochure file; the uploaded brochure PDF still rides as an
+        // optional attachment from the composer.
+        body: 'Hi {{customer_name}}, here are the full details and photos for {{project_name}}: {{project_url}}. Let me know which configuration catches your eye. - {{salesperson_name}}',
+        variables: ['customer_name', 'project_name', 'project_url', 'salesperson_name'],
         metaCategory: 'UTILITY'
     },
     {
         name: 'Property Quotation',
         group: 'Floor Plan & Brochure',
         description: 'Send an itemised price quotation with the payment schedule.',
-        body: 'Hi {{customer_name}}, here is the detailed quotation for {{project_name}} with the full cost breakdown and payment schedule: {{quotation_url}}. Happy to walk you through the terms whenever you like. - {{salesperson_name}}',
-        variables: ['customer_name', 'project_name', 'quotation_url', 'salesperson_name'],
+        // The text carries the SHORT public property-details link; the
+        // itemised quotation rides as the attached PDF — the customer's
+        // chat never gets a giant quote= URL.
+        body: 'Hi {{customer_name}}, here is the detailed quotation for {{project_name}} with the full cost breakdown and payment schedule. View the project page: {{project_url}}. Happy to walk you through the terms whenever you like. - {{salesperson_name}}',
+        variables: ['customer_name', 'project_name', 'project_url', 'salesperson_name'],
         metaCategory: 'UTILITY'
     },
     {

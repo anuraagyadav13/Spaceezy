@@ -27,6 +27,24 @@ const getMessages = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data: result, message: 'Messages fetched successfully' });
 });
 
+const updateConversation = asyncHandler(async (req, res) => {
+    const { organizationId, userId, role } = req.auth;
+    const conversation = await WhatsAppService.updateConversationStatus(req.params.id, organizationId, userId, role, req.body.status);
+    res.status(200).json({ success: true, data: conversation, message: 'Conversation updated successfully' });
+});
+
+const assignConversation = asyncHandler(async (req, res) => {
+    const { organizationId, userId, role } = req.auth;
+    const data = await WhatsAppService.assignConversation(req.params.id, organizationId, userId, role, req.body.assignedToId || null);
+    res.status(200).json({ success: true, data, message: data.changed ? 'Conversation assigned' : 'Conversation already assigned' });
+});
+
+const markConversationRead = asyncHandler(async (req, res) => {
+    const { organizationId, role, userId } = req.auth;
+    const data = await WhatsAppService.markConversationRead(req.params.id, organizationId, role, userId);
+    res.status(200).json({ success: true, data, message: 'Conversation marked as read' });
+});
+
 const sendMessage = asyncHandler(async (req, res) => {
     const { organizationId, userId, role } = req.auth;
     const message = await WhatsAppService.sendMessage(req.params.id, req.body, organizationId, userId, role);
@@ -98,11 +116,29 @@ const testNotify = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data, message: 'Test notification sent' });
 });
 
+// Embedded Signup (Coexistence): exchange Meta's short-lived code for the
+// permanent business token, discover the phone_number_id from the WABA and
+// store everything encrypted. Service performs no number lifecycle calls;
+// responses carry only display-safe fields (never code/token/secret).
+const completeEmbeddedSignup = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const data = await WhatsappSettingsService.completeEmbeddedSignup(organizationId, userId, {
+        code: req.body.code,
+        wabaId: req.body.wabaId,
+        phoneNumberId: req.body.phoneNumberId,
+        event: req.body.event,
+    });
+    res.status(200).json({ success: true, data, message: 'WhatsApp Business App connected via Embedded Signup' });
+});
+
 module.exports = {
     getStatus,
     listConversations,
     createConversation,
     getMessages,
+    updateConversation,
+    assignConversation,
+    markConversationRead,
     sendMessage,
     listTemplates,
     listLibrary,
@@ -114,5 +150,6 @@ module.exports = {
     removeSecret,
     testConnection,
     latestNotification,
-    testNotify
+    testNotify,
+    completeEmbeddedSignup
 };

@@ -7,14 +7,16 @@ import {
     MessageSquare, MessageCircle, Send, AlertCircle, RefreshCw, Link2, Search,
     Check, CheckCheck, Clock, Phone, Video, MoreVertical, Paperclip, Plus, X,
     List, Settings, Signal, ExternalLink, CalendarPlus, FileText, KeyRound, Receipt,
-    Maximize2, Minimize2
+    Maximize2, Minimize2, Copy
 } from "lucide-react";
 import { fetchLeads, fetchLeadById } from "../../../../lib/api/leads";
+import { fetchUsers } from "../../../../lib/api/users";
 import { fetchPropertyById, fetchProperties } from "../../../../lib/api/properties";
 import { fetchProjects, fetchProjectById, uploadProjectBrochure, removeProjectBrochure } from "../../../../lib/api/projects";
 import { showToast } from "../../../../lib/toast";
 import { formatCurrency } from "../../../../features/pipeline/helpers";
 import { useAuth } from "../../../../features/auth/hooks/useAuth";
+import { usePermissions } from "../../../../features/auth/hooks/usePermissions";
 import UnifiedTimeline from "../../../../features/communication/components/UnifiedTimeline";
 import {
     useWhatsAppStatus,
@@ -22,6 +24,9 @@ import {
     useMessages,
     useCreateConversation,
     useSendMessage,
+    useUpdateConversationStatus,
+    useAssignConversation,
+    useMarkConversationRead,
     useWhatsAppTemplates,
     useTemplateLibrary,
     useTestWhatsappConnection
@@ -47,7 +52,7 @@ const renderPreview = (body, values) => {
 // uses any of these opens the project picker in the composer, so a template can
 // be sent for any project — not only the one linked to the lead.
 const PROJECT_TEMPLATE_VARS = [
-    "brochure_url", "quotation_url", "project_name", "location", "price_range", "site_address",
+    "brochure_url", "quotation_url", "project_url", "project_name", "location", "price_range", "site_address",
     "property_name", "configuration"
 ];
 
@@ -184,6 +189,10 @@ function WhatsAppCenterPageInner() {
     // Manual variable overrides keyed by variable name. Anything not
     // overridden falls back to auto-filled record values (see getVar).
     const [varValues, setVarValues] = useState({});
+    // brochure_url / quotation_url are shown as a short live-link chip, not
+    // the raw URL (the quotation link can carry a huge ?quote= sheet blob).
+    // Raw value stays one click away behind "Show link".
+    const [linkRawShown, setLinkRawShown] = useState({});
     // Project chosen in the composer's picker. When set it outranks the
     // lead's own project for every project-derived variable (project name,
     // brochure link, price range…), letting one template be sent for any
@@ -246,6 +255,31 @@ function WhatsAppCenterPageInner() {
     const [rightTab, setRightTab] = useState("details");
     const [mobileListOpen, setMobileListOpen] = useState(false);
     const { user } = useAuth();
+    const { hasPermission } = usePermissions();
+    // Assigning a conversation is lead assignment server-side, so the control
+    // is gated on exactly the permission that already governs lead assignment
+    // (admins/managers). Executives never see the assignee filter either.
+    const canAssignConversations = hasPermission("lead:assign");
+
+    // Shared-inbox filters: conversation status (Open/Closed) and assignee.
+    const [convStatusFilter, setConvStatusFilter] = useState("all"); // all | ACTIVE | CLOSED
+    const [assigneeFilter, setAssigneeFilter] = useState("all"); // all | unassigned | <userId>
+    // Header "More options" menu — the pre-existing stub button now opens a
+    // small menu carrying only the conversation actions that already exist
+    // elsewhere on this page (mark-as-read, close/reopen). Every action calls
+    // the same mutations the working controls use, so the server keeps
+    // enforcing RBAC + org scope exactly as before. Holds the id of the
+    // conversation the menu was opened for: switching threads makes it vanish
+    // on its own (derived state, no reset effect), so it can never act on a
+    // thread other than the one it was opened on.
+    const [convMenuFor, setConvMenuFor] = useState(null);
+    const convMenuOpen = convMenuFor !== null;
+    // Debounced server-side search term (reaches beyond the loaded page).
+    const [serverQ, setServerQ] = useState("");
+    useEffect(() => {
+        const timer = setTimeout(() => setServerQ(convSearch.trim()), 350);
+        return () => clearTimeout(timer);
+    }, [convSearch]);
 
     const { data: leadsData } = useQuery({
         queryKey: ["leads", "whatsapp-picker"],
@@ -262,10 +296,29 @@ function WhatsAppCenterPageInner() {
         retry: 1
     });
 
-    const { data: conversations, refetch: refetchConvs, isFetching: convsFetching } = useConversations({ limit: 50 });
+    const { data: conversations, refetch: refetchConvs, isFetching: convsFetching } = useConversations({ limit: 50 }, { refetchInterval: 15_000 });
+    // Debounced server-side search — only active while the typed text matches
+    // the debounced term, so the instant client-side filter below wins during
+    // typing and the thread you have open can never vanish from the base list.
+    const { data: searchResults } = useConversations(
+        { limit: 50, q: serverQ },
+        { enabled: serverQ.length >= 2, refetchInterval: 15_000 }
+    );
+    // Active employees for the assignee filter and the assign control.
+    const { data: employeesData } = useQuery({
+        queryKey: ["users", "whatsapp-assign"],
+        queryFn: () => fetchUsers({ limit: 100, status: "ACTIVE" }),
+        enabled: canAssignConversations,
+        staleTime: 5 * 60_000,
+        retry: 1
+    });
+    const employeeList = Array.isArray(employeesData) ? employeesData : [];
     const createConversation = useCreateConversation();
     const sendMessage = useSendMessage();
     const testConnection = useTestWhatsappConnection();
+    const conversationStatus = useUpdateConversationStatus();
+    const assignConversation = useAssignConversation();
+    const markConversationRead = useMarkConversationRead();
     const { data: templates } = useWhatsAppTemplates();
 
     // All projects for the composer's picker — a template is often sent for a
@@ -315,6 +368,40 @@ function WhatsAppCenterPageInner() {
         .sort((a, b) => new Date(b.lastMessageAt || b.createdAt || 0) - new Date(a.lastMessageAt || a.createdAt || 0));
     const conversation = conversationList.find((c) => c.leadId === selectedLeadId) || null;
     const { data: thread, isLoading: threadLoading, refetch, isFetching } = useMessages(conversation?.id, {}, { enabled: Boolean(conversation?.id) });
+
+    // Shared unread counter clears when the thread is opened — and again if a
+    // new inbound lands while it's open. Guarded per (id, count) so re-renders
+    // never double-fire; the server only writes when the count is > 0.
+    const activeConvId = conversation?.id || null;
+    const activeConvUnread = conversation?.unreadCount || 0;
+    const markReadKeyRef = useRef(null);
+    useEffect(() => {
+        if (!activeConvId || !(activeConvUnread > 0)) return;
+        const key = `${activeConvId}:${activeConvUnread}`;
+        if (markReadKeyRef.current === key) return;
+        markReadKeyRef.current = key;
+        markConversationRead.mutate(activeConvId, {
+            onError: () => { markReadKeyRef.current = null; }
+        });
+    }, [activeConvId, activeConvUnread, markConversationRead]);
+
+    // The menu only ever acts on the currently open thread: close it on
+    // outside click and on Escape. (Switching conversations closes it via the
+    // convMenuFor === conversation.id render guard instead of an effect.)
+    const convMenuRef = useRef(null);
+    useEffect(() => {
+        if (!convMenuOpen) return;
+        const onPointerDown = (e) => {
+            if (convMenuRef.current && !convMenuRef.current.contains(e.target)) setConvMenuFor(null);
+        };
+        const onKeyDown = (e) => { if (e.key === "Escape") setConvMenuFor(null); };
+        document.addEventListener("pointerdown", onPointerDown);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("pointerdown", onPointerDown);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+    }, [convMenuOpen]);
 
     const selectedLead = leads.find((l) => l.id === selectedLeadId)
         || conversationList.find((c) => c.leadId === selectedLeadId)?.lead
@@ -533,6 +620,20 @@ function WhatsAppCenterPageInner() {
         site_address: projectData?.address || "",
         brochure_url: brochureUrl,
         quotation_url: quotationUrl,
+        // Short, stable PROPERTY DETAILS link (no query params at all) —
+        // unlike brochure_url, which prefers the uploaded brochure PDF.
+        // Written WITHOUT the scheme ("yourdomain.com/projects/...") so the
+        // chat shows a small written link, never a raw http://localhost
+        // address; in production the deployed domain takes its place
+        // automatically. Last-resort fallbacks keep the template sendable.
+        project_url: (() => {
+            const strip = (u) => String(u || "").replace(/^https?:\/\//, "");
+            if (projectData?.publicSlug) {
+                const origin = typeof window !== "undefined" ? window.location.origin : "";
+                return `${strip(origin)}/projects/${projectData.publicSlug}`;
+            }
+            return strip(brochureUrl) || strip(quotationUrl);
+        })(),
         salesperson_name: user?.name || "",
     };
     const getVar = (name) => (varValues[name] !== undefined ? varValues[name] : (autoVars[name] || ""));
@@ -597,14 +698,19 @@ function WhatsAppCenterPageInner() {
     // for every project, on every template and on plain text, independent
     // of the quotation. A customized row may have lost the recorded variable
     // list, so the body is checked too — the PDF must never be silently
-    // skipped.
+    // skipped. The library's Property Quotation no longer carries the giant
+    // {{quotation_url}} in its body at all (the text links the short public
+    // project page instead; the itemised PDF rides as an attachment), so it
+    // is recognised by name — custom rows carrying the variable keep
+    // working through carriesVar.
     const carriesVar = (name) => Boolean(
         selectedDef && (
             (Array.isArray(selectedDef.variables) && selectedDef.variables.includes(name)) ||
             String(selectedDef.body || "").includes(name)
         )
     );
-    const usesCompanionPdf = carriesVar("quotation_url");
+    const usesCompanionPdf = carriesVar("quotation_url")
+        || /quotation/i.test(String(selectedDef?.name || ""));
     // Which PDFs (if any) this send carries. Brochure and quotation are
     // INDEPENDENT options — the brochure is an employee-uploaded file and is
     // offered on every template and on plain text, with no quotation needed.
@@ -820,6 +926,17 @@ function WhatsAppCenterPageInner() {
         if (conversation?.id) refetch();
     };
 
+    // Close / reopen the open thread (server re-checks scope + permissions).
+    const changeConversationStatus = async (status) => {
+        if (!conversation?.id) return;
+        try {
+            await conversationStatus.mutateAsync({ conversationId: conversation.id, status });
+            showToast(status === "CLOSED" ? "Conversation closed" : "Conversation reopened", "success");
+        } catch (err) {
+            showToast(err?.message || "Failed to update the conversation", "error");
+        }
+    };
+
     const handleTestConnection = async () => {
         if (status?.simulated) {
             showToast(`Mock provider active — messages are simulated inside the CRM and never leave it (${status?.provider || "mock"})`, "success");
@@ -983,16 +1100,30 @@ function WhatsAppCenterPageInner() {
         if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
     }, [orderedMessages.length, conversation?.id]);
 
-    // Conversation list: search + All / Unread / My Leads, newest first.
+    // Conversation list: server search (debounced, beyond the loaded page) →
+    // instant client search → status / assignee filters → All / Unread /
+    // My Leads tabs, newest first. The base `conversationList` stays
+    // unfiltered so the open thread is never dropped while filtering.
     const searchQ = convSearch.trim().toLowerCase();
-    const searchedConvs = searchQ
-        ? conversationList.filter((c) => [c.lead?.name, c.lead?.phone].filter(Boolean).some((v) => String(v).toLowerCase().includes(searchQ)))
-        : conversationList;
+    const serverSearchActive = serverQ.length >= 2
+        && searchQ === serverQ.toLowerCase()
+        && Array.isArray(searchResults);
+    const searchedConvs = serverSearchActive
+        ? searchResults
+        : searchQ
+            ? conversationList.filter((c) => [c.lead?.name, c.lead?.phone].filter(Boolean).some((v) => String(v).toLowerCase().includes(searchQ)))
+            : conversationList;
+    const statusFilteredConvs = searchedConvs.filter((c) => {
+        if (convStatusFilter !== "all" && String(c.status || "ACTIVE") !== convStatusFilter) return false;
+        if (assigneeFilter === "unassigned") return !c.lead?.assignedToId;
+        if (assigneeFilter !== "all" && c.lead?.assignedToId !== assigneeFilter) return false;
+        return true;
+    });
     const filteredConvs = convFilter === "unread"
-        ? searchedConvs.filter((c) => (c.unreadCount || 0) > 0)
+        ? statusFilteredConvs.filter((c) => (c.unreadCount || 0) > 0)
         : convFilter === "mine"
-            ? searchedConvs.filter((c) => c.lead?.assignedToId && user?.id && c.lead.assignedToId === user.id)
-            : searchedConvs;
+            ? statusFilteredConvs.filter((c) => c.lead?.assignedToId && user?.id && c.lead.assignedToId === user.id)
+            : statusFilteredConvs;
     const unreadTotal = conversationList.filter((c) => (c.unreadCount || 0) > 0).length;
     const mineTotal = conversationList.filter((c) => c.lead?.assignedToId && user?.id && c.lead.assignedToId === user.id).length;
 
@@ -1013,6 +1144,38 @@ function WhatsAppCenterPageInner() {
     const detailAssignee = detailLead?.assignedTo?.name || "";
     const detailSource = detailLead?.source || "";
     const headerContext = [detailProject, detailConfig, autoVars.price_range].filter(Boolean).join(" · ");
+
+    // Status + assignee filter controls — one definition, reused by the
+    // desktop list and the mobile "More" panel (assignee control only for
+    // roles that may assign leads).
+    const convFilterControls = (
+        <div className="flex gap-1.5 min-w-0">
+            <select
+                value={convStatusFilter}
+                onChange={(e) => setConvStatusFilter(e.target.value)}
+                aria-label="Filter conversations by status"
+                className="flex-1 min-w-0 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-violet-400"
+            >
+                <option value="all">All statuses</option>
+                <option value="ACTIVE">Open</option>
+                <option value="CLOSED">Closed</option>
+            </select>
+            {canAssignConversations && (
+                <select
+                    value={assigneeFilter}
+                    onChange={(e) => setAssigneeFilter(e.target.value)}
+                    aria-label="Filter conversations by assigned employee"
+                    className="flex-1 min-w-0 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-violet-400"
+                >
+                    <option value="all">All assignees</option>
+                    <option value="unassigned">Unassigned</option>
+                    {employeeList.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                </select>
+            )}
+        </div>
+    );
 
     const convListBody = (
         <>
@@ -1044,6 +1207,11 @@ function WhatsAppCenterPageInner() {
                                 <span className="shrink-0 text-[11px] text-gray-400">{formatConvTime(c.lastMessageAt || c.createdAt)}</span>
                             </span>
                             <span className="block text-xs text-gray-500 truncate mt-0.5">{snippetOf(c)}</span>
+                            {canAssignConversations ? (
+                                <span className={`block text-[10px] font-bold truncate mt-0.5 ${c.lead?.assignedToId ? "text-gray-400" : "text-amber-600"}`}>
+                                    {c.lead?.assignedTo?.name ? `→ ${c.lead.assignedTo.name}` : "Unassigned"}
+                                </span>
+                            ) : null}
                         </span>
                     </button>
                 );
@@ -1215,8 +1383,15 @@ function WhatsAppCenterPageInner() {
                                 // never a PDF: no brochure reaches a client).
                                 // It only falls back to a manual field when the
                                 // project has no public link to build from.
-                                const derivedLink = (name === "brochure_url" || name === "quotation_url")
+                                const derivedLink = (name === "brochure_url" || name === "quotation_url" || name === "project_url")
                                     && getVar(name).trim() !== "";
+                                // project_url is written without a scheme on purpose;
+                                // "//host/path" keeps the chip clickable instead of the
+                                // browser parsing "localhost" as a custom protocol.
+                                const linkHref = (() => {
+                                    const v = getVar(name).trim();
+                                    return /^(?:https?:)?\/\//i.test(v) ? v : `//${v}`;
+                                })();
                                 return (
                                     <div key={name} className="min-w-0">
                                         <label className="flex items-center gap-2 text-[11px] font-bold text-gray-600 mb-1 min-w-0">
@@ -1229,13 +1404,54 @@ function WhatsAppCenterPageInner() {
                                         </label>
                                         {derivedLink ? (
                                             <>
-                                                <div className="w-full min-w-0 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 flex items-start gap-2">
-                                                    <Link2 size={13} className="shrink-0 mt-0.5 text-gray-400" />
-                                                    <span className="min-w-0 break-all">{getVar(name)}</span>
+                                                <div className="w-full min-w-0 bg-white border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-2">
+                                                    <Link2 size={13} className="shrink-0 text-gray-400" />
+                                                    <a
+                                                        href={linkHref}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        title={getVar(name)}
+                                                        className="min-w-0 flex-1 truncate text-sm font-bold text-indigo-600 hover:underline"
+                                                    >
+                                                        {projectData?.name || "Project"} — {name === "quotation_url" ? "Quotation PDF" : name === "project_url" ? "Project page" : "Brochure link"}
+                                                    </a>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const url = getVar(name);
+                                                            if (navigator.clipboard?.writeText) {
+                                                                navigator.clipboard.writeText(url)
+                                                                    .then(() => showToast("Link copied", "success"))
+                                                                    .catch(() => showToast("Could not copy the link", "error"));
+                                                            } else {
+                                                                showToast("Copying isn't supported in this browser", "error");
+                                                            }
+                                                        }}
+                                                        className="shrink-0 text-[10px] font-black uppercase tracking-wide text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 rounded-lg px-2 py-1 inline-flex items-center gap-1"
+                                                    >
+                                                        <Copy size={11} /> Copy
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setLinkRawShown((m) => ({ ...m, [name]: !m[name] }))}
+                                                        aria-pressed={!!linkRawShown[name]}
+                                                        className="shrink-0 text-[10px] font-black uppercase tracking-wide text-gray-500 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 rounded-lg px-2 py-1"
+                                                    >
+                                                        {linkRawShown[name] ? "Hide link" : "Show link"}
+                                                    </button>
                                                 </div>
+                                                {linkRawShown[name] ? (
+                                                    <input
+                                                        type="text"
+                                                        readOnly
+                                                        value={getVar(name)}
+                                                        aria-label={`Raw value for ${name}`}
+                                                        className="w-full min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 mt-1 text-[11px] text-gray-500 focus:outline-none"
+                                                    />
+                                                ) : null}
                                                 {projectData?.name ? (
                                                     <p className="text-[10px] text-gray-400 mt-1">
-                                                        From {projectData.name} — pick another project above to change it.
+                                                        Live link — opens {name === "quotation_url" ? "the PDF quotation" : name === "project_url" ? "the project page" : "the brochure page"} for {projectData.name}. Pick another project above to change it.
                                                         {name === "quotation_url" && pdfPreviewUrl ? (
                                                             <>
                                                                 {" "}
@@ -1660,6 +1876,36 @@ function WhatsAppCenterPageInner() {
                             </div>
                         ))}
                     </dl>
+                    {canAssignConversations && conversation?.id && employeeList.length > 0 ? (
+                        <div className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 min-w-0">
+                            <label htmlFor="conv-assign-select" className="text-[11px] font-bold text-gray-500">Assign Conversation</label>
+                            <select
+                                id="conv-assign-select"
+                                value={conversation.lead?.assignedToId || ""}
+                                disabled={assignConversation.isPending}
+                                onChange={async (e) => {
+                                    const target = e.target.value || null;
+                                    try {
+                                        await assignConversation.mutateAsync({ conversationId: conversation.id, assignedToId: target });
+                                        showToast(target ? "Conversation assigned" : "Conversation unassigned", "success");
+                                    } catch (err) {
+                                        showToast(err?.message || "Failed to assign the conversation", "error");
+                                    }
+                                }}
+                                className="mt-1 w-full text-sm font-semibold text-gray-900 bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-violet-400"
+                            >
+                                <option value="">Unassigned</option>
+                                {(conversation.lead?.assignedToId && !employeeList.some((u) => u.id === conversation.lead.assignedToId)) ? (
+                                    <option value={conversation.lead.assignedToId}>
+                                        {conversation.lead?.assignedTo?.name || detailAssignee || "Current assignee"}
+                                    </option>
+                                ) : null}
+                                {employeeList.map((u) => (
+                                    <option key={u.id} value={u.id}>{u.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : null}
                     <Link
                         href={`/dashboard/leads/${selectedLeadId}`}
                         className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl border-2 border-violet-500 text-violet-700 text-sm font-bold hover:bg-violet-50 transition-colors"
@@ -1780,6 +2026,11 @@ function WhatsAppCenterPageInner() {
                                         {String(leadStatusLabel).replace(/_/g, " ")}
                                     </span>
                                 ) : null}
+                                {conversation?.status === "CLOSED" ? (
+                                    <span className="shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300 uppercase">
+                                        Closed
+                                    </span>
+                                ) : null}
                             </p>
                             <p className="text-xs text-gray-500 truncate">{leadPhone}{headerContext ? ` · ${headerContext}` : ""}</p>
                         </div>
@@ -1795,9 +2046,77 @@ function WhatsAppCenterPageInner() {
                             <button onClick={handleVideo} className="p-2 rounded-full text-gray-600 hover:bg-gray-100" aria-label="Video call (not available)" title="Video calls aren't available yet">
                                 <Video size={17} />
                             </button>
-                            <button onClick={() => showToast("Conversation options aren't available yet", "error")} className="p-2 rounded-full text-gray-600 hover:bg-gray-100" aria-label="More conversation options" title="More options">
-                                <MoreVertical size={17} />
-                            </button>
+                            {conversation.status === "CLOSED" ? (
+                                <button
+                                    onClick={() => changeConversationStatus("ACTIVE")}
+                                    disabled={conversationStatus.isPending}
+                                    className="p-2 rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                                    aria-label="Reopen conversation"
+                                    title="Reopen conversation"
+                                >
+                                    <RefreshCw size={17} />
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => changeConversationStatus("CLOSED")}
+                                    disabled={conversationStatus.isPending}
+                                    className="p-2 rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                                    aria-label="Close conversation"
+                                    title="Close conversation"
+                                >
+                                    <X size={17} />
+                                </button>
+                            )}
+                            <div className="relative" ref={convMenuRef}>
+                                <button
+                                    onClick={() => setConvMenuFor((cur) => (cur === conversation.id ? null : conversation.id))}
+                                    className="p-2 rounded-full text-gray-600 hover:bg-gray-100"
+                                    aria-label="More conversation options"
+                                    aria-haspopup="menu"
+                                    aria-expanded={convMenuOpen}
+                                    title="More options"
+                                >
+                                    <MoreVertical size={17} />
+                                </button>
+                                {convMenuFor === conversation.id ? (
+                                    <div
+                                        role="menu"
+                                        aria-label="Conversation options"
+                                        className="absolute right-0 top-full mt-1 z-30 min-w-[190px] bg-white border border-gray-200 rounded-xl shadow-lg py-1"
+                                    >
+                                        {(conversation.unreadCount || 0) > 0 ? (
+                                            <button
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    setConvMenuFor(null);
+                                                    markConversationRead.mutate(conversation.id, {
+                                                        onError: (err) => showToast(err?.message || "Failed to mark as read", "error")
+                                                    });
+                                                }}
+                                                disabled={markConversationRead.isPending}
+                                                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 text-left"
+                                            >
+                                                <CheckCheck size={14} className="shrink-0 text-gray-400" /> Mark as read
+                                            </button>
+                                        ) : null}
+                                        <button
+                                            role="menuitem"
+                                            onClick={() => {
+                                                setConvMenuFor(null);
+                                                changeConversationStatus(conversation.status === "CLOSED" ? "ACTIVE" : "CLOSED");
+                                            }}
+                                            disabled={conversationStatus.isPending}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 text-left"
+                                        >
+                                            {conversation.status === "CLOSED" ? (
+                                                <><RefreshCw size={14} className="shrink-0 text-gray-400" /> Reopen conversation</>
+                                            ) : (
+                                                <><X size={14} className="shrink-0 text-gray-400" /> Close conversation</>
+                                            )}
+                                        </button>
+                                    </div>
+                                ) : null}
+                            </div>
                         </div>
                     </div>
 
@@ -1886,6 +2205,11 @@ function WhatsAppCenterPageInner() {
                     </div>
 
                     <div className="shrink-0 bg-white border-t border-gray-100 px-3 sm:px-4 pt-2 pb-3 space-y-2">
+                        {conversation.status === "CLOSED" && (
+                            <p className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                                This conversation is closed — reopen it from the header to send messages.
+                            </p>
+                        )}
                         <div className="flex items-center gap-1">
                             <div className="flex rounded-lg bg-gray-100 p-0.5 text-xs font-bold">
                                 <button
@@ -2090,6 +2414,7 @@ function WhatsAppCenterPageInner() {
                 </div>
                 {mobileListOpen && (
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-2 space-y-1 max-h-72 overflow-y-auto custom-scrollbar">
+                        <div className="min-w-0">{convFilterControls}</div>
                         {convListBody}
                     </div>
                 )}
@@ -2125,6 +2450,7 @@ function WhatsAppCenterPageInner() {
                             </button>
                         ))}
                     </div>
+                    <div className="mb-2 min-w-0">{convFilterControls}</div>
                     <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-1 pr-0.5">
                         {convsFetching && conversationList.length === 0 && (
                             <p className="text-sm text-gray-400 px-1 py-4 text-center">Loading conversations...</p>

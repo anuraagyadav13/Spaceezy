@@ -5,6 +5,8 @@ const { getWhatsAppProvider } = require('../providers/whatsapp');
 const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
 const WhatsappSettingsService = require('./whatsappSettingsService');
 const { getCatalogEntry } = require('./templateCatalog');
+const { normalizeMetaTemplateName } = require('../utils/metaTemplateName');
+const { TEMPLATE_LANGUAGE } = require('../constants/whatsapp');
 
 // Outbox-driven new-lead WhatsApp notifications (owner/team alerts, never
 // customer messages). Design notes:
@@ -75,7 +77,7 @@ class WhatsappNotifyService {
                         organizationId,
                         name: getCatalogEntry(templateName).name,
                         providerTemplateId: null,
-                        language: 'en',
+                        language: TEMPLATE_LANGUAGE,
                         category: getCatalogEntry(templateName).metaCategory,
                         description: getCatalogEntry(templateName).description,
                         body: getCatalogEntry(templateName).body,
@@ -116,7 +118,7 @@ class WhatsappNotifyService {
         }, credentials);
         const approved = (Array.isArray(data.data) ? data.data : []).some(
             (t) => t && typeof t.name === 'string'
-                && t.name.toLowerCase() === String(templateName).toLowerCase()
+                && normalizeMetaTemplateName(t.name) === normalizeMetaTemplateName(templateName)
                 && String(t.status).toUpperCase() === 'APPROVED'
         );
         if (!approved) {

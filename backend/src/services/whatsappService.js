@@ -1,5 +1,6 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { TEMPLATE_LANGUAGE } = require('../constants/whatsapp');
 const { getWhatsAppProvider } = require('../providers/whatsapp');
 const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
 const WhatsappSettingsService = require('./whatsappSettingsService');
@@ -10,8 +11,9 @@ const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { buildPublicPropertyUrl, buildPublicApiUrl, slugify } = require('../utils/publicLink');
 const { findBrochureDocument } = require('./storageService');
 const { buildQuotationUrl, sanitizeAddons, sanitizeQuote, VALIDITY_DAYS: QUOTATION_VALIDITY_DAYS } = require('./quotationPdf');
-const { isExecRole } = require('../utils/roles');
+const { isExecRole, assignmentSourceForRole } = require('../utils/roles');
 const { assertOwnership } = require('../utils/roles');
+const NotificationService = require('./notificationService');
 
 const maskConversation = (conv, role) => {
     if (!conv || canSeePII(role)) return conv;
@@ -36,23 +38,41 @@ class WhatsAppService {
     }
 
     static async listConversations(organizationId, query, role, userId) {
-        const { leadId, limit = 50, status } = query;
+        const { leadId, limit = 50, status, q, assignedToId } = query;
         const where = { organizationId };
         if (leadId) where.leadId = leadId;
         if (status) where.status = status;
-        if (isExecRole(role)) where.lead = { assignedToId: userId };
+
+        // Lead-level filters (additive). Restricted roles are always forced
+        // onto their own leads — an assignedToId query from them is ignored,
+        // preserving the existing authorization behaviour exactly.
+        const leadWhere = {};
+        if (isExecRole(role)) {
+            leadWhere.assignedToId = userId;
+        } else if (assignedToId === 'unassigned') {
+            leadWhere.assignedToId = null;
+        } else if (assignedToId) {
+            leadWhere.assignedToId = assignedToId;
+        }
+        if (q) {
+            leadWhere.OR = [
+                { name: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q, mode: 'insensitive' } }
+            ];
+        }
+        if (Object.keys(leadWhere).length > 0) where.lead = leadWhere;
 
         const conversations = await prisma.whatsAppConversation.findMany({
             where,
             take: parseInt(limit),
             orderBy: { lastMessageAt: 'desc' },
             include: {
-                lead: { select: { id: true, name: true, phone: true, status: true, assignedToId: true } },
+                lead: { select: { id: true, name: true, phone: true, status: true, assignedToId: true, assignedTo: { select: { id: true, name: true } } } },
                 customer: { select: { id: true, name: true } },
                 messages: {
                     orderBy: { createdAt: 'desc' },
                     take: 1,
-                    select: { id: true, body: true, direction: true, status: true, createdAt: true }
+                    select: { id: true, body: true, direction: true, status: true, createdAt: true, sentById: true }
                 }
             }
         });
@@ -61,6 +81,137 @@ class WhatsAppService {
 
     static async assertConversationScope(conversation, role, userId) {
         if (conversation.lead) assertOwnership(conversation.lead, role, userId, 'assignedToId', 'You do not have access to this conversation');
+    }
+
+    // --- Conversation management (shared inbox) ----------------------------
+    // All three methods reuse the existing visibility rules: scope is derived
+    // from the conversation's lead (getConversationById → assertScope), and
+    // assignment IS lead assignment (no separate assignment mechanism).
+
+    // Close or reopen a conversation. Callers gate on whatsapp:create and
+    // the conversation scope, so executives can only touch their own threads.
+    static async updateConversationStatus(conversationId, organizationId, userId, role, status) {
+        const conversation = await WhatsAppService.getConversationById(conversationId, organizationId, role, userId);
+        if (conversation.status === status) {
+            return maskConversation(conversation, role);
+        }
+        const updated = await prisma.whatsAppConversation.update({
+            where: { id: conversation.id },
+            data: { status },
+            include: {
+                lead: { select: { id: true, name: true, phone: true, status: true, assignedToId: true } },
+                customer: { select: { id: true, name: true } }
+            }
+        });
+        await audit(organizationId, userId, AUDIT_ACTIONS.WHATSAPP_CONVERSATION_STATUS, 'WhatsAppConversation', conversation.id, {
+            status, previousStatus: conversation.status
+        });
+        return maskConversation(updated, role);
+    }
+
+    // Assign (or unassign with null) a conversation to an employee.
+    // Assignment reuses the lead's assignedToId: the conversation's visibility
+    // for restricted roles is already derived from it, and a lead has exactly
+    // one owner across the CRM. Route-gated on lead:assign (admin/manager).
+    // Because this IS lead assignment, it writes the same lead timeline entry
+    // and fires the same in-app alert as the Leads page — an assignee must not
+    // be silently created from the inbox.
+    static async assignConversation(conversationId, organizationId, userId, role, assignedToId) {
+        const conversation = await prisma.whatsAppConversation.findFirst({
+            where: { id: conversationId, organizationId },
+            select: {
+                id: true,
+                leadId: true,
+                lead: {
+                    select: {
+                        id: true,
+                        name: true,
+                        assignedToId: true,
+                        project: { select: { name: true } }
+                    }
+                }
+            }
+        });
+        if (!conversation || !conversation.lead) {
+            throw new AppError('Conversation not found', 404, 'NOT_FOUND');
+        }
+
+        let assignee = null;
+        if (assignedToId) {
+            assignee = await prisma.user.findFirst({
+                where: { id: assignedToId, organizationId },
+                select: { id: true, name: true, status: true }
+            });
+            if (!assignee) throw new AppError('Assignee not found', 404, 'NOT_FOUND');
+            if (assignee.status !== 'ACTIVE') throw new AppError('Cannot assign a conversation to an inactive user', 400, 'BAD_REQUEST');
+        }
+
+        const previousAssigneeId = conversation.lead.assignedToId;
+        if (previousAssigneeId === (assignedToId || null)) {
+            // No-op reassignment: honest response, no phantom audit row.
+            return {
+                conversationId: conversation.id,
+                leadId: conversation.leadId,
+                assignedToId: assignedToId || null,
+                assignedTo: assignee ? { id: assignee.id, name: assignee.name } : null,
+                changed: false
+            };
+        }
+
+        await prisma.lead.update({
+            where: { id: conversation.leadId },
+            data: { assignedToId: assignedToId || null }
+        });
+        // Lead timeline entry — identical shape to LeadService's reassignment
+        // so the history reads the same no matter where the change was made.
+        await prisma.leadActivity.create({
+            data: {
+                organizationId,
+                leadId: conversation.leadId,
+                type: 'ASSIGNMENT',
+                description: `Lead reassigned to ${assignee ? assignee.name : 'user'}`,
+                performedById: userId,
+                metadata: {
+                    source: assignmentSourceForRole(role),
+                    previousAssignedToId: previousAssigneeId || null,
+                    via: 'whatsapp_inbox'
+                }
+            }
+        });
+        await audit(organizationId, userId, AUDIT_ACTIONS.WHATSAPP_CONVERSATION_ASSIGNED, 'WhatsAppConversation', conversation.id, {
+            leadId: conversation.leadId,
+            from: previousAssigneeId || null,
+            to: assignedToId || null
+        });
+        // In-app alert (fire-and-forget, same contract as the Leads page): a
+        // notification failure must never undo or fail the assignment.
+        if (assignedToId) {
+            void NotificationService.notifyLeadAssigned(organizationId, conversation.lead, assignedToId, {
+                performedById: userId,
+                previousAssignedToId: previousAssigneeId || null
+            });
+        }
+        return {
+            conversationId: conversation.id,
+            leadId: conversation.leadId,
+            assignedToId: assignedToId || null,
+            assignedTo: assignee ? { id: assignee.id, name: assignee.name } : null,
+            changed: true
+        };
+    }
+
+    // Reset the shared unread counter when someone opens the thread.
+    // Per-conversation (not per-user) by design: the column already exists,
+    // so no schema change; only an actual unread thread writes to the DB.
+    static async markConversationRead(conversationId, organizationId, role, userId) {
+        const conversation = await WhatsAppService.getConversationById(conversationId, organizationId, role, userId);
+        if (conversation.unreadCount > 0) {
+            await prisma.whatsAppConversation.update({
+                where: { id: conversation.id },
+                data: { unreadCount: 0 }
+            });
+        }
+        return { id: conversation.id, unreadCount: 0 };
     }
 
     static async getOrCreateConversation(leadId, organizationId, userId, role) {
@@ -686,7 +837,7 @@ class WhatsAppService {
                     organizationId,
                     name: entry.name,
                     providerTemplateId: null,
-                    language: 'en',
+                    language: TEMPLATE_LANGUAGE,
                     category: entry.metaCategory,
                     description: entry.description,
                     body: entry.body,
@@ -726,7 +877,7 @@ class WhatsAppService {
                 organizationId,
                 name: data.name,
                 providerTemplateId: data.providerTemplateId || null,
-                language: data.language || 'en',
+                language: data.language || TEMPLATE_LANGUAGE,
                 category: data.category || 'UTILITY',
                 description: data.description || null,
                 body: data.body || null,
@@ -967,10 +1118,31 @@ class WhatsAppService {
             });
         }
         if (!lead && phone) {
+            // Phones are stored in mixed formats ("+91 92679 03565",
+            // "919267903565", ...) while Meta always sends digits only.
+            // Exact string matching drops replies from leads whose phone
+            // contains spaces, dashes, or a leading "+". Match on the
+            // normalized digit form so an inbound reply lands on the lead
+            // the outbound message was sent to.
+            const digits = String(phone).replace(/\D/g, '');
             lead = await prisma.lead.findFirst({
                 where: { organizationId, phone: String(phone).trim() },
                 orderBy: { createdAt: 'desc' }
             });
+            if (!lead && digits) {
+                const matched = await prisma.$queryRaw`
+                    SELECT id FROM "Lead"
+                    WHERE "organizationId" = ${organizationId}
+                      AND regexp_replace(phone, '[^0-9]', '', 'g') = ${digits}
+                    ORDER BY "createdAt" DESC
+                    LIMIT 1
+                `;
+                if (matched && matched[0]) {
+                    lead = await prisma.lead.findFirst({
+                        where: { id: matched[0].id, organizationId }
+                    });
+                }
+            }
         }
         if (!lead) {
             return { ok: true, ignored: 'no_lead' };
@@ -982,15 +1154,31 @@ class WhatsAppService {
             orderBy: { lastMessageAt: 'desc' }
         });
         if (!conversation) {
-            conversation = await prisma.whatsAppConversation.create({
-                data: {
-                    organizationId: lead.organizationId,
-                    leadId: lead.id,
-                    provider: provider.name,
-                    providerContactId: providerContactId || phone || lead.phone || null,
-                    lastMessageAt: new Date()
-                }
+            // A customer reply is customer-initiated contact: reopen the most
+            // recent conversation for this lead (whatever its status) instead
+            // of creating a second row — every earlier message stays attached
+            // to the same thread, and the shared inbox shows one conversation
+            // per lead. Only leads with no conversation at all create one.
+            const previous = await prisma.whatsAppConversation.findFirst({
+                where: { organizationId: lead.organizationId, leadId: lead.id },
+                orderBy: { lastMessageAt: 'desc' }
             });
+            if (previous) {
+                conversation = await prisma.whatsAppConversation.update({
+                    where: { id: previous.id },
+                    data: { status: 'ACTIVE' }
+                });
+            } else {
+                conversation = await prisma.whatsAppConversation.create({
+                    data: {
+                        organizationId: lead.organizationId,
+                        leadId: lead.id,
+                        provider: provider.name,
+                        providerContactId: providerContactId || phone || lead.phone || null,
+                        lastMessageAt: new Date()
+                    }
+                });
+            }
         }
 
         const message = await prisma.$transaction(async (tx) => {

@@ -12,6 +12,17 @@ export const fetchMessages = async (conversationId, params = {}) =>
 export const sendWhatsAppMessage = async ({ conversationId, ...data }) =>
     (await apiClient.post(`/whatsapp/conversations/${conversationId}/messages`, data));
 
+// Shared-inbox conversation management (conversation assignment reuses the
+// lead's assignedToId on the server — see assignConversation API).
+export const updateConversationStatus = async ({ conversationId, status }) =>
+    (await apiClient.patch(`/whatsapp/conversations/${conversationId}`, { status }));
+
+export const assignConversation = async ({ conversationId, assignedToId }) =>
+    (await apiClient.post(`/whatsapp/conversations/${conversationId}/assign`, { assignedToId }));
+
+export const markConversationRead = async (conversationId) =>
+    (await apiClient.post(`/whatsapp/conversations/${conversationId}/read`, {}));
+
 export const fetchWhatsAppTemplates = async (params = {}) => (await apiClient.get("/whatsapp/templates", { params }));
 
 export const fetchTemplateLibrary = async () => (await apiClient.get("/whatsapp/templates/library"));
@@ -29,6 +40,12 @@ export const rotateWhatsappSecret = async (data) => (await apiClient.post("/what
 export const removeWhatsappSecret = async (field) => (await apiClient.delete(`/whatsapp/settings/secrets/${field}`));
 
 export const testWhatsappConnection = async () => (await apiClient.post("/whatsapp/settings/test-connection", {}));
+
+// Embedded Signup (Coexistence) completion: carries Meta's exchangeable code
+// (30s TTL) + session asset ids straight to the server. The code is never
+// logged or stored client-side.
+export const completeEmbeddedSignup = async (data) =>
+    (await apiClient.post("/whatsapp/settings/embedded-signup", data));
 
 export const fetchLatestNotification = async () => (await apiClient.get("/whatsapp/settings/notifications/latest"));
 
