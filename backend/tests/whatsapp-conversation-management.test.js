@@ -4,8 +4,9 @@
 // Assignment deliberately REUSES the lead's assignedToId (no separate
 // assignment mechanism, no schema change): these tests pin that contract,
 // the RBAC around it (lead:assign → admins/managers only; executives stay
-// scoped to their own conversations), and the shared-unread-counter
-// semantics (reset-on-open, per-conversation).
+// scoped to their own conversations), the shared-unread-counter semantics
+// (reset-on-open, per-conversation), and that an inbox assignment writes the
+// same lead timeline entry + fires the same in-app alert as the Leads page.
 //
 // NOTE: every provider/webhook interaction below is MOCKED (mock transport,
 // HMAC-signed mock webhook route against the local test secret). Green here
@@ -28,6 +29,7 @@ jest.mock('../src/db/prisma', () => {
     whatsAppTemplate: { findFirst: jest.fn(), findMany: jest.fn() },
     whatsappSettings: { findUnique: jest.fn(), findMany: jest.fn() },
     auditLog: { create: jest.fn() },
+    notification: { create: jest.fn() },
     $transaction: jest.fn(),
   };
   mock.$transaction.mockImplementation(async (fn) => fn(mock));
@@ -234,6 +236,36 @@ describe('POST /api/v1/whatsapp/conversations/:id/assign (reuses lead assignment
     const audit = prisma.auditLog.create.mock.calls[0][0].data;
     expect(audit.action).toBe('whatsapp.conversation_assigned');
     expect(audit.metadata).toMatchObject({ leadId: LEAD, from: ADMIN_ID, to: ASSIGNEE_A });
+
+    // Same timeline entry + in-app alert the Leads page writes on a
+    // reassignment — the inbox must not be a silent assignment path.
+    expect(prisma.leadActivity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          organizationId: ORG,
+          leadId: LEAD,
+          type: 'ASSIGNMENT',
+          performedById: ADMIN_ID,
+          metadata: expect.objectContaining({
+            source: 'ADMIN_ASSIGNED',
+            previousAssignedToId: ADMIN_ID,
+            via: 'whatsapp_inbox',
+          }),
+        }),
+      })
+    );
+    // Fire-and-forget: let the notification microtask land before asserting.
+    await new Promise((r) => setImmediate(r));
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          organizationId: ORG,
+          userId: ASSIGNEE_A,
+          type: 'LEAD_ASSIGNED',
+          leadId: LEAD,
+        }),
+      })
+    );
   });
 
   test('unassign (null) clears the lead owner', async () => {
@@ -251,6 +283,19 @@ describe('POST /api/v1/whatsapp/conversations/:id/assign (reuses lead assignment
     });
     const audit = prisma.auditLog.create.mock.calls[0][0].data;
     expect(audit.metadata).toMatchObject({ from: ADMIN_ID, to: null });
+    // The timeline still records who the lead was taken FROM...
+    expect(prisma.leadActivity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          leadId: LEAD,
+          type: 'ASSIGNMENT',
+          metadata: expect.objectContaining({ previousAssignedToId: ADMIN_ID, via: 'whatsapp_inbox' }),
+        }),
+      })
+    );
+    // ...but unassigning has nobody to alert.
+    await new Promise((r) => setImmediate(r));
+    expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 
   test('re-assigning the same employee is an honest no-op (no write, no audit)', async () => {
@@ -268,6 +313,8 @@ describe('POST /api/v1/whatsapp/conversations/:id/assign (reuses lead assignment
     expect(res.body.data.changed).toBe(false);
     expect(prisma.lead.update).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    expect(prisma.leadActivity.create).not.toHaveBeenCalled();
+    expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 
   test('reassignment to a different employee updates the owner', async () => {

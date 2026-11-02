@@ -34,8 +34,8 @@ const updateConversation = asyncHandler(async (req, res) => {
 });
 
 const assignConversation = asyncHandler(async (req, res) => {
-    const { organizationId, userId } = req.auth;
-    const data = await WhatsAppService.assignConversation(req.params.id, organizationId, userId, req.body.assignedToId || null);
+    const { organizationId, userId, role } = req.auth;
+    const data = await WhatsAppService.assignConversation(req.params.id, organizationId, userId, role, req.body.assignedToId || null);
     res.status(200).json({ success: true, data, message: data.changed ? 'Conversation assigned' : 'Conversation already assigned' });
 });
 
