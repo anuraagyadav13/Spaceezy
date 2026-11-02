@@ -1,5 +1,5 @@
 export const SITE_NAME = "Spaceezy";
-export const SITE_URL = "https://Spaceezy.com";
+export const SITE_URL = "https://spaceezy.com";
 export const SITE_TITLE_FALLBACK = "Spaceezy | Premium Real Estate";
 // Business contact number — single source of truth for the whole site
 // (footer, floating button, contact page, SEO copy). The footer's
@@ -9,7 +9,7 @@ export const PHONE_DISPLAY = "+91 78272 67897";
 export const PHONE_TEL = "+917827267897";
 export const WHATSAPP_NUMBER = "917827267897";
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}`;
-export const EMAIL = "admin@Spaceezy.com";
+export const EMAIL = "admin@spaceezy.com";
 export const OFFICE = {
     streetAddress: "Office No. 04, 1st Floor, Wave Galleria, Sector-3, Wave City",
     addressLocality: "Ghaziabad",

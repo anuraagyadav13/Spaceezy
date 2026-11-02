@@ -48,7 +48,7 @@ export function PublicFooter() {
                     <div>
                         <h4 className="text-white font-bold mb-6">Contact</h4>
                         <ul className="flex flex-col gap-3 text-sm text-gray-400">
-                            <li><a href="mailto:admin@Spaceezy.com" className="hover:text-purple-400 transition-colors">admin@Spaceezy.com</a></li>
+                            <li><a href="mailto:admin@spaceezy.com" className="hover:text-purple-400 transition-colors">admin@spaceezy.com</a></li>
                             <li><a href={`tel:${PHONE_TEL}`} className="hover:text-purple-400 transition-colors">{PHONE_DISPLAY}</a></li>
                             <li className="mt-2">Office No. 04, 1st Floor, Wave Galleria<br />Sector-3, Wave City, Ghaziabad 201002</li>
                         </ul>

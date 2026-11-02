@@ -39,7 +39,7 @@ export default function ContactPage() {
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">Email</h3>
                         <p className="text-gray-500 mb-4">We usually respond within 24 hours.</p>
-                        <a href="mailto:admin@Spaceezy.com" className="text-purple-600 font-bold text-lg hover:underline">admin@Spaceezy.com</a>
+                        <a href="mailto:admin@spaceezy.com" className="text-purple-600 font-bold text-lg hover:underline">admin@spaceezy.com</a>
                     </div>
                     
                     <div className="bg-gray-50 rounded-[32px] p-8 text-center flex flex-col items-center border border-gray-100">

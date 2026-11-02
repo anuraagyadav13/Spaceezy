@@ -59,6 +59,7 @@ const uploadsRoot = path.resolve(__dirname, '..', 'uploads');
 beforeEach(() => {
   jest.clearAllMocks();
   mockSession('ADMIN', 'admin-user-1');
+  prisma.organization.findFirst.mockResolvedValue({ id: ORG });
   prisma.project.update.mockImplementation(async ({ data }) => ({ id: PROJECT, ...data }));
 });
 
@@ -289,5 +290,25 @@ describe('Phase 18: public delivery path for the brochure', () => {
     const res = await request(app).get(`/api/v1/public/documents?projectId=${PROJECT}`);
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('NO_BROCHURE');
+  });
+
+  test('the public documents route only resolves public, active projects of this org', async () => {
+    // Same visibility contract as every other public read: without it any
+    // archived/draft/other-org brochure would be downloadable by UUID.
+    prisma.project.findFirst.mockResolvedValue(null);
+
+    const res = await request(app).get(`/api/v1/public/documents?projectId=${PROJECT}`);
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('NOT_FOUND');
+    expect(prisma.project.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: PROJECT,
+          organizationId: ORG,
+          isPublic: true,
+          status: { not: 'INACTIVE' },
+        }),
+      })
+    );
   });
 });

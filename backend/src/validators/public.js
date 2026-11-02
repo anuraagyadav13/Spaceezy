@@ -97,10 +97,12 @@ const publicPropertyParamSchema = {
     })
 };
 
-// Project documents (the employee-uploaded brochure PDF): project id is an
-// internal UUID (already exposed by the public project list). The file itself
-// lives in the private storage bucket / local uploads dir — this route is the
-// delivery path WhatsApp/Meta fetches.
+// Project documents (the employee-uploaded brochure PDF): `projectId` is an
+// internal UUID delivered to customers via WhatsApp links only — the public
+// project list does NOT expose ids. The controller still verifies the project
+// is public, active and in this organization before serving anything. The file
+// itself lives in the private storage bucket / local uploads dir — this route
+// is the delivery path WhatsApp/Meta fetches.
 const publicDocumentQuerySchema = {
     query: z.object({
         projectId: z.string().uuid('projectId must be a valid UUID')

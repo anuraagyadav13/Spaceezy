@@ -91,8 +91,13 @@ const { findBrochureDocument, readDocument } = require('../services/storageServi
 const { slugify } = require('../utils/publicLink');
 
 const getPublicDocument = asyncHandler(async (req, res) => {
+    // Same visibility contract as every other public read: only a published,
+    // non-archived project of this installation's organization resolves.
+    // Without it any archived/draft/other-org project's brochure would be
+    // downloadable by anyone holding its UUID.
+    const organizationId = await PublicService.defaultOrganization();
     const project = await prisma.project.findFirst({
-        where: { id: req.query.projectId },
+        where: { id: req.query.projectId, organizationId, ...PublicService.PUBLIC_PROJECT_WHERE },
         select: { name: true, documents: true }
     });
     if (!project) throw new AppError('Project not found', 404, 'NOT_FOUND');
@@ -116,14 +121,28 @@ const getPublicDocument = asyncHandler(async (req, res) => {
 
 // Renders the quotation PDF on demand from live project/unit data. Same
 // delivery contract as the brochure route: no auth, Meta's servers fetch
-// the link for the WhatsApp document message, and the payload only mirrors
-// data the public project pages already expose (price list + charges). Any
-// per-send add-on values travel as `addons` JSON and are re-validated inside
-// the renderer (nothing from the URL is trusted).
+// the link for the WhatsApp document message. The render is restricted to a
+// public, non-archived project of this organization (the PDF carries
+// commercial rows the public project DTOs do not expose). Any per-send
+// add-on values travel as `addons` JSON and are re-validated inside the
+// renderer (nothing from the URL is trusted).
 const { generateQuotation } = require('../services/quotationPdf');
 
 const getPublicQuotation = asyncHandler(async (req, res) => {
+    // Same visibility contract as the brochure route: only a published,
+    // non-archived project of this organization renders. The gate runs before
+    // the render because the PDF carries commercial rows the public project
+    // DTOs do not expose; the unit (if any) is then scoped to that project
+    // inside buildQuotationData.
+    const organizationId = await PublicService.defaultOrganization();
+    const visible = await prisma.project.findFirst({
+        where: { id: req.query.projectId, organizationId, ...PublicService.PUBLIC_PROJECT_WHERE },
+        select: { id: true }
+    });
+    if (!visible) throw new AppError('Project not found', 404, 'NOT_FOUND');
+
     const { buffer, filename } = await generateQuotation({
+        organizationId,
         projectId: req.query.projectId,
         propertyId: req.query.unit || null,
         by: req.query.by,
