@@ -210,6 +210,19 @@ const testNotifySchema = {
     })
 };
 
+// Embedded Signup (WhatsApp Business App coexistence) completion. The
+// frontend posts Meta's exchangeable code (30-second TTL) + the session
+// asset IDs here immediately after Finish — validated strictly, never
+// logged, never echoed back in responses.
+const embeddedSignupSchema = {
+    body: z.object({
+        code: z.string().trim().min(1, 'code is required').max(4096),
+        wabaId: z.string().regex(/^\d{1,32}$/, 'wabaId must be a numeric identifier'),
+        phoneNumberId: z.string().regex(/^\d{1,32}$/, 'phoneNumberId must be a numeric identifier').optional(),
+        event: z.string().trim().max(64).optional(),
+    })
+};
+
 module.exports = {
     idParamsSchema,
     createConversationSchema,
@@ -226,4 +239,5 @@ module.exports = {
     rotateSecretSchema,
     secretFieldParamsSchema,
     testNotifySchema,
+    embeddedSignupSchema,
 };

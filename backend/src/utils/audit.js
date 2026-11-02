@@ -30,6 +30,7 @@ const AUDIT_ACTIONS = {
     WHATSAPP_CONVERSATION_ASSIGNED: 'whatsapp.conversation_assigned',
     WHATSAPP_CONVERSATION_STATUS: 'whatsapp.conversation_status',
     WHATSAPP_CONNECTION_TESTED: 'whatsapp.connection_tested',
+    WHATSAPP_EMBEDDED_SIGNUP: 'whatsapp.embedded_signup',
     WHATSAPP_NOTIFY_TEST: 'whatsapp.notify_test',
     META_LEAD_SYNC: 'meta.lead_sync'
 };

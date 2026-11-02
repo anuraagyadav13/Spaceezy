@@ -12,8 +12,10 @@ import {
     useTemplateLibrary,
     useWhatsAppTemplates,
     useLatestNotification,
-    useTestNotify
+    useTestNotify,
+    useEmbeddedSignup
 } from "../../../../features/communication/hooks/useWhatsApp";
+import { launchWhatsAppEmbeddedSignup, FB_APP_ID } from "../../../../lib/whatsappEmbeddedSignup";
 import { usePermissions } from "../../../../features/auth/hooks/usePermissions";
 import { showToast } from "../../../../lib/toast";
 
@@ -166,6 +168,7 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
     const removeMutation = useRemoveWhatsappSecret();
     const testMutation = useTestWhatsappConnection();
     const testNotifyMutation = useTestNotify();
+    const embeddedSignupMutation = useEmbeddedSignup();
     const { data: libraryData } = useTemplateLibrary();
     const { data: customTemplates } = useWhatsAppTemplates();
     const { data: latestNotify } = useLatestNotification();
@@ -175,6 +178,7 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
     const [savedFlash, setSavedFlash] = useState(false);
     const [rotateField, setRotateField] = useState("accessToken");
     const [rotateValue, setRotateValue] = useState("");
+    const [signupBusy, setSignupBusy] = useState(false);
 
     // Seed non-secret fields from the server record (secrets always start
     // blank so stored values are never echoed back into the form).
@@ -301,6 +305,45 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
         }
     };
 
+    // Embedded Signup (Coexistence): run Meta's launch flow, then hand the
+    // exchangeable code (30s TTL) straight to the backend — it is never
+    // logged or stored here. All statuses surface only display-safe text.
+    const handleEmbeddedSignup = async () => {
+        setSignupBusy(true);
+        try {
+            const result = await launchWhatsAppEmbeddedSignup();
+            if (result.status === "cancelled") {
+                showToast("Embedded Signup cancelled — nothing was changed", "error");
+                return;
+            }
+            if (result.status === "incomplete") {
+                showToast("The flow was exited before Finish — re-run and click Finish on the last screen to return the exchange code", "error");
+                return;
+            }
+            if (result.status !== "completed") {
+                showToast(result.message || "Embedded Signup did not complete", "error");
+                return;
+            }
+            const saved = await embeddedSignupMutation.mutateAsync({
+                code: result.code,
+                wabaId: result.wabaId,
+                phoneNumberId: result.phoneNumberId || undefined,
+                event: result.event || undefined,
+            });
+            setTestResult(null);
+            setFormSeed(null); // re-seed the form from the freshly saved record
+            showToast(
+                `Connected — ${saved?.displayPhoneNumber || saved?.phoneNumberId || "business number"} linked` +
+                    (saved?.webhookSubscribed === false ? " (webhook subscription pending — run Test Connection shortly)" : ""),
+                "success"
+            );
+        } catch (err) {
+            showToast(err?.message || "Embedded Signup failed", "error");
+        } finally {
+            setSignupBusy(false);
+        }
+    };
+
     return (
         <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -313,6 +356,39 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
                     </p>
                 </div>
                 <StatusBadge tone={connection.tone}>{connection.label}</StatusBadge>
+            </div>
+
+            {/* WhatsApp Business App Coexistence — official Meta Embedded Signup (ES v4). */}
+            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-sm font-black text-gray-900">Connect WhatsApp Business App (Coexistence)</p>
+                        <p className="text-xs text-gray-500 leading-relaxed mt-1">
+                            Official Meta Embedded Signup (v4). You sign in on Meta&apos;s side; this CRM then exchanges
+                            the code server-side, stores the token encrypted, and links the configured business number —
+                            no number registration, migration or disconnection is performed.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleEmbeddedSignup}
+                        disabled={signupBusy || embeddedSignupMutation.isPending}
+                        className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1877f2] text-white text-sm font-bold hover:bg-blue-600 disabled:opacity-50"
+                    >
+                        <RefreshCw size={14} className={signupBusy || embeddedSignupMutation.isPending ? "animate-spin" : ""} />
+                        {signupBusy || embeddedSignupMutation.isPending
+                            ? "Connecting…"
+                            : settings?.wabaId && settings?.hasAccessToken ? "Reconnect" : "Connect"}
+                    </button>
+                </div>
+                {settings?.wabaId ? (
+                    <p className="text-xs text-gray-600">
+                        Linked account: <b>WABA {settings.wabaId}</b>
+                        {settings.phoneNumberId ? ` · phone number ID ${settings.phoneNumberId}` : ""} · App {settings.appId || FB_APP_ID}
+                    </p>
+                ) : (
+                    <p className="text-xs text-gray-500">Not connected yet.</p>
+                )}
             </div>
 
             {isLoading ? (

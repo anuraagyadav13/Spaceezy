@@ -18,6 +18,7 @@ const {
     rotateSecret,
     removeSecret,
     testConnection,
+    completeEmbeddedSignup,
     latestNotification,
     testNotify
 } = require('../controllers/whatsapp');
@@ -38,7 +39,8 @@ const {
     saveSettingsSchema,
     rotateSecretSchema,
     secretFieldParamsSchema,
-    testNotifySchema
+    testNotifySchema,
+    embeddedSignupSchema
 } = require('../validators/whatsapp');
 
 const router = express.Router();
@@ -92,6 +94,11 @@ router.put('/settings', adminOnly(), settingsLimiter, validate(saveSettingsSchem
 router.post('/settings/rotate', adminOnly(), settingsLimiter, validate(rotateSecretSchema), rotateSecret);
 router.delete('/settings/secrets/:field', adminOnly(), settingsLimiter, validate(secretFieldParamsSchema), removeSecret);
 router.post('/settings/test-connection', adminOnly(), settingsLimiter, testConnection);
+// Embedded Signup (WhatsApp Business App coexistence): exchange Meta's
+// short-lived code server-side + store the permanent credentials encrypted.
+// Admin-only, shares the settings rate limit. No number registration,
+// migration, deletion or disconnection happens on this route.
+router.post('/settings/embedded-signup', adminOnly(), settingsLimiter, validate(embeddedSignupSchema), completeEmbeddedSignup);
 router.get('/settings/notifications/latest', adminOnly(), latestNotification);
 router.post('/settings/notify-test', adminOnly(), settingsLimiter, validate(testNotifySchema), testNotify);
 

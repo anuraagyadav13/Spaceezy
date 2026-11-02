@@ -316,6 +316,177 @@ class WhatsappSettingsService {
         });
         return result;
     }
+
+    // --- Embedded Signup (WhatsApp Business App coexistence) ---------------
+    // Server half of Meta's Embedded Signup v4 launch flow (official FB JS
+    // SDK on the frontend). The browser posts Meta's exchangeable code
+    // (30-second TTL) + the session asset IDs straight here; this method:
+    //   1) exchanges the code server-to-server for the permanent business
+    //      token (app secret never leaves the server),
+    //   2) discovers phone_number_id from the returned WABA with a READ-ONLY
+    //      phone_numbers query,
+    //   3) persists everything through the existing encrypted settings
+    //      service (AES-256-GCM),
+    //   4) subscribes the app to the account's webhooks (standard post-flow
+    //      step so inbound keeps flowing).
+    //
+    // Deliberately NEVER called here: register, migrate, deregister,
+    // disconnect — a coexistence number is already registered, and number
+    // lifecycle changes are out of scope. Nothing in this flow is logged,
+    // and no code/token/secret is ever echoed back to the client.
+    static async completeEmbeddedSignup(organizationId, userId, { code, wabaId, phoneNumberId: sessionPhoneNumberId }) {
+        const effective = await WhatsappSettingsService.getEffectiveConfig(organizationId);
+        // The real App Secret only exists in the encrypted settings row — the
+        // legacy env snapshot's appSecret is the webhook HMAC secret, so an
+        // exchange against it would be meaningless.
+        if (effective.source !== 'db' || !effective.appSecret) {
+            throw new AppError('Save your Meta App Secret in WhatsApp Settings first — it is required to exchange the Embedded Signup code.', 409, 'WHATSAPP_NOT_CONFIGURED');
+        }
+        const appId = EMBEDDED_SIGNUP_APP_ID;
+        const version = effective.graphVersion || 'v21.0';
+
+        // 1) Exchange the code for the customer's business token.
+        const exchangeUrl = new URL(`https://graph.facebook.com/${version}/oauth/access_token`);
+        exchangeUrl.searchParams.set('client_id', appId);
+        exchangeUrl.searchParams.set('client_secret', effective.appSecret);
+        exchangeUrl.searchParams.set('code', code);
+        let exchangeRes;
+        try {
+            exchangeRes = await fetch(exchangeUrl.toString(), { method: 'GET', signal: AbortSignal.timeout(15000) });
+        } catch {
+            // Fixed message on purpose: the request URL embeds the app
+            // secret and code, so no error detail may propagate.
+            throw new AppError('Meta token exchange is unreachable (network error)', 502, 'WHATSAPP_PROVIDER_ERROR');
+        }
+        let exchangeData = null;
+        try {
+            exchangeData = await exchangeRes.json();
+        } catch {
+            throw new AppError('Meta token exchange returned a non-JSON response', 502, 'WHATSAPP_PROVIDER_ERROR');
+        }
+        if (!exchangeRes.ok || !exchangeData || !exchangeData.access_token) {
+            const metaError = (exchangeData && exchangeData.error) || {};
+            throw new AppError(
+                `Meta rejected the Embedded Signup code${metaError.message ? `: ${String(metaError.message)}` : ''}${metaError.code ? ` (Meta code ${metaError.code})` : ''} — codes expire 30 seconds after Finish, so retry the flow promptly.`,
+                502,
+                'WHATSAPP_PROVIDER_ERROR'
+            );
+        }
+        const businessToken = String(exchangeData.access_token);
+
+        // 2) Discover phone_number_id from the WABA (read-only).
+        const numbersPayload = await metaGraphGet(`${version}/${encodeURIComponent(String(wabaId))}/phone_numbers`, businessToken);
+        const numbers = Array.isArray(numbersPayload && numbersPayload.data) ? numbersPayload.data : [];
+        const target = numbers.find((entry) => {
+            const digits = String((entry && entry.display_phone_number) || '').replace(/\D/g, '');
+            return EMBEDDED_SIGNUP_TARGET_NUMBERS.includes(digits);
+        });
+        if (!target || !target.id) {
+            const seen = numbers
+                .map((entry) => String((entry && entry.display_phone_number) || '').trim())
+                .filter(Boolean);
+            throw new AppError(
+                `The ${EMBEDDED_SIGNUP_TARGET_LABEL} number is not in the connected WhatsApp account${seen.length ? ` (found: ${seen.join(', ')})` : ''} — refusing to connect a different number. Nothing was saved.`,
+                409,
+                'EMBEDDED_SIGNUP_NUMBER_MISMATCH'
+            );
+        }
+        const discoveredPhoneNumberId = String(target.id);
+        if (sessionPhoneNumberId && String(sessionPhoneNumberId) !== discoveredPhoneNumberId) {
+            throw new AppError('The session phone_number_id does not match the number discovered on the WABA. Nothing was saved.', 409, 'EMBEDDED_SIGNUP_MISMATCH');
+        }
+
+        // 3) Persist through the existing encrypted settings service.
+        const saved = await WhatsappSettingsService.saveSettings(organizationId, userId, {
+            appId,
+            wabaId: String(wabaId),
+            phoneNumberId: discoveredPhoneNumberId,
+            providerMode: 'meta',
+            accessToken: businessToken,
+        });
+
+        // 4) Best-effort webhook subscription on this Messaging account — a
+        //    failure never undoes the saved credentials; it is reported so
+        //    the admin can retry (it is NOT a number lifecycle call).
+        let webhookSubscribed = false;
+        try {
+            const sub = await metaGraphPost(`${version}/${encodeURIComponent(String(wabaId))}/subscribed_apps`, businessToken);
+            webhookSubscribed = Boolean(sub && sub.success !== false);
+        } catch {
+            webhookSubscribed = false;
+        }
+
+        await audit(organizationId, userId, AUDIT_ACTIONS.WHATSAPP_EMBEDDED_SIGNUP, 'WhatsappSettings', organizationId, {
+            wabaId: String(wabaId),
+            phoneNumberId: discoveredPhoneNumberId,
+            appId,
+            displayPhoneNumber: target.display_phone_number || null,
+            webhookSubscribed,
+        });
+
+        return {
+            ...saved,
+            displayPhoneNumber: target.display_phone_number || null,
+            webhookSubscribed,
+        };
+    }
+}
+
+// Embedded Signup constants: the ONE Meta app this integration lives on and
+// the ONLY business number allowed to onboard (no test numbers — discovery
+// refuses anything else instead of silently connecting a different line).
+const EMBEDDED_SIGNUP_APP_ID = '1536498651554499';
+const EMBEDDED_SIGNUP_TARGET_LABEL = '+91 76830 20204';
+const EMBEDDED_SIGNUP_TARGET_NUMBERS = ['917683020204', '7683020204'];
+
+// Read-only Graph GET with the token in the Authorization header (never in
+// the URL). Meta error messages are safe to surface; tokens never are.
+async function metaGraphGet(path, token) {
+    let res;
+    try {
+        res = await fetch(`https://graph.facebook.com/${path}`, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(15000),
+        });
+    } catch {
+        throw new AppError('Meta Graph API is unreachable (network error)', 502, 'WHATSAPP_PROVIDER_ERROR');
+    }
+    let data = null;
+    try {
+        data = await res.json();
+    } catch {
+        throw new AppError('Meta Graph API returned a non-JSON response', 502, 'WHATSAPP_PROVIDER_ERROR');
+    }
+    if (!res.ok) {
+        const metaError = (data && data.error) || {};
+        throw new AppError(`Meta Graph API error${metaError.message ? `: ${String(metaError.message)}` : ''}${metaError.code ? ` (code ${metaError.code})` : ''}`, 502, 'WHATSAPP_PROVIDER_ERROR');
+    }
+    return data;
+}
+
+async function metaGraphPost(path, token) {
+    let res;
+    try {
+        res = await fetch(`https://graph.facebook.com/${path}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(15000),
+        });
+    } catch {
+        throw new AppError('Meta Graph API is unreachable (network error)', 502, 'WHATSAPP_PROVIDER_ERROR');
+    }
+    let data = null;
+    try {
+        data = await res.json();
+    } catch {
+        throw new AppError('Meta Graph API returned a non-JSON response', 502, 'WHATSAPP_PROVIDER_ERROR');
+    }
+    if (!res.ok) {
+        const metaError = (data && data.error) || {};
+        throw new AppError(`Meta Graph API error${metaError.message ? `: ${String(metaError.message)}` : ''}${metaError.code ? ` (code ${metaError.code})` : ''}`, 502, 'WHATSAPP_PROVIDER_ERROR');
+    }
+    return data;
 }
 
 module.exports = WhatsappSettingsService;

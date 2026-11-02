@@ -17,6 +17,7 @@ import {
     rotateWhatsappSecret,
     removeWhatsappSecret,
     testWhatsappConnection,
+    completeEmbeddedSignup,
     fetchLatestNotification,
     sendTestNotification
 } from "../../../lib/api/whatsapp";
@@ -198,5 +199,17 @@ export const useTestNotify = () => {
     return useMutation({
         mutationFn: sendTestNotification,
         onSettled: () => queryClient.invalidateQueries({ queryKey: ["whatsapp-latest-notification"] })
+    });
+};
+
+// Embedded Signup (WhatsApp Business App coexistence): completes Meta's
+// launch flow by exchanging the short-lived code server-side and storing the
+// permanent credentials encrypted. Invalidates settings on settle so the
+// linked WABA/number reflects the new state.
+export const useEmbeddedSignup = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: completeEmbeddedSignup,
+        onSettled: () => invalidateSettings(queryClient)
     });
 };

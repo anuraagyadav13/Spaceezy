@@ -1078,10 +1078,31 @@ class WhatsAppService {
             });
         }
         if (!lead && phone) {
+            // Phones are stored in mixed formats ("+91 92679 03565",
+            // "919267903565", ...) while Meta always sends digits only.
+            // Exact string matching drops replies from leads whose phone
+            // contains spaces, dashes, or a leading "+". Match on the
+            // normalized digit form so an inbound reply lands on the lead
+            // the outbound message was sent to.
+            const digits = String(phone).replace(/\D/g, '');
             lead = await prisma.lead.findFirst({
                 where: { organizationId, phone: String(phone).trim() },
                 orderBy: { createdAt: 'desc' }
             });
+            if (!lead && digits) {
+                const matched = await prisma.$queryRaw`
+                    SELECT id FROM "Lead"
+                    WHERE "organizationId" = ${organizationId}
+                      AND regexp_replace(phone, '[^0-9]', '', 'g') = ${digits}
+                    ORDER BY "createdAt" DESC
+                    LIMIT 1
+                `;
+                if (matched && matched[0]) {
+                    lead = await prisma.lead.findFirst({
+                        where: { id: matched[0].id, organizationId }
+                    });
+                }
+            }
         }
         if (!lead) {
             return { ok: true, ignored: 'no_lead' };

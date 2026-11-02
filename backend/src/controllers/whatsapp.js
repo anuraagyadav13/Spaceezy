@@ -116,6 +116,21 @@ const testNotify = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data, message: 'Test notification sent' });
 });
 
+// Embedded Signup (Coexistence): exchange Meta's short-lived code for the
+// permanent business token, discover the phone_number_id from the WABA and
+// store everything encrypted. Service performs no number lifecycle calls;
+// responses carry only display-safe fields (never code/token/secret).
+const completeEmbeddedSignup = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const data = await WhatsappSettingsService.completeEmbeddedSignup(organizationId, userId, {
+        code: req.body.code,
+        wabaId: req.body.wabaId,
+        phoneNumberId: req.body.phoneNumberId,
+        event: req.body.event,
+    });
+    res.status(200).json({ success: true, data, message: 'WhatsApp Business App connected via Embedded Signup' });
+});
+
 module.exports = {
     getStatus,
     listConversations,
@@ -135,5 +150,6 @@ module.exports = {
     removeSecret,
     testConnection,
     latestNotification,
-    testNotify
+    testNotify,
+    completeEmbeddedSignup
 };

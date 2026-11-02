@@ -41,6 +41,12 @@ export const removeWhatsappSecret = async (field) => (await apiClient.delete(`/w
 
 export const testWhatsappConnection = async () => (await apiClient.post("/whatsapp/settings/test-connection", {}));
 
+// Embedded Signup (Coexistence) completion: carries Meta's exchangeable code
+// (30s TTL) + session asset ids straight to the server. The code is never
+// logged or stored client-side.
+export const completeEmbeddedSignup = async (data) =>
+    (await apiClient.post("/whatsapp/settings/embedded-signup", data));
+
 export const fetchLatestNotification = async () => (await apiClient.get("/whatsapp/settings/notifications/latest"));
 
 export const sendTestNotification = async (data = {}) => (await apiClient.post("/whatsapp/settings/notify-test", data));
