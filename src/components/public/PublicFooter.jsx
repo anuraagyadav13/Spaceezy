@@ -10,7 +10,7 @@ export function PublicFooter() {
                     <div className="md:col-span-1">
                         <Link href="/" className="flex items-center gap-3 mb-6">
                             <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white/10">
-                                <Image src="/images/logo.jpg" alt="Spaceezy logo" fill sizes="44px" className="object-cover" />
+                                <Image src="/images/spaceezy-logo.png" alt="Spaceezy logo" fill sizes="44px" className="object-cover" />
                             </span>
                             <span className="font-bold text-2xl tracking-tighter text-white">
                                 Spaceezy<span className="text-purple-500">.</span>

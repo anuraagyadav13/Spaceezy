@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { 
     LogOut, X, LayoutDashboard, Users, Home, ClipboardList, 
     Calendar, PhoneCall, ListTodo,
-    BarChart3, Megaphone, Settings, ChevronDown, ChevronRight 
+    BarChart3, Megaphone, ChevronDown, ChevronRight 
 } from "lucide-react";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 
@@ -95,70 +96,55 @@ const NAVIGATION_GROUPS = [
             { label: "Meta Ads", href: "/dashboard/marketing/meta-ads" },
             { label: "Website Enquiries", href: "/dashboard/marketing/website" }
         ]
-    },
-    {
-        title: "ADMINISTRATION",
-        icon: Settings,
-        items: [
-            { label: "Employees & Teams", href: "/dashboard/team" },
-            { label: "Roles & Permissions", href: "/dashboard/admin/roles" },
-            { label: "Integrations", href: "/dashboard/admin/integrations" },
-            { label: "Location Management", href: "/dashboard/admin/locations" },
-            { label: "Audit Logs", href: "/dashboard/admin/audit" }
-        ]
     }
 ];
 
-// Nested menu item component
-function NavGroup({ group, pathname, setIsOpen }) {
+function NavGroup({ group, pathname, setIsOpen, isCollapsed }) {
+    const isChildActive = (group.items || []).some(item => 
+        item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href)
+    );
     const [userToggled, setUserToggled] = useState(null);
+    const isExpanded = userToggled !== null ? userToggled : (isChildActive || group.title === "DASHBOARD");
 
-    if (group.href) {
-        const isActive = group.href === "/dashboard" 
-            ? pathname === "/dashboard" 
-            : pathname === group.href || pathname.startsWith(group.href + "/");
+    if (isCollapsed) {
         return (
-            <div className="mb-2">
-                <Link 
-                    href={group.href}
-                    onClick={() => setIsOpen(false)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium transition-all ${
-                        isActive ? "bg-purple-50 text-purple-700 font-semibold shadow-xs" : "text-gray-700 hover:bg-gray-50"
+            <div className="mb-2 flex justify-center">
+                <Link
+                    href={group.items[0]?.href || "/dashboard"}
+                    title={group.title}
+                    className={`p-2.5 rounded-xl transition-all ${
+                        isChildActive
+                            ? "bg-purple-100 text-purple-700 shadow-2xs"
+                            : "text-gray-500 hover:text-purple-700 hover:bg-purple-50"
                     }`}
                 >
-                    <div className="flex items-center gap-3">
-                        <group.icon size={18} className={isActive ? "text-purple-600" : "text-gray-400"} />
-                        <span className="text-sm">{group.title}</span>
-                    </div>
+                    <group.icon size={20} />
                 </Link>
             </div>
         );
     }
 
-    // Check if any child route is active to keep the group open
-    const isChildActive = (group.items || []).some(item => 
-        item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href)
-    );
-    
-    const isExpanded = userToggled !== null ? userToggled : isChildActive;
-
     return (
-        <div className="mb-2">
+        <div className="mb-1">
             <button 
                 onClick={() => setUserToggled(!isExpanded)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium transition-all ${
-                    isChildActive && !isExpanded ? "bg-purple-50 text-purple-700" : "text-gray-700 hover:bg-gray-50"
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl font-bold text-xs tracking-wider transition-colors ${
+                    isChildActive ? "text-purple-900" : "text-gray-700 hover:text-purple-700 hover:bg-purple-50/40"
                 }`}
             >
                 <div className="flex items-center gap-3">
-                    <group.icon size={18} className={isChildActive ? "text-purple-600" : "text-gray-400"} />
-                    <span className="text-sm">{group.title}</span>
+                    <group.icon size={17} className={isChildActive ? "text-purple-600" : "text-purple-400"} />
+                    <span>{group.title}</span>
                 </div>
-                {isExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+                {isExpanded ? (
+                    <ChevronDown size={14} className="text-gray-400" />
+                ) : (
+                    <ChevronRight size={14} className="text-gray-400" />
+                )}
             </button>
             
             {isExpanded && (
-                <div className="mt-1 ml-4 pl-4 border-l border-gray-100 flex flex-col gap-1">
+                <div className="mt-1 ml-4 pl-3 flex flex-col gap-1 border-l-2 border-purple-100">
                     {group.items.map(item => {
                         const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname === item.href;
                         return (
@@ -166,10 +152,10 @@ function NavGroup({ group, pathname, setIsOpen }) {
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setIsOpen(false)}
-                                className={`block px-3 py-2 rounded-lg text-sm transition-all ${
+                                className={`block px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                                     isActive 
-                                    ? "bg-purple-50 text-purple-700 font-semibold" 
-                                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+                                    ? "bg-purple-100/70 text-purple-700 shadow-2xs" 
+                                    : "text-gray-600 hover:text-purple-700 hover:bg-purple-50/50"
                                 }`}
                             >
                                 {item.label}
@@ -182,55 +168,72 @@ function NavGroup({ group, pathname, setIsOpen }) {
     );
 }
 
+const emptySubscribe = () => () => {};
+
 export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
     const pathname = usePathname();
     const { logout } = useAuth();
-    const [mounted, setMounted] = useState(false);
-    
-    useEffect(() => {
-        const timer = setTimeout(() => setMounted(true), 0);
-        return () => clearTimeout(timer);
-    }, []);
+    const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
-    if (!mounted) return <div className={`w-72 border-r border-gray-100 bg-white ${collapsed ? "hidden" : "hidden lg:block"}`} />; 
+    if (!mounted) {
+        return <div className={`${collapsed ? "w-20" : "w-64"} border-r border-purple-50 bg-white hidden lg:block`} />;
+    }
 
     return (
         <>
             {isOpen && (
                 <div 
-                    className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-40 lg:hidden"
+                    className="fixed inset-0 bg-gray-900/30 backdrop-blur-xs z-40 lg:hidden"
                     onClick={() => setIsOpen(false)}
                 />
             )}
 
-            <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"} ${collapsed ? "lg:hidden" : ""}`}>
-                <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100 shrink-0">
-                    <Link href="/dashboard" className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600">
-                        Spaceezy CRM
+            <aside className={`fixed inset-y-0 left-0 z-50 ${collapsed ? "w-20" : "w-64"} bg-white border-r border-purple-50 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+                {/* Brand Logo Header */}
+                <div className={`h-18 flex items-center ${collapsed ? "justify-center px-2" : "justify-between px-5"} shrink-0`}>
+                    <Link href="/dashboard" className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shrink-0">
+                            <Image 
+                                src="/images/spaceezy-logo.png" 
+                                alt="Spaceezy" 
+                                width={40} 
+                                height={40} 
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+                        {!collapsed && (
+                            <span className="text-lg font-black text-purple-700 tracking-tight whitespace-nowrap">
+                                Spaceezy CRM
+                            </span>
+                        )}
                     </Link>
                     <button onClick={() => setIsOpen(false)} className="lg:hidden p-1 text-gray-500 hover:bg-gray-100 rounded-lg">
                         <X size={20} />
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto py-6 px-4 custom-scrollbar">
+                {/* Nav Links */}
+                <div className="flex-1 overflow-y-auto py-2 px-3 custom-scrollbar">
                     {NAVIGATION_GROUPS.map(group => (
                         <NavGroup 
                             key={group.title} 
                             group={group} 
                             pathname={pathname} 
                             setIsOpen={setIsOpen} 
+                            isCollapsed={collapsed}
                         />
                     ))}
                 </div>
 
-                <div className="p-4 border-t border-gray-100 shrink-0 bg-gray-50/50">
+                {/* Sign Out bottom card */}
+                <div className="p-4 shrink-0">
                     <button 
                         onClick={logout}
-                        className="flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium text-gray-700 bg-white border border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all shadow-sm"
+                        title="Sign Out"
+                        className={`w-full flex items-center justify-center gap-2 ${collapsed ? "p-2.5" : "px-4 py-2.5"} rounded-2xl font-bold text-xs text-purple-700 bg-purple-50/80 border border-purple-100 hover:bg-purple-100 transition-all shadow-2xs`}
                     >
-                        <LogOut size={18} />
-                        Sign Out
+                        <LogOut size={15} className="rotate-180 shrink-0" />
+                        {!collapsed && <span>Sign Out</span>}
                     </button>
                 </div>
             </aside>

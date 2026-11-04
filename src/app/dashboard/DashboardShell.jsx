@@ -9,7 +9,6 @@ export default function DashboardShell({ children }) {
     const { user, isLoading } = useAuth();
     const router = useRouter();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    // Desktop collapse preference (mobile slide-over is unaffected).
     const [isCollapsed, setIsCollapsed] = useState(() => {
         try {
             return window.localStorage.getItem("Spaceezy-sidebar-collapsed") === "1";
@@ -22,7 +21,7 @@ export default function DashboardShell({ children }) {
         try {
             window.localStorage.setItem("Spaceezy-sidebar-collapsed", isCollapsed ? "1" : "0");
         } catch {
-            // Private mode etc. — preference simply won't persist.
+            // ignore
         }
     }, [isCollapsed]);
 
@@ -34,20 +33,24 @@ export default function DashboardShell({ children }) {
 
     if (isLoading || !user) {
         return (
-            <div className="flex h-screen items-center justify-center bg-gray-50">
+            <div className="flex h-screen items-center justify-center bg-[#F8F9FD]">
                 <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
             </div>
         );
     }
 
     return (
-        <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
-            <AppSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} collapsed={isCollapsed} />
+        <div className="flex h-screen bg-[#F8F9FD] overflow-hidden font-sans">
+            <AppSidebar 
+                isOpen={isSidebarOpen} 
+                setIsOpen={setIsSidebarOpen} 
+                collapsed={isCollapsed}
+            />
 
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-                <AppHeader
-                    onOpenSidebar={() => setIsSidebarOpen(true)}
-                    onToggleCollapse={() => setIsCollapsed((v) => !v)}
+                <AppHeader 
+                    onOpenSidebar={() => setIsSidebarOpen(true)} 
+                    onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
                     collapsed={isCollapsed}
                 />
                 <div className="flex-1 overflow-y-auto">

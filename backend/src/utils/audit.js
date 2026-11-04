@@ -32,7 +32,9 @@ const AUDIT_ACTIONS = {
     WHATSAPP_CONNECTION_TESTED: 'whatsapp.connection_tested',
     WHATSAPP_EMBEDDED_SIGNUP: 'whatsapp.embedded_signup',
     WHATSAPP_NOTIFY_TEST: 'whatsapp.notify_test',
-    META_LEAD_SYNC: 'meta.lead_sync'
+    META_LEAD_SYNC: 'meta.lead_sync',
+    PASSWORD_RESET_REQUESTED: 'auth.password_reset_requested',
+    PASSWORD_RESET: 'auth.password_reset'
 };
 
 module.exports = { audit, AUDIT_ACTIONS };

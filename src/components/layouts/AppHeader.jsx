@@ -49,36 +49,44 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
     };
 
     return (
-        <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 shrink-0 sticky top-0 z-30">
-            <div className="flex items-center gap-4">
+        <header className="h-16 bg-[#F8F9FD] flex items-center justify-between px-6 sm:px-8 shrink-0 sticky top-0 z-30">
+            <div className="flex items-center gap-3">
+                {/* Mobile open hamburger */}
                 <button
                     onClick={onOpenSidebar}
                     aria-label="Open sidebar"
-                    className="lg:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-xl"
+                    className="lg:hidden p-2 -ml-2 text-gray-500 hover:bg-white rounded-xl shadow-xs"
                 >
                     <Menu size={20} />
                 </button>
+
+                {/* Sidebar toggle button matching mockup */}
                 <button
                     onClick={onToggleCollapse}
-                    aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
-                    title={collapsed ? "Show sidebar" : "Hide sidebar"}
-                    className="hidden lg:block p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-xl"
+                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    className="hidden lg:flex items-center justify-center w-8 h-8 rounded-xl border border-purple-200/60 bg-white/90 shadow-2xs text-purple-600 hover:bg-purple-50 transition-colors"
                 >
-                    {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+                    {collapsed ? (
+                        <PanelLeftOpen size={17} />
+                    ) : (
+                        <PanelLeftClose size={17} />
+                    )}
                 </button>
             </div>
 
-            <div className="flex items-center gap-4 sm:gap-6">
+            <div className="flex items-center gap-5 sm:gap-6">
+                {/* Notification bell */}
                 <div className="relative" ref={menuRef}>
                     <button
                         onClick={() => setOpen((v) => !v)}
                         aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
                         aria-expanded={open}
-                        className="relative p-2 text-gray-400 hover:bg-gray-50 rounded-xl transition-colors"
+                        className="relative p-2 text-gray-500 hover:text-purple-600 hover:bg-white rounded-xl transition-colors"
                     >
                         <Bell size={20} />
                         {unreadCount > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+                            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-[#F8F9FD]">
                                 {unreadCount > 99 ? "99+" : unreadCount}
                             </span>
                         )}
@@ -125,18 +133,26 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
                         </div>
                     )}
                 </div>
+
+                {/* User info */}
                 <div className="flex items-center gap-3">
-                    <div className="hidden sm:block text-right">
-                        <p className="text-sm font-bold text-gray-900">{user?.name || "User"}</p>
-                        <div className="flex items-center justify-end gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.5)]"></span>
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{user?.role?.replace("_", " ") || "ROLE"}</p>
+                    <div className="text-right">
+                        <p className="text-sm font-bold text-gray-900 leading-tight">{user?.name || "Admin User"}</p>
+                        <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <p className="text-[10px] font-bold text-gray-500 tracking-wider uppercase">
+                                {user?.role?.replace("_", " ") || "ADMIN"}
+                            </p>
                         </div>
                     </div>
-                    <div className="relative w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 p-[2px] shadow-sm">
-                        <div className="w-full h-full rounded-full border-2 border-white overflow-hidden bg-white">
-                            <Image src={user?.avatar || "https://i.pravatar.cc/150?img=33"} alt="Profile" className="w-full h-full object-cover" width={36} height={36} />
-                        </div>
+                    <div className="relative w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-purple-100 flex items-center justify-center">
+                        <Image
+                            src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces"}
+                            alt="Profile"
+                            className="w-full h-full object-cover"
+                            width={40}
+                            height={40}
+                        />
                     </div>
                 </div>
             </div>

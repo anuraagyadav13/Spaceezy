@@ -72,6 +72,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   sessions           Session[]
+  passwordReset      PasswordReset?
   assignedLeads      Lead[]         @relation("AssignedLeads")
   createdLeads       Lead[]         @relation("CreatedLeads")
   leadActivities     LeadActivity[]
@@ -95,6 +96,38 @@ model Session {
   expiresAt  DateTime
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
+}
+
+// Password-reset state. Exactly ONE row per user (userId is unique), which is
+// what makes "generating a new code invalidates the previous one" a property of
+// the schema rather than of the calling code: a second code overwrites the row.
+//
+// Only ever stores DIGESTS: argon2id for the OTP (it has only 1e6 possible
+// values, so a bare SHA-256 would be trivially brute-forceable from a DB dump)
+// and SHA-256 for the 256-bit reset token. The secrets themselves live only in
+// the outbound email.
+model PasswordReset {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // argon2id digest of the current 6-digit code. Null once the code has been
+  // verified (single-use) — at which point resetTokenHash takes over.
+  otpHash       String?
+  otpExpiresAt  DateTime
+  attempts      Int      @default(0)
+  lastSentAt    DateTime
+
+  // SHA-256 of the one-time token handed to the client by verify-reset-otp.
+  // This is what authorizes POST /reset-password, so the OTP itself is never
+  // replayed in a second request.
+  resetTokenHash String?
+  tokenExpiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([otpExpiresAt])
 }
 
 enum LeadStatus {

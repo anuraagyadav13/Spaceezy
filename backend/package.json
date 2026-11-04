@@ -20,6 +20,7 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1147.0",
+    "@aws-sdk/client-sesv2": "^3.1161.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "argon2": "^0.45.1",
