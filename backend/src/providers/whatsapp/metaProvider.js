@@ -2,6 +2,7 @@ const { AppError } = require('../../utils/errors');
 const { verifyHmacSha256 } = require('../../utils/hmac');
 const { normalizeMetaTemplateName } = require('../../utils/metaTemplateName');
 const { formatMetaError } = require('../../utils/metaErrors');
+const { TEMPLATE_LANGUAGE } = require('../../constants/whatsapp');
 
 // Official WhatsApp Business Platform (Cloud API) transport.
 //
@@ -129,7 +130,7 @@ class MetaWhatsAppProvider {
         return { providerMessageId: wamid, status: 'SENT' };
     }
 
-    async sendTemplate({ to, templateName, variables = [], language = 'en', credentials }) {
+    async sendTemplate({ to, templateName, variables = [], language = TEMPLATE_LANGUAGE, credentials }) {
         const recipient = normalizeRecipient(to);
         // Local library rows carry display names ("Property Quotation"); Meta
         // only accepts lowercase_snake_case template names, so normalize at
@@ -145,7 +146,7 @@ class MetaWhatsAppProvider {
         }));
         const template = {
             name,
-            language: { code: language || 'en_US' }
+            language: { code: language || TEMPLATE_LANGUAGE }
         };
         if (parameters.length > 0) {
             template.components = [{ type: 'body', parameters }];

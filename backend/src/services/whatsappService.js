@@ -1,5 +1,6 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { TEMPLATE_LANGUAGE } = require('../constants/whatsapp');
 const { getWhatsAppProvider } = require('../providers/whatsapp');
 const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
 const WhatsappSettingsService = require('./whatsappSettingsService');
@@ -11,8 +12,9 @@ const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { buildPublicPropertyUrl, buildPublicApiUrl, slugify } = require('../utils/publicLink');
 const { findBrochureDocument } = require('./storageService');
 const { buildQuotationUrl, sanitizeAddons, sanitizeQuote, VALIDITY_DAYS: QUOTATION_VALIDITY_DAYS } = require('./quotationPdf');
-const { isExecRole } = require('../utils/roles');
+const { isExecRole, assignmentSourceForRole } = require('../utils/roles');
 const { assertOwnership } = require('../utils/roles');
+const NotificationService = require('./notificationService');
 
 const maskConversation = (conv, role) => {
     if (!conv || canSeePII(role)) return conv;
@@ -112,10 +114,24 @@ class WhatsAppService {
     // Assignment reuses the lead's assignedToId: the conversation's visibility
     // for restricted roles is already derived from it, and a lead has exactly
     // one owner across the CRM. Route-gated on lead:assign (admin/manager).
-    static async assignConversation(conversationId, organizationId, userId, assignedToId) {
+    // Because this IS lead assignment, it writes the same lead timeline entry
+    // and fires the same in-app alert as the Leads page — an assignee must not
+    // be silently created from the inbox.
+    static async assignConversation(conversationId, organizationId, userId, role, assignedToId) {
         const conversation = await prisma.whatsAppConversation.findFirst({
             where: { id: conversationId, organizationId },
-            select: { id: true, leadId: true, lead: { select: { id: true, assignedToId: true } } }
+            select: {
+                id: true,
+                leadId: true,
+                lead: {
+                    select: {
+                        id: true,
+                        name: true,
+                        assignedToId: true,
+                        project: { select: { name: true } }
+                    }
+                }
+            }
         });
         if (!conversation || !conversation.lead) {
             throw new AppError('Conversation not found', 404, 'NOT_FOUND');
@@ -147,11 +163,35 @@ class WhatsAppService {
             where: { id: conversation.leadId },
             data: { assignedToId: assignedToId || null }
         });
+        // Lead timeline entry — identical shape to LeadService's reassignment
+        // so the history reads the same no matter where the change was made.
+        await prisma.leadActivity.create({
+            data: {
+                organizationId,
+                leadId: conversation.leadId,
+                type: 'ASSIGNMENT',
+                description: `Lead reassigned to ${assignee ? assignee.name : 'user'}`,
+                performedById: userId,
+                metadata: {
+                    source: assignmentSourceForRole(role),
+                    previousAssignedToId: previousAssigneeId || null,
+                    via: 'whatsapp_inbox'
+                }
+            }
+        });
         await audit(organizationId, userId, AUDIT_ACTIONS.WHATSAPP_CONVERSATION_ASSIGNED, 'WhatsAppConversation', conversation.id, {
             leadId: conversation.leadId,
             from: previousAssigneeId || null,
             to: assignedToId || null
         });
+        // In-app alert (fire-and-forget, same contract as the Leads page): a
+        // notification failure must never undo or fail the assignment.
+        if (assignedToId) {
+            void NotificationService.notifyLeadAssigned(organizationId, conversation.lead, assignedToId, {
+                performedById: userId,
+                previousAssignedToId: previousAssigneeId || null
+            });
+        }
         return {
             conversationId: conversation.id,
             leadId: conversation.leadId,
@@ -818,7 +858,7 @@ class WhatsAppService {
                     organizationId,
                     name: entry.name,
                     providerTemplateId: null,
-                    language: 'en_US',
+                    language: TEMPLATE_LANGUAGE,
                     category: entry.metaCategory,
                     description: entry.description,
                     body: entry.body,
@@ -858,7 +898,7 @@ class WhatsAppService {
                 organizationId,
                 name: data.name,
                 providerTemplateId: data.providerTemplateId || null,
-                language: data.language || 'en_US',
+                language: data.language || TEMPLATE_LANGUAGE,
                 category: data.category || 'UTILITY',
                 description: data.description || null,
                 body: data.body || null,

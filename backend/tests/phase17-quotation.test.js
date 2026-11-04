@@ -450,6 +450,31 @@ describe('Phase 17: public quotation endpoint', () => {
     expect(direct.buffer.length).toBeGreaterThan(2000);
   });
 
+  test('only renders for a public, active project of this organization', async () => {
+    const res = await request(app).get(quotationUrl());
+
+    expect(res.status).toBe(200);
+    // The visibility gate runs before the render — the same PUBLIC_PROJECT_WHERE
+    // + org scope every other public read uses (the PDF carries internal cost
+    // rows the public project DTOs never expose).
+    expect(prisma.project.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: PROJECT,
+          organizationId: ORG,
+          isPublic: true,
+          status: { not: 'INACTIVE' },
+        }),
+      })
+    );
+
+    // A hidden project answers the same 404 as an unknown one (no oracle).
+    prisma.project.findFirst.mockResolvedValue(null);
+    const hidden = await request(app).get(quotationUrl());
+    expect(hidden.status).toBe(404);
+    expect(hidden.body.code).toBe('NOT_FOUND');
+  });
+
   test('scopes the render to a unit inside that project and carries display params', async () => {
     const res = await request(app).get(quotationUrl(`&unit=${UNIT}&by=Priya+Sharma&customer=Kamal`));
 

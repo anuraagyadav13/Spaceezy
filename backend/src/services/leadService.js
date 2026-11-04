@@ -10,7 +10,7 @@ const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { generatePublicToken, buildPublicPropertyUrl, publicAvailability } = require('../utils/publicLink');
 const WhatsappNotifyService = require('./whatsappNotifyService');
 const NotificationService = require('./notificationService');
-const { isExecRole } = require('../utils/roles');
+const { isExecRole, assignmentSourceForRole } = require('../utils/roles');
 const { assertOwnership } = require('../utils/roles');
 const { parseBudgetValue } = require('../utils/budgetParser');
 
@@ -19,12 +19,6 @@ function parseBudget(value) {
 }
 
 const INELIGIBLE_CLAIM_STATUSES = ['BOOKED', 'LOST', 'CLOSED'];
-
-function assignmentSourceForRole(role) {
-    if (isExecRole(role)) return 'EMPLOYEE_ASSIGNED';
-    if (role === 'SALES_MANAGER') return 'MANAGER_ASSIGNED';
-    return 'ADMIN_ASSIGNED';
-}
 
 class LeadService {
     // Validates lead project/property references against the organization and keeps
