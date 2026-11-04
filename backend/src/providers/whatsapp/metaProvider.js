@@ -1,6 +1,7 @@
 const { AppError } = require('../../utils/errors');
 const { verifyHmacSha256 } = require('../../utils/hmac');
 const { normalizeMetaTemplateName } = require('../../utils/metaTemplateName');
+const { formatMetaError } = require('../../utils/metaErrors');
 
 // Official WhatsApp Business Platform (Cloud API) transport.
 //
@@ -59,20 +60,26 @@ async function graphRequest(path, payload, credentials) {
         throw new AppError('WhatsApp API returned a non-JSON response', 502, 'WHATSAPP_PROVIDER_ERROR');
     }
     if (!res.ok) {
-        const metaError = (data && data.error) || {};
-        const metaMessage = metaError.message ? String(metaError.message) : `HTTP ${res.status}`;
-        const metaDetail = metaError.code
-            ? ` (Meta code ${metaError.code}${metaError.type ? `, ${metaError.type}` : ''})`
-            : '';
-        // Code 190 / OAuthException = Meta rejected the stored access token —
-        // in practice an expired or revoked temporary token. Name the fix
-        // instead of surfacing a cryptic one-liner.
-        const hint = (metaError.code === 190 || /authentication/i.test(metaMessage))
-            ? ' — the saved WhatsApp access token is invalid or expired; generate a new token in Meta Business Manager and save it in WhatsApp Settings'
-            : '';
-        throw new AppError(`WhatsApp API error: ${metaMessage}${metaDetail}${hint}`, 502, 'WHATSAPP_PROVIDER_ERROR');
+        throw metaAppError(data, res.status);
     }
     return data;
+}
+
+// Builds the single provider error used by every Meta call. Keeps HTTP 502
+// (callers/UX already treat provider rejections as 502) but attaches the
+// structured Meta code + actionable hint so the UI can show *why* a send
+// failed instead of a generic "Bad Gateway".
+function metaAppError(data, httpStatus) {
+    const described = formatMetaError(data && data.error, `HTTP ${httpStatus}`);
+    const err = new AppError(described.message, 502, 'WHATSAPP_PROVIDER_ERROR');
+    err.meta = {
+        code: described.code,
+        subcode: described.subcode,
+        type: described.type,
+        hint: described.hint,
+        httpStatus
+    };
+    return err;
 }
 
 class MetaWhatsAppProvider {
@@ -241,8 +248,7 @@ class MetaWhatsAppProvider {
             throw new AppError('WhatsApp API returned a non-JSON response', 502, 'WHATSAPP_PROVIDER_ERROR');
         }
         if (!res.ok) {
-            const metaMessage = data && data.error && data.error.message ? String(data.error.message) : `HTTP ${res.status}`;
-            throw new AppError(`WhatsApp API error: ${metaMessage}`, 502, 'WHATSAPP_PROVIDER_ERROR');
+            throw metaAppError(data, res.status);
         }
         return data;
     }

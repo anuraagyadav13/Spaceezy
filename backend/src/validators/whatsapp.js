@@ -146,6 +146,22 @@ const updateTemplateSchema = {
     })
 };
 
+// Meta template import: reads the WABA's approved list and materializes one
+// local row. `language` selects the exact Meta variant when a name exists in
+// several languages (en vs en_US).
+const importTemplateSchema = {
+    body: z.object({
+        name: z.string().trim().min(1).max(200),
+        language: z.string().trim().max(20).optional()
+    })
+};
+
+const listMetaTemplatesQuerySchema = {
+    query: z.object({
+        refresh: z.enum(['true', 'false']).optional()
+    })
+};
+
 const listTemplatesQuerySchema = {
     query: z.object({
         active: z.enum(['true', 'false']).optional()
@@ -235,6 +251,8 @@ module.exports = {
     createTemplateSchema,
     updateTemplateSchema,
     listTemplatesQuerySchema,
+    importTemplateSchema,
+    listMetaTemplatesQuerySchema,
     saveSettingsSchema,
     rotateSecretSchema,
     secretFieldParamsSchema,

@@ -2190,7 +2190,9 @@ function WhatsAppCenterPageInner() {
                                                 {outbound && (
                                                     <span
                                                         className={`inline-flex items-center gap-0.5 shrink-0 ${failed ? "text-red-500 font-bold" : statusLabel === "Read" ? "text-sky-500" : "text-gray-400"}`}
-                                                        title={failed ? "Failed to send — your text is kept in the composer, edit and retry" : statusLabel}
+                                                        title={failed
+                                                            ? `Failed to send${m.error ? ` — ${m.error}` : ""}. Your text is kept in the composer, edit and retry.`
+                                                            : statusLabel}
                                                     >
                                                         <StatusIcon size={13} aria-label={statusLabel} />
                                                         {failed ? <span>Failed</span> : null}

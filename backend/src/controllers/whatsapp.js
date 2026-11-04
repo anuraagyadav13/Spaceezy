@@ -1,7 +1,29 @@
-const { asyncHandler } = require('../utils/errors');
+const { asyncHandler, AppError } = require('../utils/errors');
 const WhatsAppService = require('../services/whatsappService');
 const WhatsappSettingsService = require('../services/whatsappSettingsService');
 const WhatsappNotifyService = require('../services/whatsappNotifyService');
+const WhatsappTemplateService = require('../services/whatsappTemplateService');
+
+// Meta template endpoints must work even when providerMode is still 'mock'
+// (admins sync/review templates before going live), so they read the saved
+// credentials directly instead of the resolved send transport.
+const metaCredentials = async (organizationId) => {
+    const effective = await WhatsappSettingsService.getEffectiveConfig(organizationId);
+    if (!effective || !effective.accessToken) {
+        throw new AppError(
+            'Save a Meta access token in Integrations before reading templates.',
+            409,
+            'WHATSAPP_NOT_CONFIGURED'
+        );
+    }
+    return {
+        phoneNumberId: effective.phoneNumberId,
+        accessToken: effective.accessToken,
+        appSecret: effective.appSecret,
+        graphVersion: effective.graphVersion,
+        wabaId: effective.wabaId
+    };
+};
 
 const getStatus = asyncHandler(async (req, res) => {
     const { organizationId } = req.auth;
@@ -74,6 +96,39 @@ const updateTemplate = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data: template, message: 'Template updated' });
 });
 
+// Approved Meta templates for this WABA. This is the missing link that made
+// WhatsApp Manager templates invisible in the CRM dropdown.
+const listMetaTemplates = asyncHandler(async (req, res) => {
+    const { organizationId } = req.auth;
+    const credentials = await metaCredentials(organizationId);
+    const data = await WhatsappTemplateService.listMetaTemplates(credentials, {
+        force: req.query.refresh === 'true'
+    });
+    res.status(200).json({ success: true, data, message: 'Meta templates fetched successfully' });
+});
+
+const importMetaTemplate = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const credentials = await metaCredentials(organizationId);
+    const data = await WhatsappTemplateService.importMetaTemplate(
+        organizationId, userId, credentials, req.body
+    );
+    res.status(201).json({ success: true, data, message: 'Template imported from Meta' });
+});
+
+const syncMetaTemplates = asyncHandler(async (req, res) => {
+    const { organizationId, userId } = req.auth;
+    const credentials = await metaCredentials(organizationId);
+    const data = await WhatsappTemplateService.syncFromMeta(
+        organizationId, userId, credentials, { force: true }
+    );
+    res.status(200).json({
+        success: true,
+        data,
+        message: `Synced ${data.imported} new and ${data.updated} existing template(s) from Meta`
+    });
+});
+
 const getSettings = asyncHandler(async (req, res) => {
     const { organizationId } = req.auth;
     const data = await WhatsappSettingsService.getSettings(organizationId);
@@ -144,6 +199,9 @@ module.exports = {
     listLibrary,
     createTemplate,
     updateTemplate,
+    listMetaTemplates,
+    importMetaTemplate,
+    syncMetaTemplates,
     getSettings,
     saveSettings,
     rotateSecret,

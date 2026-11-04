@@ -56,6 +56,9 @@ const errorHandler = (err, req, res, next) => {
             success: false,
             message: err.message,
             code: err.code,
+            // Present only for provider rejections: display-safe Meta code,
+            // subcode, type and hint. Never contains credentials or payloads.
+            ...(err.meta ? { meta: err.meta } : {}),
         });
     }
 

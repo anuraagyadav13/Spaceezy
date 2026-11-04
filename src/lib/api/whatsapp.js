@@ -27,6 +27,17 @@ export const fetchWhatsAppTemplates = async (params = {}) => (await apiClient.ge
 
 export const fetchTemplateLibrary = async () => (await apiClient.get("/whatsapp/templates/library"));
 
+// Meta template bridge: approved templates on the configured WABA, imported
+// into local rows so they appear in the composer/notification selectors.
+export const fetchMetaTemplates = async (params = {}) =>
+    (await apiClient.get("/whatsapp/templates/meta", { params }));
+
+export const importMetaTemplate = async (data) =>
+    (await apiClient.post("/whatsapp/templates/import", data));
+
+export const syncMetaTemplates = async () =>
+    (await apiClient.post("/whatsapp/templates/sync", {}));
+
 export const createWhatsAppTemplate = async (data) => (await apiClient.post("/whatsapp/templates", data));
 
 export const updateWhatsAppTemplate = async ({ id, ...data }) => (await apiClient.patch(`/whatsapp/templates/${id}`, data));

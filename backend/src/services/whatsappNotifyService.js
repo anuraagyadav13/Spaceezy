@@ -2,10 +2,9 @@ const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { getWhatsAppProvider } = require('../providers/whatsapp');
-const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
 const WhatsappSettingsService = require('./whatsappSettingsService');
+const WhatsappTemplateService = require('./whatsappTemplateService');
 const { getCatalogEntry } = require('./templateCatalog');
-const { normalizeMetaTemplateName } = require('../utils/metaTemplateName');
 
 // Outbox-driven new-lead WhatsApp notifications (owner/team alerts, never
 // customer messages). Design notes:
@@ -101,35 +100,24 @@ class WhatsappNotifyService {
     }
 
     // Live approval check against Meta (meta mode only). Returns silently on
-    // success; throws a permanent, non-retryable error otherwise. Uses the
-    // WABA template list — local library names are never treated as approved.
-    static async verifyTemplateApproval(credentials, templateName) {
+    // success; throws a permanent, non-retryable error otherwise. Language and
+    // parameter count are validated too: a template approved as `en_US` cannot
+    // satisfy a row that sends `en`, and a 1-placeholder template cannot take
+    // 3 parameters. Catching those here turns two cryptic Meta rejections
+    // (132001 / 132000) into one actionable message before any send happens.
+    static async verifyTemplateApproval(credentials, templateName, options = {}) {
         if (!credentials || !credentials.wabaId) {
             throw Object.assign(
                 new AppError('Template approval cannot be verified without a WABA ID', 400, 'TEMPLATE_NOT_APPROVED'),
                 { permanent: true }
             );
         }
-        const provider = new MetaWhatsAppProvider();
-        const data = await provider.graphGet(`/${credentials.wabaId}/message_templates`, {
-            fields: 'name,status,language',
-            limit: 100,
-        }, credentials);
-        const approved = (Array.isArray(data.data) ? data.data : []).some(
-            (t) => t && typeof t.name === 'string'
-                && normalizeMetaTemplateName(t.name) === normalizeMetaTemplateName(templateName)
-                && String(t.status).toUpperCase() === 'APPROVED'
-        );
-        if (!approved) {
-            throw Object.assign(
-                new AppError(
-                    `Template "${templateName}" is not Meta-approved; notification not sent`,
-                    400,
-                    'TEMPLATE_NOT_APPROVED'
-                ),
-                { permanent: true }
-            );
-        }
+        return await WhatsappTemplateService.assertSendable({
+            credentials,
+            name: templateName,
+            language: options.language,
+            variableCount: options.variableCount
+        });
     }
 
     // Enqueue one notification row per enabled recipient. Safe to call from
@@ -282,7 +270,10 @@ class WhatsappNotifyService {
                 if (!credentials || !credentials.accessToken || !credentials.phoneNumberId) {
                     throw Object.assign(new AppError('WhatsApp credentials are incomplete', 409, 'WHATSAPP_NOT_CONFIGURED'), { permanent: true });
                 }
-                await WhatsappNotifyService.verifyTemplateApproval(credentials, template.name);
+                await WhatsappNotifyService.verifyTemplateApproval(credentials, template.name, {
+                    language: template.language,
+                    variableCount: values.length
+                });
             }
             const provider = t.provider;
             const result = await provider.sendMessage({
@@ -387,16 +378,19 @@ class WhatsappNotifyService {
             throw new AppError('Test recipient must be one of the configured recipients', 400, 'INVALID_RECIPIENT');
         }
         const template = await WhatsappNotifyService.resolveTemplate(organizationId, settings.notifyTemplateName);
+        const testValues = (Array.isArray(template.variables) ? template.variables : []).map(() => '[TEST]');
         const t = await WhatsappSettingsService.resolveTransport(organizationId);
         const credentials = t.credentials;
         if (t.source === 'db' && t.mode === 'meta') {
             if (!credentials || !credentials.accessToken || !credentials.phoneNumberId) {
                 throw new AppError('WhatsApp credentials are incomplete', 409, 'WHATSAPP_NOT_CONFIGURED');
             }
-            await WhatsappNotifyService.verifyTemplateApproval(credentials, template.name);
+            await WhatsappNotifyService.verifyTemplateApproval(credentials, template.name, {
+                language: template.language,
+                variableCount: testValues.length
+            });
         }
         const provider = t.provider;
-        const testValues = (Array.isArray(template.variables) ? template.variables : []).map(() => '[TEST]');
         const result = await provider.sendMessage({
             to: target.phone,
             body: `[notify-test: ${template.name}]`,

@@ -13,6 +13,9 @@ import {
     useWhatsAppTemplates,
     useLatestNotification,
     useTestNotify,
+    useSyncMetaTemplates,
+    useImportMetaTemplate,
+    useMetaTemplates,
     useEmbeddedSignup
 } from "../../../../features/communication/hooks/useWhatsApp";
 import { launchWhatsAppEmbeddedSignup, FB_APP_ID } from "../../../../lib/whatsappEmbeddedSignup";
@@ -168,14 +171,23 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
     const removeMutation = useRemoveWhatsappSecret();
     const testMutation = useTestWhatsappConnection();
     const testNotifyMutation = useTestNotify();
+    const syncTemplatesMutation = useSyncMetaTemplates();
+    const importTemplateMutation = useImportMetaTemplate();
     const embeddedSignupMutation = useEmbeddedSignup();
     const { data: libraryData } = useTemplateLibrary();
     const { data: customTemplates } = useWhatsAppTemplates();
     const { data: latestNotify } = useLatestNotification();
+    const [showMetaTemplates, setShowMetaTemplates] = useState(false);
+    const {
+        data: metaTemplates,
+        isFetching: metaTemplatesFetching,
+        error: metaTemplatesError
+    } = useMetaTemplates({ enabled: showMetaTemplates });
 
     const [form, setForm] = useState(emptyForm());
     const [formSeed, setFormSeed] = useState(null);
     const [savedFlash, setSavedFlash] = useState(false);
+    const [notifyResult, setNotifyResult] = useState(null);
     const [rotateField, setRotateField] = useState("accessToken");
     const [rotateValue, setRotateValue] = useState("");
     const [signupBusy, setSignupBusy] = useState(false);
@@ -208,7 +220,7 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
         setTestResult(null);
     };
 
-    const busy = saveMutation.isPending || rotateMutation.isPending || removeMutation.isPending || testMutation.isPending || testNotifyMutation.isPending;
+    const busy = saveMutation.isPending || rotateMutation.isPending || removeMutation.isPending || testMutation.isPending || testNotifyMutation.isPending || syncTemplatesMutation.isPending || importTemplateMutation.isPending;
 
     // Template options for notifications: predefined library first, then
     // active custom rows (deduped by name — the stored row wins at send).
@@ -216,7 +228,11 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
     const customRows = (Array.isArray(customTemplates) ? customTemplates : []).filter((t) => t && t.active !== false);
     const customNames = new Set(customRows.map((t) => t.name));
     const notifyTemplateOptions = [
-        ...customRows.map((t) => ({ name: t.name, hint: "Custom" })),
+        ...customRows.map((t) => ({
+            name: t.name,
+            hint: t.language ? `Custom · ${t.language}` : "Custom",
+            active: t.active !== false
+        })),
         ...libraryEntries.filter((e) => e && e.name && !customNames.has(e.name)).map((e) => ({ name: e.name, hint: "Library" })),
     ];
 
@@ -297,11 +313,43 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
 
     const handleTestNotify = async () => {
         if (!window.confirm("Send a labeled TEST notification to the first enabled recipient? In live mode this sends a real message.")) return;
+        setNotifyResult(null);
         try {
-            await testNotifyMutation.mutateAsync({});
+            const result = await testNotifyMutation.mutateAsync({});
+            setNotifyResult({ ok: true, ...result });
             showToast("Test notification sent", "success");
         } catch (err) {
+            setNotifyResult({ ok: false, message: err?.message || "Test notification failed" });
             showToast(err?.message || "Test notification failed", "error");
+        }
+    };
+
+    // Pull approved Meta templates into local rows. Without this the Meta
+    // template never appears in the dropdown no matter which WABA is selected.
+    const handleSyncMeta = async () => {
+        if (!window.confirm("Import every approved WhatsApp template from Meta into this CRM? Existing rows are updated to match Meta (language, body, variable count).")) return;
+        try {
+            const result = await syncTemplatesMutation.mutateAsync();
+            showToast(
+                `Meta sync complete — ${result?.imported ?? 0} new, ${result?.updated ?? 0} updated`,
+                "success"
+            );
+        } catch (err) {
+            showToast(err?.message || "Could not read templates from Meta", "error");
+        }
+    };
+
+    // Import one exact Meta variant (name + language). This is how a template
+    // approved as English (en) and another as English (US) can both be used.
+    const handleImportMetaTemplate = async (template) => {
+        try {
+            const row = await importTemplateMutation.mutateAsync({
+                name: template.name,
+                language: template.language || undefined
+            });
+            showToast(`Imported "${row.name}" (${row.language})`, "success");
+        } catch (err) {
+            showToast(err?.message || "Template import failed", "error");
         }
     };
 
@@ -547,8 +595,53 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
                             </div>
                         </div>
                         <p className="text-[11px] text-gray-400">
-                            Library templates provision a local row on first use. Live sending additionally requires Meta approval of the template name — unverified names fail safely without sending.
+                            The dropdown lists local rows plus the code library. Templates approved in WhatsApp Manager appear here after <b>Sync from Meta</b> — that is the only way a Meta template becomes sendable from the CRM.
                         </p>
+                        <div className="mt-1">
+                            <button
+                                type="button"
+                                onClick={() => setShowMetaTemplates((open) => !open)}
+                                className="text-xs font-bold text-purple-700 hover:underline"
+                            >
+                                {showMetaTemplates ? "Hide templates approved on Meta" : "Browse templates approved on Meta"}
+                            </button>
+                            {showMetaTemplates && (
+                                <div className="mt-2 rounded-xl border border-gray-200 divide-y divide-gray-100">
+                                    {metaTemplatesFetching && (
+                                        <p className="p-3 text-xs text-gray-500">Reading templates from Meta…</p>
+                                    )}
+                                    {!metaTemplatesFetching && metaTemplatesError && (
+                                        <p className="p-3 text-xs text-red-600">{metaTemplatesError.message}</p>
+                                    )}
+                                    {!metaTemplatesFetching && !metaTemplatesError
+                                        && Array.isArray(metaTemplates) && metaTemplates.length === 0 && (
+                                        <p className="p-3 text-xs text-gray-500">This WABA has no templates yet.</p>
+                                    )}
+                                    {(Array.isArray(metaTemplates) ? metaTemplates : []).map((template) => (
+                                        <div key={`${template.name}:${template.language}`} className="flex flex-wrap items-center gap-2 p-2.5 text-xs">
+                                            <span className="font-bold text-gray-800">{template.name}</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-semibold">
+                                                {template.language || "default"}
+                                            </span>
+                                            <span className={`px-1.5 py-0.5 rounded font-semibold ${template.status === "APPROVED" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                                                {template.status || "UNKNOWN"}
+                                            </span>
+                                            <span className="text-gray-500">{template.variableCount ?? 0} variable(s)</span>
+                                            {template.category && <span className="text-gray-400">{template.category}</span>}
+                                            <button
+                                                type="button"
+                                                disabled={busy || template.status !== "APPROVED"}
+                                                onClick={() => handleImportMetaTemplate(template)}
+                                                className="ml-auto px-2.5 py-1 rounded-lg border border-purple-200 text-purple-700 font-bold hover:bg-purple-50 disabled:opacity-40"
+                                                title={`Create/update the local row for ${template.name} (${template.language})`}
+                                            >
+                                                Import
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -576,11 +669,33 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
                         >
                             <Send size={14} /> Test Notify
                         </button>
+                        <button
+                            type="button"
+                            onClick={handleSyncMeta}
+                            disabled={busy}
+                            className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-2"
+                            title="Read approved templates from Meta and create/update local rows"
+                        >
+                            <Database size={15} /> {syncTemplatesMutation.isPending ? "Syncing…" : "Sync from Meta"}
+                        </button>
                     </div>
+
+                    {notifyResult && (
+                        <div className={`rounded-2xl border p-4 ${notifyResult.ok ? "border-emerald-100 bg-emerald-50/60" : "border-red-100 bg-red-50/60"}`}>
+                            <p className={`text-xs font-black uppercase tracking-wider mb-1 ${notifyResult.ok ? "text-emerald-700" : "text-red-700"}`}>
+                                {notifyResult.ok ? "Test notification accepted" : "Test notification failed"}
+                            </p>
+                            <p className="text-xs text-gray-700 break-words">
+                                {notifyResult.ok
+                                    ? `Meta message id: ${notifyResult.providerMessageId || "—"} · to ${notifyResult.recipient || "configured recipient"}`
+                                    : notifyResult.message}
+                            </p>
+                        </div>
+                    )}
 
                     {latestNotify && (
                         <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-4">
-                            <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2">Latest notification</p>
+                            <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2">Latest lead notification</p>
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                                 <span className={`font-black px-2 py-0.5 rounded uppercase ${latestNotify.status === "FAILED" ? "bg-red-50 text-red-600" : latestNotify.status === "PENDING" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
                                     {latestNotify.status}
@@ -590,6 +705,9 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
                                 <span className="text-gray-600">Attempts <b>{latestNotify.attempts ?? 0}</b></span>
                                 {latestNotify.error && <span className="text-red-600 font-semibold">{latestNotify.error}</span>}
                             </div>
+                            <p className="text-[11px] text-gray-400 mt-2">
+                                This box only reflects lead-created notifications. Test Notify results are shown above and by the toast.
+                            </p>
                         </div>
                     )}
 
