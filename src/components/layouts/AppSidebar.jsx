@@ -3,10 +3,10 @@ import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { 
-    LogOut, X, LayoutDashboard, Users, Home, ClipboardList, 
+import {
+    LogOut, X, LayoutDashboard, Users, Home, ClipboardList,
     Calendar, PhoneCall, ListTodo,
-    BarChart3, Megaphone, ChevronDown, ChevronRight 
+    BarChart3, Megaphone, ChevronDown, ChevronRight, Settings
 } from "lucide-react";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 
@@ -95,6 +95,17 @@ const NAVIGATION_GROUPS = [
             { label: "Campaigns", href: "/dashboard/marketing/campaigns" },
             { label: "Meta Ads", href: "/dashboard/marketing/meta-ads" },
             { label: "Website Enquiries", href: "/dashboard/marketing/website" }
+        ]
+    },
+    {
+        title: "ADMINISTRATION",
+        icon: Settings,
+        items: [
+            { label: "Employees & Teams", href: "/dashboard/team" },
+            { label: "Roles & Permissions", href: "/dashboard/admin/roles" },
+            { label: "Integrations", href: "/dashboard/admin/integrations" },
+            { label: "Location Management", href: "/dashboard/admin/locations" },
+            { label: "Audit Logs", href: "/dashboard/admin/audit" }
         ]
     }
 ];
