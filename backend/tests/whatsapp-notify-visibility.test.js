@@ -1,11 +1,13 @@
 const prisma = require('../src/db/prisma');
 const WhatsappNotifyService = require('../src/services/whatsappNotifyService');
+const WhatsappSettingsService = require('../src/services/whatsappSettingsService');
 
 jest.mock('../src/db/prisma', () => ({
   $queryRaw: jest.fn(),
   whatsAppConversation: { findFirst: jest.fn(), update: jest.fn() },
   whatsAppMessage: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   whatsappNotification: { findMany: jest.fn(), update: jest.fn() },
+  auditLog: { create: jest.fn() },
 }));
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -21,6 +23,41 @@ beforeEach(() => {
 });
 
 describe('Test Notify becomes visible in an existing thread', () => {
+  test('sends readable sample values and the rendered body, not [TEST] labels', async () => {
+    const sendMessage = jest.fn().mockResolvedValue({ providerMessageId: 'wamid.test' });
+    jest.spyOn(WhatsappSettingsService, 'getSettings').mockResolvedValue({
+      notifyEnabled: true,
+      notifyRecipients: [{ phone: '919876543210', label: 'Owner', enabled: true }],
+      notifyTemplateName: 'Enquiry Follow-up',
+    });
+    jest.spyOn(WhatsappSettingsService, 'resolveTransport').mockResolvedValue({
+      source: 'db',
+      mode: 'mock',
+      provider: { sendMessage },
+      credentials: undefined,
+    });
+    jest.spyOn(WhatsappNotifyService, 'resolveTemplate').mockResolvedValue({
+      name: 'Enquiry Follow-up',
+      language: 'en',
+      variables: ['customer_name', 'project_name', 'salesperson_name'],
+      body: 'Hi {{customer_name}}, about {{project_name}} with {{salesperson_name}}.',
+    });
+    prisma.$queryRaw.mockResolvedValue([]);
+
+    const result = await WhatsappNotifyService.testNotify(ORG, USER);
+
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      templateName: 'Enquiry Follow-up',
+      variables: ['Test Customer', 'Test Project', 'Sales Team'],
+      body: 'Hi Test Customer, about Test Project with Sales Team.',
+    }));
+    expect(result).toMatchObject({
+      ok: true,
+      providerMessageId: 'wamid.test',
+      threadMessageId: null,
+    });
+  });
+
   test('appends the rendered template when the recipient is a known lead', async () => {
     prisma.$queryRaw.mockResolvedValue([{ id: LEAD }]);
     prisma.whatsAppConversation.findFirst.mockResolvedValue({ id: THREAD });

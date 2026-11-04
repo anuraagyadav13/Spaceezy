@@ -46,6 +46,26 @@ const NOTIFY_VARIABLES = {
     variable_4: (lead) => lead.source || 'Direct',
 };
 
+// Test Notify is meant to show the recipient exactly what the alert looks
+// like. Old placeholder text ("[TEST]") made the message read like a system
+// alert instead of a real WhatsApp message, so resolve the same fields from a
+// readable sample lead. These values never come from, or touch, real records.
+const TEST_SAMPLE_LEAD = {
+    name: 'Test Customer',
+    source: 'Website',
+    project: { name: 'Test Project' },
+    assignedTo: { name: 'Sales Team' },
+};
+
+function sampleValueFor(name) {
+    const resolver = NOTIFY_VARIABLES[name];
+    if (!resolver) return 'Test';
+    const value = resolver(TEST_SAMPLE_LEAD);
+    return value === undefined || value === null || String(value).trim() === ''
+        ? 'Test'
+        : String(value).trim();
+}
+
 function normalizeRecipient(phone) {
     const digits = String(phone || '').replace(/\D/g, '');
     if (!/^[1-9]\d{7,14}$/.test(digits)) {
@@ -440,7 +460,15 @@ class WhatsappNotifyService {
             throw new AppError('Test recipient must be one of the configured recipients', 400, 'INVALID_RECIPIENT');
         }
         const template = await WhatsappNotifyService.resolveTemplate(organizationId, settings.notifyTemplateName);
-        const testValues = (Array.isArray(template.variables) ? template.variables : []).map(() => '[TEST]');
+        const declaredNames = Array.isArray(template.variables) ? template.variables : [];
+        // Sample values, not [TEST]: the test must look like the real alert so
+        // the admin can judge the actual wording on the phone.
+        const testValues = declaredNames.map(sampleValueFor);
+        const renderValues = {};
+        declaredNames.forEach((name, index) => { renderValues[name] = testValues[index]; });
+        const renderedBody = template.body
+            ? renderPreview(template.body, renderValues).text
+            : `[template: ${template.name}]`;
         const t = await WhatsappSettingsService.resolveTransport(organizationId);
         const credentials = t.credentials;
         if (t.source === 'db' && t.mode === 'meta') {
@@ -455,7 +483,7 @@ class WhatsappNotifyService {
         const provider = t.provider;
         const result = await provider.sendMessage({
             to: target.phone,
-            body: `[notify-test: ${template.name}]`,
+            body: renderedBody,
             templateName: template.name,
             variables: testValues,
             language: template.language,
@@ -468,12 +496,6 @@ class WhatsappNotifyService {
 
         // Mirror the test into the thread when the number is a known lead, so
         // "accepted" is visible in the CRM and delivery receipts can update it.
-        const declaredNames = Array.isArray(template.variables) ? template.variables : [];
-        const renderValues = {};
-        declaredNames.forEach((name, index) => { renderValues[name] = testValues[index]; });
-        const renderedBody = template.body
-            ? renderPreview(template.body, renderValues).text
-            : `[template: ${template.name}]`;
         const threadMessage = await WhatsappNotifyService.recordTestInThread({
             organizationId,
             userId,
