@@ -690,6 +690,13 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
                                     ? `Meta message id: ${notifyResult.providerMessageId || "—"} · to ${notifyResult.recipient || "configured recipient"}`
                                     : notifyResult.message}
                             </p>
+                            {notifyResult.ok && (
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                    {notifyResult.threadMessageId
+                                        ? "Also appended to the chat thread for this number."
+                                        : "Not shown in a chat: this number has no CRM conversation yet. Send it from the WhatsApp composer to test the in-chat flow."}
+                                </p>
+                            )}
                         </div>
                     )}
 
