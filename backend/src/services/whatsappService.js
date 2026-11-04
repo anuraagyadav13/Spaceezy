@@ -5,6 +5,7 @@ const { getWhatsAppProvider } = require('../providers/whatsapp');
 const MetaWhatsAppProvider = require('../providers/whatsapp/metaProvider');
 const WhatsappSettingsService = require('./whatsappSettingsService');
 const WhatsappNotifyService = require('./whatsappNotifyService');
+const WhatsappTemplateService = require('./whatsappTemplateService');
 const { getCatalogEntry, listCatalog, renderPreview } = require('./templateCatalog');
 const { canSeePII, maskPhone } = require('../utils/pii');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
@@ -559,6 +560,26 @@ class WhatsAppService {
                     .map((url) => url.trim())
                     .slice(0, 6);
             }
+        }
+
+        // Meta-mode template sends are validated against the WABA's approved
+        // list BEFORE the provider call. This is what turns "132001 / 132000
+        // after a live attempt" into one actionable message, and it also
+        // catches a name that only exists in the local catalog.
+        if (templateName && t.mode === 'meta') {
+            const guardCredentials = t.credentials || {
+                phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+                accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
+                appSecret: process.env.WHATSAPP_APP_SECRET,
+                graphVersion: process.env.WHATSAPP_GRAPH_VERSION,
+                wabaId: process.env.WHATSAPP_WABA_ID || null
+            };
+            await WhatsappTemplateService.assertSendable({
+                credentials: guardCredentials,
+                name: templateName,
+                language: templateLanguage,
+                variableCount: Array.isArray(variables) ? variables.length : 0
+            });
         }
 
         const result = await provider.sendMessage({

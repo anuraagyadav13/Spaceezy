@@ -10,6 +10,9 @@ import {
     markConversationRead,
     fetchWhatsAppTemplates,
     fetchTemplateLibrary,
+    fetchMetaTemplates,
+    importMetaTemplate,
+    syncMetaTemplates,
     createWhatsAppTemplate,
     updateWhatsAppTemplate,
     fetchWhatsappSettings,
@@ -129,6 +132,41 @@ export const useTemplateLibrary = (options = {}) =>
         staleTime: 30 * 60_000,
         retry: 1
     });
+
+// Approved Meta templates on the configured WABA (read-only). Lets the admin
+// see what actually exists on Meta before choosing a notification template.
+export const useMetaTemplates = (options = {}) =>
+    useQuery({
+        queryKey: ["whatsapp-meta-templates"],
+        queryFn: () => fetchMetaTemplates(),
+        enabled: options.enabled !== false,
+        staleTime: 60_000,
+        retry: 1
+    });
+
+// Pull approved Meta templates into local rows so they appear in every
+// template selector. This is the fix for "approved on Meta but missing here".
+export const useSyncMetaTemplates = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: syncMetaTemplates,
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["whatsapp-templates"] });
+            queryClient.invalidateQueries({ queryKey: ["whatsapp-meta-templates"] });
+        }
+    });
+};
+
+export const useImportMetaTemplate = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: importMetaTemplate,
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["whatsapp-templates"] });
+            queryClient.invalidateQueries({ queryKey: ["whatsapp-meta-templates"] });
+        }
+    });
+};
 
 export const useCreateWhatsAppTemplate = () => {
     const queryClient = useQueryClient();

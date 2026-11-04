@@ -13,6 +13,9 @@ const {
     listLibrary,
     createTemplate,
     updateTemplate,
+    listMetaTemplates,
+    importMetaTemplate,
+    syncMetaTemplates,
     getSettings,
     saveSettings,
     rotateSecret,
@@ -36,6 +39,8 @@ const {
     createTemplateSchema,
     updateTemplateSchema,
     listTemplatesQuerySchema,
+    importTemplateSchema,
+    listMetaTemplatesQuerySchema,
     saveSettingsSchema,
     rotateSecretSchema,
     secretFieldParamsSchema,
@@ -85,6 +90,11 @@ router.post('/conversations/:id/assign', requirePermission('lead:assign'), conve
 router.post('/conversations/:id/read', requirePermission('whatsapp:view'), conversationActionLimiter, validate({ ...idParamsSchema, ...markReadSchema }), markConversationRead);
 router.get('/templates', requirePermission('whatsapp:view'), validate(listTemplatesQuerySchema), listTemplates);
 router.get('/templates/library', requirePermission('whatsapp:view'), listLibrary);
+// Meta template bridge (admin-level): read the WABA's approved templates and
+// materialize them as local rows. Read-only list is safe; import/sync write.
+router.get('/templates/meta', requirePermission('whatsapp:manage'), validate(listMetaTemplatesQuerySchema), listMetaTemplates);
+router.post('/templates/import', requirePermission('whatsapp:manage'), settingsLimiter, validate(importTemplateSchema), importMetaTemplate);
+router.post('/templates/sync', requirePermission('whatsapp:manage'), settingsLimiter, syncMetaTemplates);
 router.post('/templates', requirePermission('whatsapp:manage'), validate(createTemplateSchema), createTemplate);
 router.patch('/templates/:id', requirePermission('whatsapp:manage'), validate({ ...idParamsSchema, ...updateTemplateSchema }), updateTemplate);
 
