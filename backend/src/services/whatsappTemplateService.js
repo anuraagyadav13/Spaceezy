@@ -69,20 +69,39 @@ function catalogEntryFor(metaName) {
     return byNormalized || null;
 }
 
+// Ordered lead fields used for Meta templates that are not in the code
+// catalog. Positional {{1}},{{2}},... therefore become {{customer_name}},
+// {{project_name}},... exactly like the catalog templates, which is what makes
+// an imported template usable for new-lead alerts: the alert resolver only
+// knows these names. Anything beyond the list stays generic.
+const ALERT_VARIABLE_ORDER = ['customer_name', 'project_name', 'salesperson_name', 'lead_source'];
+
+// `variable_1`, `variable_2`, ... is the old placeholder shape: it carries no
+// meaning and the alert resolver cannot fill it, so treat it as "no choice".
+function isGenericVariableName(name) {
+    return /^variable_\d+$/.test(String(name || ''));
+}
+
 // Preserve the variable names an admin already filled in when the count still
-// matches; otherwise fall back to the catalog, then to generic positional
-// names. Order is significant: it is the order Meta expects parameters in.
+// matches; otherwise fall back to the catalog, then to the ordered alert
+// fields, then to generic positional names. Order is significant: it is the
+// order Meta expects parameters in.
 function variableNamesFor(count, existing, catalogEntry) {
     const target = Number(count);
     if (!Number.isFinite(target) || target < 0) return Array.isArray(existing) ? existing.map(String) : [];
     const keep = Array.isArray(existing) ? existing.map(String) : [];
-    if (keep.length === target) return keep;
+    const meaningful = keep.filter((name) => !isGenericVariableName(name));
+    if (keep.length === target && meaningful.length === target) return keep;
     if (catalogEntry && Array.isArray(catalogEntry.variables) && catalogEntry.variables.length === target) {
         return [...catalogEntry.variables];
     }
     const out = [];
     for (let index = 0; index < target; index += 1) {
-        out.push(keep[index] || `variable_${index + 1}`);
+        out.push(
+            (!isGenericVariableName(keep[index]) && keep[index])
+            || ALERT_VARIABLE_ORDER[index]
+            || `variable_${index + 1}`
+        );
     }
     return out;
 }

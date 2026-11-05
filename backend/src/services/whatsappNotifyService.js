@@ -4,7 +4,7 @@ const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { getWhatsAppProvider } = require('../providers/whatsapp');
 const WhatsappSettingsService = require('./whatsappSettingsService');
 const WhatsappTemplateService = require('./whatsappTemplateService');
-const { getCatalogEntry } = require('./templateCatalog');
+const { getCatalogEntry, renderPreview } = require('./templateCatalog');
 const { normalizeMetaTemplateName } = require('../utils/metaTemplateName');
 const { TEMPLATE_LANGUAGE } = require('../constants/whatsapp');
 
@@ -36,7 +36,35 @@ const NOTIFY_VARIABLES = {
     assigned_employee: (lead) => (lead.assignedTo ? lead.assignedTo.name : 'Sales Team'),
     salesperson: (lead) => (lead.assignedTo ? lead.assignedTo.name : 'Sales Team'),
     salesperson_name: (lead) => (lead.assignedTo ? lead.assignedTo.name : 'Sales Team'),
+    // Positional fallbacks. Rows imported from Meta before the importer knew
+    // the ordered field names still carry {{variable_1}}... They are resolved
+    // in the same order the importer now uses, so an existing row becomes
+    // usable for alerts without a manual edit.
+    variable_1: (lead) => lead.name || 'Customer',
+    variable_2: (lead) => (lead.project ? lead.project.name : 'a project'),
+    variable_3: (lead) => (lead.assignedTo ? lead.assignedTo.name : 'Sales Team'),
+    variable_4: (lead) => lead.source || 'Direct',
 };
+
+// Test Notify is meant to show the recipient exactly what the alert looks
+// like. Old placeholder text ("[TEST]") made the message read like a system
+// alert instead of a real WhatsApp message, so resolve the same fields from a
+// readable sample lead. These values never come from, or touch, real records.
+const TEST_SAMPLE_LEAD = {
+    name: 'Test Customer',
+    source: 'Website',
+    project: { name: 'Test Project' },
+    assignedTo: { name: 'Sales Team' },
+};
+
+function sampleValueFor(name) {
+    const resolver = NOTIFY_VARIABLES[name];
+    if (!resolver) return 'Test';
+    const value = resolver(TEST_SAMPLE_LEAD);
+    return value === undefined || value === null || String(value).trim() === ''
+        ? 'Test'
+        : String(value).trim();
+}
 
 function normalizeRecipient(phone) {
     const digits = String(phone || '').replace(/\D/g, '');
@@ -335,17 +363,24 @@ class WhatsappNotifyService {
         }
     }
 
-    // Delivery-status bridge: called from the webhook status flow after the
-    // message row flips. Upgrades SENT→DELIVERED/READ only, never downgrades.
-    static async handleStatusEvent(organizationId, providerMessageId, mappedStatus) {
-        if (!providerMessageId || !['DELIVERED', 'READ'].includes(mappedStatus)) return;
-        const rows = await prisma.whatsappNotification.findMany({
-            where: { organizationId, providerMessageId, status: mappedStatus === 'READ' ? { in: ['SENT', 'DELIVERED'] } : 'SENT' },
-        });
+    // Delivery-status bridge: called from the webhook status flow, whether or
+    // not a thread message row exists. Upgrades PENDING -> SENT -> DELIVERED ->
+    // READ only, never downgrades; a provider failure flips the row to FAILED
+    // so the settings page stops claiming a lost message was sent.
+    static async handleStatusEvent(organizationId, providerMessageId, mappedStatus, error = null) {
+        if (!providerMessageId) return;
+        if (!['DELIVERED', 'READ', 'FAILED'].includes(mappedStatus)) return;
+        const where = { organizationId, providerMessageId };
+        if (mappedStatus === 'READ') where.status = { in: ['SENT', 'DELIVERED'] };
+        else if (mappedStatus === 'DELIVERED') where.status = 'SENT';
+        else where.status = { in: ['PENDING', 'SENT', 'DELIVERED'] };
+        const rows = await prisma.whatsappNotification.findMany({ where });
         for (const row of rows) {
             await prisma.whatsappNotification.update({
                 where: { id: row.id },
-                data: { status: mappedStatus },
+                data: mappedStatus === 'FAILED'
+                    ? { status: 'FAILED', error: error || 'Provider reported failure' }
+                    : { status: mappedStatus },
             }).catch(() => {});
         }
     }
@@ -360,6 +395,51 @@ class WhatsappNotifyService {
             },
         });
         return row;
+    }
+
+    // Test Notify bypasses WhatsAppService.sendMessage, so historically it
+    // wrote nothing to the inbox: the admin saw "accepted" with a wamid but no
+    // bubble in the chat and could not tell a delivered test from a lost one.
+    // When the recipient already belongs to a conversation (i.e. the number is
+    // a known lead), append the test as a normal OUTBOUND row so the thread
+    // shows exactly what went out and the delivery webhook can advance it.
+    // A settings test never creates a conversation of its own.
+    static async recordTestInThread({ organizationId, userId, recipient, templateName, body, variables, providerMessageId }) {
+        const digits = String(recipient || '').replace(/\D/g, '');
+        if (!digits) return null;
+        const matched = await prisma.$queryRaw`
+            SELECT id FROM "Lead"
+            WHERE "organizationId" = ${organizationId}
+              AND regexp_replace(phone, '[^0-9]', '', 'g') = ${digits}
+            ORDER BY "createdAt" DESC
+            LIMIT 1
+        `;
+        const leadId = matched && matched[0] ? matched[0].id : null;
+        if (!leadId) return null;
+        const conversation = await prisma.whatsAppConversation.findFirst({
+            where: { organizationId, leadId },
+            orderBy: { lastMessageAt: 'desc' }
+        });
+        if (!conversation) return null;
+        const created = await prisma.whatsAppMessage.create({
+            data: {
+                organizationId,
+                conversationId: conversation.id,
+                leadId,
+                direction: 'OUTBOUND',
+                status: 'SENT',
+                body,
+                templateName,
+                variables: Array.isArray(variables) ? variables : null,
+                providerMessageId: providerMessageId || null,
+                sentById: userId || null
+            }
+        });
+        await prisma.whatsAppConversation.update({
+            where: { id: conversation.id },
+            data: { lastMessageAt: new Date() }
+        });
+        return created;
     }
 
     // Safe configuration test: sends a clearly-labeled TEST notification to
@@ -380,7 +460,15 @@ class WhatsappNotifyService {
             throw new AppError('Test recipient must be one of the configured recipients', 400, 'INVALID_RECIPIENT');
         }
         const template = await WhatsappNotifyService.resolveTemplate(organizationId, settings.notifyTemplateName);
-        const testValues = (Array.isArray(template.variables) ? template.variables : []).map(() => '[TEST]');
+        const declaredNames = Array.isArray(template.variables) ? template.variables : [];
+        // Sample values, not [TEST]: the test must look like the real alert so
+        // the admin can judge the actual wording on the phone.
+        const testValues = declaredNames.map(sampleValueFor);
+        const renderValues = {};
+        declaredNames.forEach((name, index) => { renderValues[name] = testValues[index]; });
+        const renderedBody = template.body
+            ? renderPreview(template.body, renderValues).text
+            : `[template: ${template.name}]`;
         const t = await WhatsappSettingsService.resolveTransport(organizationId);
         const credentials = t.credentials;
         if (t.source === 'db' && t.mode === 'meta') {
@@ -395,7 +483,7 @@ class WhatsappNotifyService {
         const provider = t.provider;
         const result = await provider.sendMessage({
             to: target.phone,
-            body: `[notify-test: ${template.name}]`,
+            body: renderedBody,
             templateName: template.name,
             variables: testValues,
             language: template.language,
@@ -405,7 +493,25 @@ class WhatsappNotifyService {
             recipient: target.phone,
             templateName: template.name,
         });
-        return { ok: true, providerMessageId: result.providerMessageId || null, recipient: target.phone };
+
+        // Mirror the test into the thread when the number is a known lead, so
+        // "accepted" is visible in the CRM and delivery receipts can update it.
+        const threadMessage = await WhatsappNotifyService.recordTestInThread({
+            organizationId,
+            userId,
+            recipient: target.phone,
+            templateName: template.name,
+            body: renderedBody,
+            variables: testValues,
+            providerMessageId: result.providerMessageId || null
+        }).catch(() => null);
+
+        return {
+            ok: true,
+            providerMessageId: result.providerMessageId || null,
+            recipient: target.phone,
+            threadMessageId: threadMessage ? threadMessage.id : null
+        };
     }
 }
 

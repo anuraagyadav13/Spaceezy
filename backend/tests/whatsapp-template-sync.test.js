@@ -132,7 +132,7 @@ describe('Meta template sync: materialize approved templates as local rows', () 
     }));
   });
 
-  test('creates a local row with positional names when the template is new and unknown to the library', async () => {
+  test('creates a local row with the ordered alert fields when the template is new and unknown to the library', async () => {
     stubGraph([metaTemplate({
       name: 'site_visit_reminder_two',
       language: 'en_US',
@@ -145,10 +145,45 @@ describe('Meta template sync: materialize approved templates as local rows', () 
     expect(prisma.whatsAppTemplate.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         organizationId: ORG,
-        variables: ['variable_1', 'variable_2'],
+        // Ordered alert fields, never the meaningless variable_N shape: an
+        // alert resolver only knows these names, so this is what makes an
+        // imported template selectable as the new-lead notification.
+        variables: ['customer_name', 'project_name'],
         language: 'en_US',
         providerTemplateId: 'meta-1',
-        body: 'Hello {{variable_1}}, see you at {{variable_2}}.',
+        body: 'Hello {{customer_name}}, see you at {{project_name}}.',
+      }),
+    }));
+  });
+
+  test('re-sync renames a legacy variable_N row so it can be saved as the alert template', async () => {
+    // "Spaceezy Introduction" was imported before ordered field names existed,
+    // leaving {{variable_1}}/{{variable_2}}. Save Configuration rejected it
+    // because the alert resolver cannot fill those names. A sync must repair
+    // the row in place - it already has the same placeholder count.
+    prisma.whatsAppTemplate.findMany.mockResolvedValue([{
+      id: 'tpl-intro',
+      name: 'Spaceezy Introduction',
+      language: 'en_US',
+      category: 'MARKETING',
+      variables: ['variable_1', 'variable_2'],
+      body: 'Hello {{variable_1}}, welcome to {{variable_2}}.',
+    }]);
+    stubGraph([metaTemplate({
+      id: 'meta-intro',
+      name: 'spaceezy_introduction',
+      language: 'en_US',
+      components: [{ type: 'BODY', text: 'Hello {{1}}, welcome to {{2}}.' }],
+    })]);
+
+    const result = await WhatsappTemplateService.syncFromMeta(ORG, USER, CREDENTIALS);
+
+    expect(result.updated).toBe(1);
+    expect(prisma.whatsAppTemplate.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'tpl-intro' },
+      data: expect.objectContaining({
+        variables: ['customer_name', 'project_name'],
+        body: 'Hello {{customer_name}}, welcome to {{project_name}}.',
       }),
     }));
   });

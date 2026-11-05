@@ -1087,7 +1087,17 @@ class WhatsAppService {
         const message = await prisma.whatsAppMessage.findFirst({
             where: { organizationId, providerMessageId }
         });
-        if (!message) return { ok: true, ignored: true };
+        if (!message) {
+            // New-lead notifications and settings-level test sends exist only
+            // in the WhatsappNotification outbox, never as a WhatsAppMessage.
+            // Returning early here silently dropped every delivery receipt for
+            // them, so a notification stayed "SENT" forever even after Meta
+            // delivered it. Bridge the status before giving up on the thread.
+            await WhatsappNotifyService
+                .handleStatusEvent(organizationId, providerMessageId, mapped, payload.error)
+                .catch(() => {});
+            return { ok: true, ignored: true };
+        }
 
         // Rank ordering makes retries/duplicates idempotent (never downgrade).
         const rank = { QUEUED: 0, SENT: 1, DELIVERED: 2, READ: 3, FAILED: 3 };

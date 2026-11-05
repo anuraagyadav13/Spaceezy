@@ -188,6 +188,7 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
     const [formSeed, setFormSeed] = useState(null);
     const [savedFlash, setSavedFlash] = useState(false);
     const [notifyResult, setNotifyResult] = useState(null);
+    const [confirmTestNotify, setConfirmTestNotify] = useState(false);
     const [rotateField, setRotateField] = useState("accessToken");
     const [rotateValue, setRotateValue] = useState("");
     const [signupBusy, setSignupBusy] = useState(false);
@@ -311,8 +312,15 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
         setTestResult(null);
     };
 
-    const handleTestNotify = async () => {
-        if (!window.confirm("Send a labeled TEST notification to the first enabled recipient? In live mode this sends a real message.")) return;
+    // In-page confirmation instead of window.confirm: a native browser alert
+    // is easy to miss and cannot explain what will be sent. The panel below
+    // states what goes out and that the values are samples.
+    const handleTestNotify = () => {
+        setConfirmTestNotify(true);
+    };
+
+    const sendTestNotify = async () => {
+        setConfirmTestNotify(false);
         setNotifyResult(null);
         try {
             const result = await testNotifyMutation.mutateAsync({});
@@ -665,7 +673,7 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
                             onClick={handleTestNotify}
                             disabled={busy}
                             className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-2"
-                            title="Sends a labeled TEST notification to the first enabled recipient"
+                            title="Send the selected template to the first enabled recipient with sample values"
                         >
                             <Send size={14} /> Test Notify
                         </button>
@@ -680,6 +688,37 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
                         </button>
                     </div>
 
+                    {confirmTestNotify && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                            <p className="text-xs font-black uppercase tracking-wider text-amber-800 mb-1">
+                                Send test notification?
+                            </p>
+                            <p className="text-xs text-gray-700">
+                                The selected template goes to the first enabled recipient with sample values
+                                (e.g. Test Customer, Test Project) so you can see the real wording. This sends a
+                                real WhatsApp message.
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-3">
+                                <button
+                                    type="button"
+                                    onClick={sendTestNotify}
+                                    disabled={busy}
+                                    className="px-4 py-2 bg-purple-700 text-white text-xs font-bold rounded-xl hover:bg-purple-800 disabled:opacity-50 inline-flex items-center gap-2"
+                                >
+                                    <Send size={13} /> Send test
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setConfirmTestNotify(false)}
+                                    disabled={busy}
+                                    className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {notifyResult && (
                         <div className={`rounded-2xl border p-4 ${notifyResult.ok ? "border-emerald-100 bg-emerald-50/60" : "border-red-100 bg-red-50/60"}`}>
                             <p className={`text-xs font-black uppercase tracking-wider mb-1 ${notifyResult.ok ? "text-emerald-700" : "text-red-700"}`}>
@@ -690,6 +729,13 @@ function WhatsappSettingsCard({ testResult, setTestResult, connection }) {
                                     ? `Meta message id: ${notifyResult.providerMessageId || "—"} · to ${notifyResult.recipient || "configured recipient"}`
                                     : notifyResult.message}
                             </p>
+                            {notifyResult.ok && (
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                    {notifyResult.threadMessageId
+                                        ? "Also appended to the chat thread for this number."
+                                        : "Not shown in a chat: this number has no CRM conversation yet. Send it from the WhatsApp composer to test the in-chat flow."}
+                                </p>
+                            )}
                         </div>
                     )}
 
