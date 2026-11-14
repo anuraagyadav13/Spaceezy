@@ -5,6 +5,8 @@
 import { describe, it, expect } from "vitest";
 import {
     META_DISCONNECTED_MESSAGE,
+    META_DISCOVERY_BLOCKED_REASONS,
+    isMetaDiscoveryEnabled,
     CAMPAIGN_OBJECTIVES,
     BILLING_EVENTS,
     OPTIMIZATION_GOALS,
@@ -150,5 +152,49 @@ describe("status presentation", () => {
     it("humanizes labels without inventing content", () => {
         expect(statusLabel("PENDING_REVIEW")).toBe("Pending Review");
         expect(statusLabel("")).toBe("Unknown");
+    });
+});
+
+describe("discovery gating (no circular ad-account dependency)", () => {
+    it("enables discovery WITHOUT an ad-account selection", () => {
+        expect(
+            isMetaDiscoveryEnabled(
+                { connected: true, reason: "NO_AD_ACCOUNT_SELECTED", tokenExpired: false },
+                true
+            )
+        ).toBe(true);
+    });
+
+    it("enables discovery while required permissions are still missing", () => {
+        expect(
+            isMetaDiscoveryEnabled(
+                { connected: false, reason: "PERMISSION_DENIED", tokenExpired: false },
+                true
+            )
+        ).toBe(true);
+    });
+
+    it("blocks only a missing, expired or rejected token", () => {
+        expect(isMetaDiscoveryEnabled(null, true)).toBe(false);
+        expect(isMetaDiscoveryEnabled(undefined, true)).toBe(false);
+        expect(isMetaDiscoveryEnabled({ reason: "MISSING_CONFIG", tokenExpired: false }, true)).toBe(false);
+        expect(isMetaDiscoveryEnabled({ reason: "TOKEN_EXPIRED", tokenExpired: true }, true)).toBe(false);
+        expect(isMetaDiscoveryEnabled({ reason: "META_TOKEN_INVALID", tokenExpired: false }, true)).toBe(false);
+        expect(isMetaDiscoveryEnabled({ reason: null, tokenExpired: true }, true)).toBe(false);
+    });
+
+    it("stays disabled without the view permission", () => {
+        expect(isMetaDiscoveryEnabled({ reason: null, tokenExpired: false }, false)).toBe(false);
+    });
+
+    it("exports exactly the blocked-reason contract", () => {
+        expect(META_DISCOVERY_BLOCKED_REASONS).toEqual([
+            "MISSING_CONFIG",
+            "TOKEN_EXPIRED",
+            "META_TOKEN_INVALID",
+        ]);
+        // A missing selection must never be treated as "no connection".
+        expect(META_DISCOVERY_BLOCKED_REASONS).not.toContain("NO_AD_ACCOUNT_SELECTED");
+        expect(META_DISCOVERY_BLOCKED_REASONS).not.toContain("PERMISSION_DENIED");
     });
 });

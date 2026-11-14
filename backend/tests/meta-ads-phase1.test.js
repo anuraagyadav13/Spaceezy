@@ -798,4 +798,198 @@ describe('Phase 1: RBAC on connection settings', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Meta asset discovery fixes: status gating (NO_AD_ACCOUNT_SELECTED instead
+// of MISSING_CONFIG for an empty selection), assigned-Instagram primary
+// discovery with Page fallback and dedupe, and partial sync
+// (Promise.allSettled) that saves successful categories, reports failures
+// per category and never fabricates counts or marks a failed category as
+// synchronized.
+// ---------------------------------------------------------------------------
+describe('Meta asset discovery fixes: status, discovery, partial sync', () => {
+  test('valid stored token with empty selections → NO_AD_ACCOUNT_SELECTED, act_ probe skipped', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow({ selectedAdAccountIds: [] }));
+    const spy = stubGraphRoutes({
+      me: { id: '999', name: 'SpaceEzy' },
+      permissions: statusRoutes.permissions,
+    });
+
+    const res = await get('/api/v1/meta-ads/status');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      connected: true,
+      reason: 'NO_AD_ACCOUNT_SELECTED',
+      missing: ['selectedAdAccountIds'],
+      adAccount: null,
+      user: { id: '999', name: 'SpaceEzy' },
+    });
+    // Token and permissions were validated live; the act_{id} call is
+    // skipped entirely because there is no selection to probe.
+    const urls = spy.mock.calls.map((call) => String(call[0]));
+    expect(urls.some((url) => url.includes('/me') && !url.includes('permissions'))).toBe(true);
+    expect(urls.some((url) => url.includes('permissions'))).toBe(true);
+    expect(urls.some((url) => url.includes('act_'))).toBe(false);
+  });
+
+  test('Page discovery works while ad-account discovery is denied (no ads_read)', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    stubGraphRoutes({
+      adaccounts: { __status: 403, __body: { error: { message: 'Missing Permissions', code: 200 } } },
+      accounts: { data: [{ id: 'P1', name: 'Page One', category: 'Software' }] },
+    });
+
+    const pagesRes = await get('/api/v1/meta-ads/pages');
+    expect(pagesRes.status).toBe(200);
+    expect(pagesRes.body.data.items).toHaveLength(1);
+    expect(pagesRes.body.data.items[0]).toMatchObject({ id: 'P1', name: 'Page One' });
+
+    const adsRes = await get('/api/v1/meta-ads/ad-accounts');
+    expect(adsRes.status).toBe(403);
+    expect(adsRes.body.success).toBe(false);
+    expect(adsRes.body.code).toBe('META_PERMISSION_DENIED');
+  });
+
+  test('Instagram discovery: assigned accounts are primary and deduplicated against Page links', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    stubGraphRoutes({
+      assigned_instagram_accounts: { data: [{ id: 'IG1', username: 'spaceezy_' }] },
+      accounts: {
+        data: [
+          { id: 'P1', name: 'Page One', instagram_business_account: { id: 'IG1' } },
+          { id: 'P2', name: 'Page Two' },
+          { id: 'P3', name: 'Page Three', instagram_business_account: { id: 'IG9' } },
+        ],
+      },
+      IG9: { id: 'IG9', username: 'other_', name: 'Other' },
+    });
+
+    const res = await get('/api/v1/meta-ads/instagram-accounts');
+
+    expect(res.status).toBe(200);
+    const items = res.body.data.items;
+    // One row per account: the assigned spaceezy_ account first, its Page
+    // link merged in (not duplicated), then the page-only rows.
+    expect(items).toHaveLength(3);
+    expect(items.filter((row) => row.instagramAccountId === 'IG1')).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      instagramAccountId: 'IG1',
+      username: 'spaceezy_',
+      pageId: 'P1',
+      pageName: 'Page One',
+      available: true,
+      reason: null,
+    });
+    expect(items[1]).toMatchObject({ pageId: 'P2', instagramAccountId: null, reason: 'NOT_CONNECTED' });
+    expect(items[2]).toMatchObject({ pageId: 'P3', instagramAccountId: 'IG9', username: 'other_', available: true });
+    expect(res.body.data.errors).toEqual([]);
+  });
+
+  test('Instagram discovery: assigned-endpoint failure falls back to the Page walk', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    stubGraphRoutes({
+      assigned_instagram_accounts: { __status: 403, __body: { error: { message: 'Missing Permissions', code: 200 } } },
+      accounts: { data: [{ id: 'P1', name: 'Page One', instagram_business_account: { id: 'IG1' } }] },
+      IG1: { id: 'IG1', username: 'spaceezy', name: 'SpaceEzy' },
+    });
+
+    const res = await get('/api/v1/meta-ads/instagram-accounts');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items).toHaveLength(1);
+    expect(res.body.data.items[0]).toMatchObject({
+      pageId: 'P1',
+      instagramAccountId: 'IG1',
+      username: 'spaceezy',
+      available: true,
+    });
+    // The primary-source failure is not a per-account error — the fallback
+    // produced a complete, honest result.
+    expect(res.body.data.errors).toEqual([]);
+  });
+
+  test('partial sync: ad-account 403 saves Pages/Instagram, reports failures, marks nothing synced', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    prisma.metaAdsSettings.update.mockResolvedValue({ syncedAt: new Date() });
+    stubGraphRoutes({
+      adaccounts: { __status: 403, __body: { error: { message: 'Missing Permissions', code: 200 } } },
+      accounts: { data: [{ id: 'P1', name: 'Page One', instagram_business_account: { id: 'IG1' } }] },
+      assigned_instagram_accounts: { data: [{ id: 'IG1', username: 'spaceezy_' }] },
+    });
+
+    const res = await post('/api/v1/meta-ads/settings/sync', {});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.partial).toBe(true);
+    // Failed category → null (never a fabricated count); successful
+    // categories are returned with their real counts.
+    expect(res.body.data.adAccounts).toBeNull();
+    expect(res.body.data.pages).toBe(1);
+    expect(res.body.data.instagramAccounts).toBe(1);
+    expect(res.body.data.syncedAt).toBeNull();
+    expect(res.body.data.results).toMatchObject({
+      adAccounts: { ok: false, count: null, error: { code: 'META_PERMISSION_DENIED' } },
+      pages: { ok: true, count: 1, error: null },
+      instagramAccounts: { ok: true, count: 1, error: null },
+    });
+    // A failed category is never marked as synchronized.
+    expect(prisma.metaAdsSettings.update).not.toHaveBeenCalled();
+    const auditRow = prisma.auditLog.create.mock.calls[0][0].data;
+    expect(auditRow.action).toBe('meta.assets_synced');
+    expect(auditRow.metadata).toMatchObject({
+      partial: true,
+      adAccounts: null,
+      pages: 1,
+      instagramAccounts: 1,
+      failures: [{ category: 'adAccounts', code: 'META_PERMISSION_DENIED' }],
+    });
+  });
+
+  test('full sync success marks syncedAt and reports partial:false with per-category results', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    const syncedAt = new Date('2026-11-14T10:00:00.000Z');
+    prisma.metaAdsSettings.update.mockResolvedValue({ syncedAt });
+    stubGraphRoutes({ adaccounts: { data: [] }, accounts: { data: [] } });
+
+    const res = await post('/api/v1/meta-ads/settings/sync', {});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ partial: false, adAccounts: 0, pages: 0, instagramAccounts: 0 });
+    expect(res.body.data.results).toEqual({
+      adAccounts: { ok: true, count: 0, error: null },
+      pages: { ok: true, count: 0, error: null },
+      instagramAccounts: { ok: true, count: 0, error: null },
+    });
+    expect(res.body.data.syncedAt).toBe(syncedAt.toISOString());
+    expect(prisma.metaAdsSettings.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: ORG }, data: { syncedAt: expect.any(Date) } })
+    );
+  });
+
+  test('sync where every category fails surfaces the error and records nothing', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    const denied = { __status: 403, __body: { error: { message: 'Missing Permissions', code: 200 } } };
+    stubGraphRoutes({
+      adaccounts: denied,
+      accounts: denied,
+      assigned_instagram_accounts: denied,
+    });
+
+    const res = await post('/api/v1/meta-ads/settings/sync', {});
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.code).toBe('META_PERMISSION_DENIED');
+    expect(prisma.metaAdsSettings.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+});
+
 

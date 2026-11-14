@@ -84,7 +84,11 @@ const syncAssets = asyncHandler(async (req, res) => {
         organizationId: req.auth.organizationId,
         userId: req.auth.userId,
     });
-    res.status(200).json({ success: true, data, message: 'Meta assets synced' });
+    res.status(200).json({
+        success: true,
+        data,
+        message: data.partial ? 'Meta assets synced with some category failures' : 'Meta assets synced',
+    });
 });
 
 // --- Credential management (Section E) --------------------------------------

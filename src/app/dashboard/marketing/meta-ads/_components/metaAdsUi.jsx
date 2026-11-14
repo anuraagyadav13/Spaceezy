@@ -13,7 +13,7 @@
 //   activation ("may start ad spend") and permanent deletion uses it.
 import { useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ChevronLeft, Loader2, PlugZap, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronLeft, Loader2, PlugZap, X } from "lucide-react";
 import { META_DISCONNECTED_MESSAGE } from "../../../../../lib/metaAdsEnums";
 import { statusBadgeClass, statusLabel } from "../../../../../lib/metaAdsEnums";
 import { usePermissions } from "../../../../../features/auth/hooks/usePermissions";
@@ -53,15 +53,25 @@ export const Field = ({ label, hint, error, children }) => (
 );
 
 // Provider/server failure — message rendered verbatim (server messages are
-// operational, never credential-bearing), with optional retry.
+// operational, never credential-bearing), with optional retry. Permission
+// rejections get actionable guidance instead of a bare error code.
 export const ErrorBox = ({ error, onRetry }) => {
     if (!error) return null;
     return (
         <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3" role="alert">
             <AlertCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
-            <p className="flex-1 text-sm text-red-700">
-                {error.message || "Something went wrong while talking to the server."}
-            </p>
+            <div className="flex-1">
+                <p className="text-sm text-red-700">
+                    {error.message || "Something went wrong while talking to the server."}
+                </p>
+                {error.code === "META_PERMISSION_DENIED" && (
+                    <p className="text-xs text-red-600 mt-1">
+                        Meta denied this request — the connection is missing a required permission (ad accounts
+                        need ads_read, Instagram discovery needs instagram_basic). An administrator can grant it
+                        in the Meta App Dashboard (Permissions and Features), then reconnect.
+                    </p>
+                )}
+            </div>
             {onRetry && (
                 <button
                     onClick={onRetry}
@@ -69,6 +79,85 @@ export const ErrorBox = ({ error, onRetry }) => {
                 >
                     Retry
                 </button>
+            )}
+        </div>
+    );
+};
+
+// Per-category asset-sync outcome (settings → Sync & refresh). Renders ONLY
+// what the server reported: a failed category shows its error and never a
+// count, a partial sync is amber (not green), a full success stays green.
+// Legacy payloads without `results` fall back to the plain count line.
+const SYNC_CATEGORY_LABELS = {
+    adAccounts: "Ad accounts",
+    pages: "Pages",
+    instagramAccounts: "Instagram accounts",
+};
+
+export const SyncResultPanel = ({ result, formatTime = (value) => value }) => {
+    if (!result) return null;
+
+    if (!result.results) {
+        return (
+            <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
+                <p>
+                    Refreshed {result.adAccounts ?? "—"} ad accounts · {result.pages ?? "—"} Pages ·{" "}
+                    {result.instagramAccounts ?? "—"} Instagram accounts
+                    {result.syncedAt ? ` · ${formatTime(result.syncedAt)}` : ""}
+                </p>
+            </div>
+        );
+    }
+
+    const entries = Object.entries(result.results);
+    const failed = entries.filter(([, outcome]) => !outcome.ok);
+    const permissionDenied = failed.some(([, outcome]) => outcome.error?.code === "META_PERMISSION_DENIED");
+
+    if (failed.length === 0) {
+        return (
+            <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
+                <p>
+                    Refreshed {result.adAccounts} ad accounts · {result.pages} Pages ·{" "}
+                    {result.instagramAccounts} Instagram accounts
+                    {result.syncedAt ? ` · ${formatTime(result.syncedAt)}` : ""}
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 space-y-2" role="status">
+            <p className="text-sm font-bold text-amber-800">
+                Sync finished with errors — {failed.length} of {entries.length} categories failed
+                {result.partial ? " (partial sync)" : ""}
+            </p>
+            <ul className="space-y-1 text-sm">
+                {entries.map(([key, outcome]) => (
+                    <li key={key} className="flex items-start gap-1.5">
+                        {outcome.ok ? (
+                            <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 shrink-0" />
+                        ) : (
+                            <AlertCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
+                        )}
+                        <span className={outcome.ok ? "text-emerald-800" : "text-red-700"}>
+                            {SYNC_CATEGORY_LABELS[key] || key}:{" "}
+                            {outcome.ok
+                                ? `${outcome.count} found`
+                                : `failed — ${outcome.error?.message || "unknown error"}${
+                                      outcome.error?.code ? ` (${outcome.error.code})` : ""
+                                  }`}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+            {permissionDenied && (
+                <p className="text-xs text-amber-800">
+                    Meta denied the ad-account request — the connection is missing ads_read (and possibly
+                    ads_management). An administrator can grant it in the Meta App Dashboard (Permissions and
+                    Features), then reconnect. Pages and Instagram above were saved.
+                </p>
             )}
         </div>
     );

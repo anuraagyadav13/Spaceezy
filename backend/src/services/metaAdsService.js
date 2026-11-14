@@ -123,12 +123,11 @@ class MetaAdsService {
             tokenExpired: false,
             reauthRequired: false,
         };
-        if (!accessToken || !adAccountId) {
+        if (!accessToken) {
             // Env-mode labels stay the legacy META_* names (documented API);
             // db-mode labels avoid them so no response body ever contains an
             // access-token-like substring (phase11 leak assertions).
-            const missing = [];
-            if (!accessToken) missing.push(eff.source === 'db' ? 'storedCredentials' : 'META_ACCESS_TOKEN');
+            const missing = [eff.source === 'db' ? 'storedCredentials' : 'META_ACCESS_TOKEN'];
             if (!adAccountId) missing.push(eff.source === 'db' ? 'selectedAdAccountIds' : 'META_AD_ACCOUNT_ID');
             return {
                 connected: false,
@@ -142,6 +141,10 @@ class MetaAdsService {
                 adAccount: null,
             };
         }
+        // A usable token with no ad account selected is NOT "unconfigured":
+        // Page/Instagram discovery works without a selection. The
+        // NO_AD_ACCOUNT_SELECTED reason is reported after live validation
+        // below (an empty selection never skips token/permission checks).
         // Known-expired token: report honestly without calling Meta — the
         // call would only re-confirm the rejection. Reconnect required.
         if (base.tokenExpiresAt && base.tokenExpiresAt.getTime() <= Date.now()) {
@@ -159,28 +162,41 @@ class MetaAdsService {
                 adAccount: null,
             };
         }
-        // Live validation: token, account access, and granted permissions.
-        // Any classified failure degrades to an honest disconnected status
-        // (expiry and permission detection) instead of throwing.
+        // Live validation: token, granted permissions, and (only when an ad
+        // account is selected) account access. Any classified failure
+        // degrades to an honest disconnected status (expiry and permission
+        // detection) instead of throwing.
         try {
             const me = await graphRequest({ path: 'me', params: { fields: 'id,name' }, token: accessToken, version: eff.graphVersion });
-            const account = await graphRequest({
-                path: `act_${adAccountId}`,
-                params: { fields: 'id,name,account_status,currency,timezone_name' },
-                token: accessToken,
-                version: eff.graphVersion,
-            });
+            // With no ad account selected the act_{id} call would fail for a
+            // reason unrelated to token health — skip it (adAccount stays
+            // null) and report NO_AD_ACCOUNT_SELECTED below instead.
+            const account = adAccountId
+                ? await graphRequest({
+                    path: `act_${adAccountId}`,
+                    params: { fields: 'id,name,account_status,currency,timezone_name' },
+                    token: accessToken,
+                    version: eff.graphVersion,
+                })
+                : null;
             const perms = await graphRequest({ path: 'me/permissions', params: {}, token: accessToken, version: eff.graphVersion });
             const granted = Array.isArray(perms.data)
                 ? perms.data.filter((p) => p && p.status === 'granted').map((p) => p.permission)
                 : [];
             const missingPermissions = REQUIRED_PERMISSIONS.filter((p) => !granted.includes(p));
             const missingRecommendedPermissions = RECOMMENDED_PERMISSIONS.filter((p) => !granted.includes(p));
-            const reason = missingPermissions.length === 0 ? null : 'PERMISSION_DENIED';
+            const noAdAccountSelected = !adAccountId;
+            // Missing required permissions outrank the missing selection
+            // (both can be true — report the permission gap first).
+            const reason = missingPermissions.length > 0
+                ? 'PERMISSION_DENIED'
+                : (noAdAccountSelected ? 'NO_AD_ACCOUNT_SELECTED' : null);
             return {
                 connected: missingPermissions.length === 0,
                 reason,
-                missing: [],
+                missing: reason === 'NO_AD_ACCOUNT_SELECTED'
+                    ? [eff.source === 'db' ? 'selectedAdAccountIds' : 'META_AD_ACCOUNT_ID']
+                    : [],
                 missingPermissions,
                 missingRecommendedPermissions,
                 // Advisory-safe: permission NAMES only (no token material).
@@ -515,24 +531,75 @@ class MetaAdsService {
         return { items, paging: data.paging || null };
     }
 
-    // Instagram professional accounts connected to the accessible Pages.
-    // Pages without a connected Instagram are reported with
-    // available:false / reason NOT_CONNECTED; per-account API failures mark
-    // only that account unavailable (never the whole discovery).
+    // Instagram professional accounts for this connection. Primary source:
+    // GET /me/assigned_instagram_accounts — accounts assigned to the token
+    // holder even when no Page links them (e.g. spaceezy_). Fallback:
+    // the existing Page walk (me/accounts → instagram_business_account),
+    // which still reports Pages without a connected Instagram as
+    // NOT_CONNECTED rows. Results are deduplicated by instagramAccountId
+    // (assigned rows come first; a Page link merges onto the assigned row).
+    // The response contract ({ items, errors, paging }) is unchanged, and
+    // per-account API failures still mark only that account unavailable.
     static async listInstagramAccounts({ organizationId, limit = 100 } = {}) {
         const eff = await effectiveConfig(organizationId);
         const token = requireToken(eff);
-        const pages = await graphRequest({
-            path: 'me/accounts',
-            params: {
-                fields: 'id,name,instagram_business_account',
-                limit: Math.min(Math.max(parseInt(limit, 10) || 100, 1), 100),
-            },
-            token,
-            version: eff.graphVersion,
-        });
-        const items = [];
+        const pageSize = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 100);
         const errors = [];
+        const assignedItems = [];
+        const byIgId = new Map();
+
+        // Primary source. A failure here is not reported as an error row:
+        // the Page walk below is a complete fallback source.
+        try {
+            const assigned = await graphRequest({
+                path: 'me/assigned_instagram_accounts',
+                params: { fields: 'id,username', limit: pageSize },
+                token,
+                version: eff.graphVersion,
+            });
+            for (const row of Array.isArray(assigned.data) ? assigned.data : []) {
+                if (!row || row.id === undefined || row.id === null) continue;
+                const igId = String(row.id);
+                if (byIgId.has(igId)) continue;
+                const item = {
+                    pageId: null,
+                    pageName: null,
+                    instagramAccountId: igId,
+                    username: row.username || null,
+                    name: null,
+                    available: true,
+                    reason: null,
+                };
+                byIgId.set(igId, item);
+                assignedItems.push(item);
+            }
+        } catch {
+            // Fallback to the Page walk below (documented behavior).
+        }
+
+        // Fallback + Page linkage enrichment.
+        let pages;
+        try {
+            pages = await graphRequest({
+                path: 'me/accounts',
+                params: { fields: 'id,name,instagram_business_account', limit: pageSize },
+                token,
+                version: eff.graphVersion,
+            });
+        } catch (err) {
+            // The Page walk is unavailable: keep whatever the primary source
+            // already returned instead of failing the whole discovery.
+            if (assignedItems.length > 0) {
+                return {
+                    items: assignedItems,
+                    errors: [{ pageId: null, instagramAccountId: null, code: (err && err.code) || 'API_ERROR' }],
+                    paging: null,
+                };
+            }
+            throw err;
+        }
+
+        const items = [];
         const pageRows = Array.isArray(pages.data) ? pages.data : [];
         for (const page of pageRows) {
             if (!page || !page.id) continue;
@@ -544,6 +611,16 @@ class MetaAdsService {
                 items.push({ pageId, pageName, instagramAccountId: null, username: null, available: false, reason: 'NOT_CONNECTED' });
                 continue;
             }
+            // Already discovered (via the assigned endpoint or an earlier
+            // Page): merge the Page linkage instead of duplicating the row.
+            const existing = byIgId.get(igId);
+            if (existing) {
+                if (!existing.pageId) {
+                    existing.pageId = pageId;
+                    existing.pageName = pageName;
+                }
+                continue;
+            }
             try {
                 const detail = await graphRequest({
                     path: igId,
@@ -551,7 +628,7 @@ class MetaAdsService {
                     token,
                     version: eff.graphVersion,
                 });
-                items.push({
+                const item = {
                     pageId,
                     pageName,
                     instagramAccountId: detail && detail.id ? String(detail.id) : igId,
@@ -559,7 +636,9 @@ class MetaAdsService {
                     name: (detail && detail.name) || null,
                     available: true,
                     reason: null,
-                });
+                };
+                byIgId.set(item.instagramAccountId, item);
+                items.push(item);
             } catch (err) {
                 items.push({
                     pageId,
@@ -573,34 +652,74 @@ class MetaAdsService {
                 errors.push({ pageId, instagramAccountId: igId, code: (err && err.code) || 'API_ERROR' });
             }
         }
-        return { items, errors, paging: pages.paging || null };
+        return { items: [...assignedItems, ...items], errors, paging: pages.paging || null };
     }
 
     // Refresh discovery from Meta and record the sync timestamp. Updates an
     // existing settings row only — sync never creates one, so legacy env
     // mode is never silently flipped to db mode (syncedAt stays null there
     // and is reported honestly as such).
+    //
+    // The three categories are fetched independently (Promise.allSettled):
+    // a failure in one (e.g. ad accounts returning 403 while ads_read is
+    // not granted) never discards successful Page/Instagram results.
+    // Per-category outcomes are returned in `results`; a failed category
+    // reports count:null (never a fabricated count), `partial` is true when
+    // any category failed, and syncedAt is only recorded when EVERY
+    // category succeeded — a failed category is never marked synchronized.
     static async syncAssets({ organizationId, userId } = {}) {
         const orgId = organizationId || await MetaAdsSettingsService.resolvePrimaryOrganizationId();
         const eff = await MetaAdsSettingsService.getEffectiveConfig(orgId);
-        const [adAccounts, pages, instagramAccounts] = await Promise.all([
+        const [adAccounts, pages, instagramAccounts] = await Promise.allSettled([
             MetaAdsService.listAdAccounts({ organizationId: orgId, limit: 100 }),
             MetaAdsService.listPages({ organizationId: orgId, limit: 100 }),
             MetaAdsService.listInstagramAccounts({ organizationId: orgId, limit: 100 }),
         ]);
-        const syncedAt = await MetaAdsSettingsService.markSynced(orgId);
+        const settle = (outcome) =>
+            outcome.status === 'fulfilled'
+                ? { ok: true, count: outcome.value.items.length, error: null }
+                : {
+                    ok: false,
+                    count: null,
+                    error: {
+                        code: (outcome.reason && outcome.reason.code) || 'UNKNOWN',
+                        message: (outcome.reason && outcome.reason.message) || 'Discovery failed',
+                    },
+                };
+        const results = {
+            adAccounts: settle(adAccounts),
+            pages: settle(pages),
+            instagramAccounts: settle(instagramAccounts),
+        };
+        const failedCategories = Object.keys(results).filter((key) => !results[key].ok);
+        const partial = failedCategories.length > 0;
+
+        // Nothing succeeded: there is no result to save — surface the first
+        // error unchanged (same HTTP error contract as before).
+        if (failedCategories.length === Object.keys(results).length) {
+            throw adAccounts.reason;
+        }
+
+        // Only a fully successful sync may be marked as synchronized.
+        const syncedAt = partial ? null : await MetaAdsSettingsService.markSynced(orgId);
         if (orgId) {
             await audit(orgId, userId || null, AUDIT_ACTIONS.META_ASSETS_SYNCED, 'MetaAdsSettings', orgId, {
-                adAccounts: adAccounts.items.length,
-                pages: pages.items.length,
-                instagramAccounts: instagramAccounts.items.length,
+                partial,
+                adAccounts: results.adAccounts.count,
+                pages: results.pages.count,
+                instagramAccounts: results.instagramAccounts.count,
+                failures: partial
+                    ? failedCategories.map((category) => ({ category, code: results[category].error.code }))
+                    : [],
             });
         }
         return {
             configSource: eff.source,
-            adAccounts: adAccounts.items.length,
-            pages: pages.items.length,
-            instagramAccounts: instagramAccounts.items.length,
+            adAccounts: results.adAccounts.count,
+            pages: results.pages.count,
+            instagramAccounts: results.instagramAccounts.count,
+            partial,
+            results,
             syncedAt,
         };
     }

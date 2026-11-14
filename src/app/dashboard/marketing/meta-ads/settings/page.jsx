@@ -27,6 +27,8 @@ import {
     fetchMetaOauthDiagnostics,
     startMetaOAuth,
 } from "../../../../../lib/api/metaAds";
+import { isMetaDiscoveryEnabled } from "../../../../../lib/metaAdsEnums";
+import { SyncResultPanel } from "../_components/metaAdsUi";
 
 // Meta connection settings (Sections A–E of the credential-management UI):
 // - Viewers (marketing:view) can SEE masked status (boolean flags only);
@@ -44,6 +46,7 @@ const PAGE_SIZE = 100;
 
 const REASON_LABELS = {
     MISSING_CONFIG: "Not configured",
+    NO_AD_ACCOUNT_SELECTED: "No ad account selected",
     TOKEN_EXPIRED: "Token expired",
     PERMISSION_DENIED: "Missing Meta permissions",
     META_TOKEN_INVALID: "Token rejected by Meta",
@@ -120,9 +123,18 @@ const ErrorBox = ({ error, onRetry }) => {
     return (
         <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3">
             <AlertCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
-            <p className="flex-1 text-sm text-red-700">
-                {error.message || "Something went wrong while talking to the server."}
-            </p>
+            <div className="flex-1">
+                <p className="text-sm text-red-700">
+                    {error.message || "Something went wrong while talking to the server."}
+                </p>
+                {error.code === "META_PERMISSION_DENIED" && (
+                    <p className="text-xs text-red-600 mt-1">
+                        Meta denied this request — the connection is missing a required permission (ad accounts
+                        need ads_read, Instagram discovery needs instagram_basic). An administrator can grant it
+                        in the Meta App Dashboard (Permissions and Features), then reconnect.
+                    </p>
+                )}
+            </div>
             {onRetry && (
                 <button
                     onClick={onRetry}
@@ -337,14 +349,12 @@ function MetaAdsSettingsContent() {
     });
 
     const statusData = statusQuery.data || null;
-    // Discovery only makes sense once a usable token exists; querying with a
-    // missing/expired token would only produce guaranteed 409/401 errors.
-    const discoveryEnabled =
-        canView &&
-        !!statusData &&
-        !statusData.tokenExpired &&
-        statusData.reason !== "MISSING_CONFIG" &&
-        statusData.reason !== "META_TOKEN_INVALID";
+    // Discovery needs a usable token — nothing else. Ad-account selection
+    // is NOT a prerequisite (the old gate made discovery depend on a
+    // selection that discovery itself was meant to produce). Only a missing,
+    // expired or rejected token keeps the queries off; a missing selection
+    // or a permission gap still queries Meta and shows its honest answer.
+    const discoveryEnabled = isMetaDiscoveryEnabled(statusData, canView);
 
     const adAfter = adCursorStack.length > 0 ? adCursorStack[adCursorStack.length - 1] : undefined;
     const pageAfter = pageCursorStack.length > 0 ? pageCursorStack[pageCursorStack.length - 1] : undefined;
@@ -444,7 +454,13 @@ function MetaAdsSettingsContent() {
             setPageCursorStack([]);
             setIgCursorStack([]);
             queryClient.invalidateQueries({ queryKey: ["meta-ads"] });
-            showToast("Meta assets refreshed", "success");
+            // Partial syncs are not successes: say so instead of toasting
+            // "refreshed" while a category silently failed.
+            if (data?.partial) {
+                showToast("Sync finished with errors — some categories failed (details below)", "error");
+            } else {
+                showToast("Meta assets refreshed", "success");
+            }
         },
         onError: (error) => showToast(error.message || "Sync failed", "error"),
     });
@@ -564,6 +580,19 @@ function MetaAdsSettingsContent() {
     const discoveryHint = (what) =>
         !statusData ? "Checking the connection…" : `Connect Meta to discover ${what}.`;
 
+    // "Assets discovered" summary for the Connection card — separate from
+    // the Connected badge on purpose: connection health and discovery state
+    // are different facts (discovery can succeed while permissions are
+    // still being fixed, and vice versa). Counts come from the live queries
+    // only — nothing here is ever fabricated.
+    const discoverySummary = !discoveryEnabled
+        ? "—"
+        : adAccountsQuery.isPending || pagesQuery.isPending || instagramQuery.isPending
+        ? "Discovering…"
+        : [adAccountsQuery, pagesQuery, instagramQuery].some((query) => query.error)
+        ? "Some lists failed — see the sections below"
+        : `${adItems.length} ad accounts · ${pageItems.length} Pages · ${igItems.length} Instagram`;
+
     const listStates = (query) => {
         if (!discoveryEnabled) return "disabled";
         if (query.isPending) return "loading";
@@ -676,8 +705,16 @@ function MetaAdsSettingsContent() {
                                 <dd className="font-semibold text-gray-900">
                                     {statusData.adAccount
                                         ? `${statusData.adAccount.name || "Unnamed"}${isAdmin ? ` (${statusData.adAccount.id})` : ""}`
+                                        : statusData.reason === "NO_AD_ACCOUNT_SELECTED"
+                                        ? "None selected yet"
                                         : "—"}
                                 </dd>
+                            </div>
+                            <div>
+                                <dt className="text-[11px] font-black uppercase text-gray-400">
+                                    Assets discovered
+                                </dt>
+                                <dd className="font-semibold text-gray-900">{discoverySummary}</dd>
                             </div>
                             {isAdmin && (
                                 <div>
@@ -712,6 +749,16 @@ function MetaAdsSettingsContent() {
                             </div>
                         )}
 
+                        {statusData.reason === "NO_AD_ACCOUNT_SELECTED" && (
+                            <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                                <AlertCircle size={15} className="text-amber-500 mt-0.5 shrink-0" />
+                                <p className="text-sm text-amber-800">
+                                    Connected — no ad account selected yet. Page and Instagram discovery work
+                                    without one; pick an ad account below to enable ad-account reporting and sync.
+                                </p>
+                            </div>
+                        )}
+
                         {Array.isArray(statusData.missingPermissions) && statusData.missingPermissions.length > 0 && (
                             isAdmin ? (
                                 <div className="rounded-2xl border border-red-200 bg-red-50 p-3">
@@ -728,6 +775,11 @@ function MetaAdsSettingsContent() {
                                             </span>
                                         ))}
                                     </div>
+                                    <p className="text-xs text-red-600 mt-2">
+                                        Action: open the Meta App Dashboard → Permissions and Features, grant the
+                                        missing permissions (ads_read unlocks ad-account discovery), then reconnect
+                                        the account. Page and Instagram discovery keep working in the meantime.
+                                    </p>
                                 </div>
                             ) : (
                                 <div className="rounded-2xl border border-red-200 bg-red-50 p-3">
@@ -1486,7 +1538,7 @@ function MetaAdsSettingsContent() {
             <SectionCard
                 icon={AtSign}
                 title="Instagram accounts"
-                subtitle="Instagram professional accounts linked to your Pages — reported exactly as Meta returns them."
+                subtitle="Instagram professional accounts assigned to this connection and linked to your Pages — reported exactly as Meta returns them."
             >
                 {listStates(instagramQuery) === "disabled" ? (
                     <p className="text-sm text-gray-500">{discoveryHint("Instagram accounts")}</p>
@@ -1498,7 +1550,8 @@ function MetaAdsSettingsContent() {
                     <ErrorBox error={instagramQuery.error} onRetry={() => instagramQuery.refetch()} />
                 ) : igItems.length === 0 ? (
                     <p className="text-sm text-gray-500">
-                        No Pages are visible to this connection, so there are no Instagram accounts to show.
+                        No Instagram accounts are visible to this connection. Check that the token holder has an
+                        Instagram professional account assigned in Meta Business Manager.
                     </p>
                 ) : (
                     <div className="space-y-3">
@@ -1508,7 +1561,7 @@ function MetaAdsSettingsContent() {
                                 const selectable = !!id;
                                 return (
                                     <CheckRow
-                                        key={`${item.pageId}-${id || "none"}`}
+                                        key={`${item.pageId || "assigned"}-${id || "none"}`}
                                         checked={selectable && selection.instagram.includes(String(id))}
                                         disabled={!canManage || !selectable}
                                         onChange={() => toggleId("instagram", id)}
@@ -1519,7 +1572,9 @@ function MetaAdsSettingsContent() {
                                         }
                                         meta={
                                             selectable
-                                                ? `Page: ${item.pageName || item.pageId}`
+                                                ? item.pageId
+                                                    ? `Page: ${item.pageName || item.pageId}`
+                                                    : "Shared directly at connection"
                                                 : `Page: ${item.pageName || item.pageId}${isAdmin ? ` · ID ${item.pageId}` : ""}`
                                         }
                                         hint={
@@ -1639,7 +1694,9 @@ function MetaAdsSettingsContent() {
                             {statusQuery.isPending
                                 ? "…"
                                 : statusData?.connected
-                                ? "Connected"
+                                ? statusData?.reason === "NO_AD_ACCOUNT_SELECTED"
+                                    ? "Connected · no ad account"
+                                    : "Connected"
                                 : REASON_LABELS[statusData?.reason] || "Disconnected"}
                         </p>
                     </div>
@@ -1658,16 +1715,7 @@ function MetaAdsSettingsContent() {
                     </p>
                 )}
                 <ErrorBox error={syncMutation.error} />
-                {lastSyncResult && (
-                    <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-                        <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
-                        <p>
-                            Refreshed {lastSyncResult.adAccounts} ad accounts · {lastSyncResult.pages} Pages ·{" "}
-                            {lastSyncResult.instagramAccounts} Instagram accounts ·{" "}
-                            {formatDateTime(lastSyncResult.syncedAt)}
-                        </p>
-                    </div>
-                )}
+                <SyncResultPanel result={lastSyncResult} formatTime={formatDateTime} />
             </SectionCard>
         </div>
     );

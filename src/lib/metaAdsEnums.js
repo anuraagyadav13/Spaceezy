@@ -15,6 +15,22 @@ export const META_DISCONNECTED_MESSAGE =
 export const META_LIVE_DATA_NOTE =
     "Live data from the Meta Marketing API — no sample campaigns or audiences are shown.";
 
+// Status reasons that mean "no usable Meta connection" — the ONLY reasons
+// that disable discovery queries. NO_AD_ACCOUNT_SELECTED and
+// PERMISSION_DENIED still carry a usable token, so Pages / Ad accounts /
+// Instagram discovery runs and reports Meta's answer honestly instead of
+// being silently switched off (the old circular gate: discovery required
+// an ad-account selection that discovery itself was supposed to produce).
+export const META_DISCOVERY_BLOCKED_REASONS = ["MISSING_CONFIG", "TOKEN_EXPIRED", "META_TOKEN_INVALID"];
+
+export const isMetaDiscoveryEnabled = (statusData, canView) =>
+    Boolean(
+        canView &&
+            statusData &&
+            !statusData.tokenExpired &&
+            !META_DISCOVERY_BLOCKED_REASONS.includes(statusData.reason)
+    );
+
 export const CAMPAIGN_OBJECTIVES = [
     "APP_INSTALLS", "BRAND_AWARENESS", "CONVERSIONS", "EVENT_RESPONSES",
     "LEAD_GENERATION", "LINK_CLICKS", "LOCAL_AWARENESS", "MESSAGES",
