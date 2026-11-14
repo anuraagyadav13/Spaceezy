@@ -48,6 +48,12 @@ const SECRET_FIELDS = {
 };
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+// Legacy scope-based authorize flow, used ONLY when no
+// META_OAUTH_CONFIG_ID is configured. When a Facebook Login for Business
+// configuration id IS set, the configuration supplies the permissions and
+// `scope` must not be sent at all (Meta: config_id replaces scope).
+// public_profile was removed: it is unsupported for System User tokens
+// (N/A in Meta's permission matrix for Business Integration tokens).
 const OAUTH_SCOPES = [
     'ads_read',                    // campaign/insight reporting (existing reads)
     'ads_management',              // campaign/ad set/audience writes (Phase 3+4)
@@ -55,7 +61,6 @@ const OAUTH_SCOPES = [
     'pages_show_list',             // me/accounts page discovery
     'pages_read_engagement',       // Page details + instagram_business_account
     'instagram_basic',             // connected Instagram accounts
-    'public_profile',
 ];
 
 const ID_LIST_FIELDS = ['selectedAdAccountIds', 'pageIds', 'instagramAccountIds'];
@@ -183,6 +188,20 @@ function callbackRedirectUrl() {
     return new URL(OAUTH_CALLBACK_PATH, process.env.BACKEND_URL || '').toString();
 }
 
+// Facebook Login for Business configuration id — public OAuth metadata (it
+// appears in the authorize URL exactly like client_id, so it is never a
+// secret). Set via META_OAUTH_CONFIG_ID in the server env; blank/unset
+// keeps the legacy scope-based flow. A set-but-malformed value fails
+// closed instead of being sent to Meta's dialog.
+function oauthConfigId() {
+    const raw = String(process.env.META_OAUTH_CONFIG_ID || '').trim();
+    if (!raw) return null;
+    if (!/^\d{1,32}$/.test(raw)) {
+        throw new AppError('META_OAUTH_CONFIG_ID must be a numeric configuration id', 500, 'META_OAUTH_CONFIG_ID_INVALID');
+    }
+    return raw;
+}
+
 // --- OAuth configuration diagnostic (admin-only) --------------------------
 // Reports the exact values an administrator must register in the Meta
 // Developer Console (App Domains + Valid OAuth Redirect URIs) and whether
@@ -238,11 +257,28 @@ function oauthDiagnostics() {
     const host = backendOrigin ? new URL(backendOrigin).hostname : null;
     const appDomain = host ? host.replace(/^www\./, '') : null;
 
+    // Facebook Login for Business configuration (optional). Diagnostics
+    // must never throw, so a malformed META_OAUTH_CONFIG_ID is reported as
+    // an issue instead of an error. The config id itself is public OAuth
+    // metadata (it appears in the authorize URL) — safe to display.
+    let configId = null;
+    try {
+        configId = oauthConfigId();
+    } catch {
+        issues.push('META_OAUTH_CONFIG_ID is set but is not a numeric configuration id — clear it or fix it before connecting.');
+    }
+    const usesConfigId = configId !== null;
+
     return {
         appDomain,
         oauthRedirectUri,
         frontendUrl: frontendUrl || null,
         backendUrl: backendUrl || null,
+        oauthConfigId: configId,
+        oauthMode: usesConfigId ? 'config_id' : 'legacy_scopes',
+        oauthFlowNote: usesConfigId
+            ? 'Facebook Login for Business: the authorize URL sends config_id + override_default_response_type=true with response_type=code and NO scope — permissions come from the saved configuration. A System User token configuration issues non-expiring tokens by default.'
+            : 'Legacy scope flow: the authorize URL sends scope (no config_id). Set META_OAUTH_CONFIG_ID in the server env to use a Facebook Login for Business configuration.',
         consistent: issues.length === 0,
         issues,
         troubleshooting: OAUTH_TROUBLESHOOTING,
@@ -516,12 +552,23 @@ class MetaAdsSettingsService {
             );
         }
         const state = signOAuthState(); // throws SETTINGS_KEY_MISSING when no key
+        const configId = oauthConfigId(); // throws META_OAUTH_CONFIG_ID_INVALID when malformed
         const url = new URL(`https://www.facebook.com/${resolveDialogVersion(row)}/dialog/oauth`);
         url.searchParams.set('client_id', appId);
         url.searchParams.set('redirect_uri', callbackRedirectUrl());
         url.searchParams.set('response_type', 'code');
         url.searchParams.set('state', state);
-        url.searchParams.set('scope', OAUTH_SCOPES.join(','));
+        if (configId) {
+            // Facebook Login for Business: config_id REPLACES scope (Meta
+            // docs: scope "should not be used" with a configuration), and
+            // override_default_response_type=true is required for System
+            // User token configurations. Permissions come from the config.
+            url.searchParams.set('config_id', configId);
+            url.searchParams.set('override_default_response_type', 'true');
+        } else {
+            // Legacy flow (no META_OAUTH_CONFIG_ID): request scopes directly.
+            url.searchParams.set('scope', OAUTH_SCOPES.join(','));
+        }
         return url.toString();
     }
 

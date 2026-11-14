@@ -49,7 +49,8 @@ const ENC = { keyEnv: 'META_ADS_SETTINGS_KEY', label: 'Meta Ads settings' };
 const META_ENV_KEYS = [
   'META_APP_ID', 'META_APP_SECRET', 'META_ACCESS_TOKEN', 'META_AD_ACCOUNT_ID',
   'META_PAGE_ID', 'META_GRAPH_VERSION', 'META_WEBHOOK_VERIFY_TOKEN',
-  'META_ADS_SETTINGS_KEY', 'BACKEND_URL', 'FRONTEND_URL', 'SESSION_COOKIE_NAME',
+  'META_ADS_SETTINGS_KEY', 'META_OAUTH_CONFIG_ID',
+  'BACKEND_URL', 'FRONTEND_URL', 'SESSION_COOKIE_NAME',
 ];
 let savedMetaEnv;
 
@@ -436,6 +437,23 @@ describe('Phase 1: OAuth connect flow', () => {
     expect(url.searchParams.get('scope')).toContain('ads_read');
     expect(url.searchParams.get('scope')).toContain('leads_retrieval');
     expect(JSON.stringify(res.body)).not.toContain('ENV-WEBHOOK-SECRET');
+    expect(res.body.data.authorizeUrl).not.toContain('client_secret');
+  });
+
+  test('Facebook Login for Business: config_id replaces scope when META_OAUTH_CONFIG_ID is set', async () => {
+    admin();
+    process.env.META_OAUTH_CONFIG_ID = '2088777191773830';
+
+    const res = await post('/api/v1/meta-ads/oauth/state', {});
+
+    expect(res.status).toBe(200);
+    const url = new URL(res.body.data.authorizeUrl);
+    expect(url.searchParams.get('config_id')).toBe('2088777191773830');
+    expect(url.searchParams.get('override_default_response_type')).toBe('true');
+    expect(url.searchParams.get('response_type')).toBe('code');
+    expect(url.searchParams.get('state')).toMatch(/^v1\./);
+    expect(url.searchParams.get('redirect_uri')).toContain('/api/v1/meta-ads/oauth/callback');
+    expect(url.searchParams.has('scope')).toBe(false);
     expect(res.body.data.authorizeUrl).not.toContain('client_secret');
   });
 

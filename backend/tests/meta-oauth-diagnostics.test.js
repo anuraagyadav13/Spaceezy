@@ -50,7 +50,8 @@ const CALLBACK_PATH = '/api/v1/meta-ads/oauth/callback';
 const META_ENV_KEYS = [
   'META_APP_ID', 'META_APP_SECRET', 'META_ACCESS_TOKEN', 'META_AD_ACCOUNT_ID',
   'META_PAGE_ID', 'META_GRAPH_VERSION', 'META_WEBHOOK_VERIFY_TOKEN',
-  'META_ADS_SETTINGS_KEY', 'BACKEND_URL', 'FRONTEND_URL', 'SESSION_COOKIE_NAME',
+  'META_ADS_SETTINGS_KEY', 'META_OAUTH_CONFIG_ID',
+  'BACKEND_URL', 'FRONTEND_URL', 'SESSION_COOKIE_NAME',
 ];
 let savedMetaEnv;
 
@@ -253,7 +254,8 @@ describe('Meta OAuth: admin-only configuration diagnostic', () => {
     expect(serialized).not.toMatch(/appSecret|accessToken|"token"/i);
     expect(Object.keys(res.body.data).sort()).toEqual([
       'appDomain', 'backendUrl', 'consistent', 'frontendUrl',
-      'issues', 'oauthRedirectUri', 'troubleshooting',
+      'issues', 'oauthConfigId', 'oauthFlowNote', 'oauthMode',
+      'oauthRedirectUri', 'troubleshooting',
     ]);
   });
 });
@@ -280,5 +282,96 @@ describe('Meta OAuth: diagnostic RBAC (admin-only)', () => {
   test('unauthenticated requests are rejected', async () => {
     const res = await request(app).get('/api/v1/meta-ads/settings/oauth-diagnostics');
     expect(res.status).toBe(401);
+  });
+});
+
+describe('Meta OAuth: Facebook Login for Business config_id (META_OAUTH_CONFIG_ID)', () => {
+  const CONFIG_ID = '2088777191773830';
+
+  test('authorize URL uses config_id + override_default_response_type and NO scope', async () => {
+    admin();
+    process.env.BACKEND_URL = 'https://spaceezy.com';
+    process.env.META_OAUTH_CONFIG_ID = CONFIG_ID;
+
+    const res = await post('/api/v1/meta-ads/oauth/state', {});
+
+    expect(res.status).toBe(200);
+    const url = new URL(res.body.data.authorizeUrl);
+    expect(url.searchParams.get('config_id')).toBe(CONFIG_ID);
+    expect(url.searchParams.get('override_default_response_type')).toBe('true');
+    // response_type, state and the exact callback URL are unchanged.
+    expect(url.searchParams.get('response_type')).toBe('code');
+    expect(url.searchParams.get('state')).toMatch(/^v1\./);
+    expect(url.searchParams.get('redirect_uri')).toBe('https://spaceezy.com/api/v1/meta-ads/oauth/callback');
+    // config_id REPLACES scope — Meta: scope "should not be used" with a configuration.
+    expect(url.searchParams.has('scope')).toBe(false);
+    expect(res.body.data.authorizeUrl).not.toContain('public_profile');
+    expect(res.body.data.authorizeUrl).not.toContain('client_secret');
+  });
+
+  test('without META_OAUTH_CONFIG_ID the legacy scope flow is preserved', async () => {
+    admin();
+
+    const res = await post('/api/v1/meta-ads/oauth/state', {});
+
+    expect(res.status).toBe(200);
+    const url = new URL(res.body.data.authorizeUrl);
+    expect(url.searchParams.has('config_id')).toBe(false);
+    expect(url.searchParams.has('override_default_response_type')).toBe(false);
+    expect(url.searchParams.get('scope')).toContain('ads_read');
+    expect(url.searchParams.get('scope')).not.toContain('public_profile');
+  });
+
+  test('diagnostics report the config id, mode and flow note (no secrets)', async () => {
+    admin();
+    process.env.BACKEND_URL = 'https://spaceezy.com';
+    process.env.FRONTEND_URL = 'https://spaceezy.com';
+    process.env.META_OAUTH_CONFIG_ID = CONFIG_ID;
+
+    const res = await get('/api/v1/meta-ads/settings/oauth-diagnostics');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.oauthConfigId).toBe(CONFIG_ID);
+    expect(res.body.data.oauthMode).toBe('config_id');
+    expect(res.body.data.oauthFlowNote).toContain('config_id');
+    expect(res.body.data.oauthFlowNote).toContain('override_default_response_type');
+    expect(res.body.data.consistent).toBe(true);
+
+    const serialized = JSON.stringify(res.body);
+    expect(serialized).not.toContain('ENV-APP-SECRET-VALUE');
+    expect(serialized).not.toContain('ENV-ACCESS-TOKEN-VALUE');
+    expect(serialized).not.toContain(META_KEY);
+  });
+
+  test('diagnostics default to legacy_scopes with a null config id when unset', async () => {
+    admin();
+    process.env.BACKEND_URL = 'https://spaceezy.com';
+    process.env.FRONTEND_URL = 'https://spaceezy.com';
+
+    const res = await get('/api/v1/meta-ads/settings/oauth-diagnostics');
+
+    expect(res.body.data.oauthConfigId).toBeNull();
+    expect(res.body.data.oauthMode).toBe('legacy_scopes');
+    expect(res.body.data.oauthFlowNote).toContain('META_OAUTH_CONFIG_ID');
+    expect(res.body.data.consistent).toBe(true);
+  });
+
+  test('a malformed META_OAUTH_CONFIG_ID fails closed and is flagged as an issue', async () => {
+    admin();
+    process.env.BACKEND_URL = 'https://spaceezy.com';
+    process.env.FRONTEND_URL = 'https://spaceezy.com';
+    process.env.META_OAUTH_CONFIG_ID = 'not-a-numeric-id';
+
+    // The authorize URL builder refuses to send a malformed config id to Meta…
+    await expect(MetaAdsSettingsService.createAuthorizeUrl())
+      .rejects.toThrow('META_OAUTH_CONFIG_ID');
+
+    // …and the diagnostic reports it without throwing or leaking the raw value.
+    const res = await get('/api/v1/meta-ads/settings/oauth-diagnostics');
+    expect(res.status).toBe(200);
+    expect(res.body.data.consistent).toBe(false);
+    expect(res.body.data.issues.join(' ')).toContain('META_OAUTH_CONFIG_ID');
+    expect(res.body.data.oauthConfigId).toBeNull();
+    expect(res.body.data.oauthMode).toBe('legacy_scopes');
   });
 });

@@ -946,6 +946,7 @@ function MetaAdsSettingsContent() {
                             {[
                                 ["App Domain", oauthDiagQuery.data.appDomain, "Meta app → Settings → Basic → App Domains"],
                                 ["OAuth Redirect URI", oauthDiagQuery.data.oauthRedirectUri, "Facebook Login → Settings → Valid OAuth Redirect URIs"],
+                                ["FB Login for Business Config ID", oauthDiagQuery.data.oauthConfigId, "Server env META_OAUTH_CONFIG_ID (public — it appears in the authorize URL)"],
                                 ["Frontend URL", oauthDiagQuery.data.frontendUrl, "Public origin of this app"],
                                 ["Backend URL", oauthDiagQuery.data.backendUrl, "Origin the redirect_uri is built from"],
                             ].map(([label, value, hint]) => (
@@ -976,6 +977,15 @@ function MetaAdsSettingsContent() {
                                 </div>
                             ))}
                         </div>
+
+                        {oauthDiagQuery.data.oauthFlowNote && (
+                            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                                <p className="text-[11px] font-black uppercase text-gray-400 mb-1">
+                                    Authorization mode ({oauthDiagQuery.data.oauthMode === "config_id" ? "Facebook Login for Business" : "legacy scopes"})
+                                </p>
+                                <p className="text-sm text-gray-600">{oauthDiagQuery.data.oauthFlowNote}</p>
+                            </div>
+                        )}
 
                         {oauthDiagQuery.data.consistent ? (
                             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 flex items-start gap-2">

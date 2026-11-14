@@ -61,7 +61,9 @@ Notes:
    `https://spaceezy.com/api/v1/meta-ads/oauth/callback` → **Save**.
 4. **App Review → Permissions and Features**: ensure the app can request `ads_read`,
    `ads_management`, `leads_retrieval`, `pages_show_list`, `pages_read_engagement`,
-   `instagram_basic`, `public_profile` (the connecting admin/system user must hold them).
+   `instagram_basic` (the connecting admin/system user must hold them). `public_profile`
+   and `email` are **not** requested — they are unsupported for System User tokens
+   (see §3).
 5. **Webhooks**: subscribe the `leadgen` field to
    `https://spaceezy.com/api/v1/webhooks/meta/leadgen` (verify handshake unchanged).
 
@@ -72,7 +74,63 @@ and [`META_ADS_CREDENTIAL_MANAGEMENT.md`](./META_ADS_CREDENTIAL_MANAGEMENT.md)
 
 ---
 
-## 3. Troubleshooting: "Can't load URL — The domain of this URL isn't included in the app's domains"
+## 3. Facebook Login for Business configuration (`config_id`)
+
+SpaceEzy supports Meta's **Facebook Login for Business** flow. When the server env sets:
+
+```
+META_OAUTH_CONFIG_ID=2088777191773830
+```
+
+the authorize URL (`GET …/dialog/oauth`) is built as:
+
+| Parameter | Value |
+| --- | --- |
+| `client_id` | the saved Meta App ID |
+| `redirect_uri` | `https://spaceezy.com/api/v1/meta-ads/oauth/callback` — unchanged, single source of truth |
+| `response_type` | `code` — unchanged |
+| `state` | HMAC-signed, 10-minute TTL — unchanged |
+| `config_id` | value of `META_OAUTH_CONFIG_ID` — **replaces `scope`** (Meta: `scope` "should not be used" with a configuration; permissions come from the configuration) |
+| `override_default_response_type` | `true` — required for **System User** token configurations |
+
+When `META_OAUTH_CONFIG_ID` is unset or blank, the legacy `scope=…` flow is used
+instead — no behavior change for deployments that have not adopted a configuration.
+
+### Token type: System User (as configured)
+
+- The `meta ads` configuration (ID `2088777191773830`) was saved with token type
+  **System User**. Tokens issued through it are **non-expiring by default**; the
+  callback stores `tokenExpiresAt: null` when Meta omits `expires_in`.
+- Login must be performed by a person with access to the **business portfolio** the
+  configuration belongs to.
+- The token only sees **assets selected in the configuration** — attach the ad accounts,
+  Facebook Pages and Instagram accounts SpaceEzy should manage in the Meta app dashboard
+  (Facebook Login for Business → configuration → assets), or Graph reads will come back
+  empty.
+- **Token exchange is unchanged**: `GET /{version}/oauth/access_token` with `client_id`,
+  `client_secret`, `redirect_uri` (must match exactly) and `code`.
+- **Credential storage is unchanged**: AES-256-GCM under `META_ADS_SETTINGS_KEY`
+  (`accessTokenEnc`); the token never appears in URLs, logs or API responses.
+
+### Configuration checklist (Meta app dashboard + server env)
+
+1. Facebook Login for Business → use configuration **`meta ads`**
+   (ID `2088777191773830`) with permissions `ads_read`, `ads_management`,
+   `leads_retrieval`, `pages_show_list`, `pages_read_engagement`, `instagram_basic`.
+2. Token type: **System User**.
+3. Assets: the ad accounts, Pages and Instagram accounts to manage.
+4. Set `META_OAUTH_CONFIG_ID=2088777191773830` in the server env — a **manual ops step**;
+   SpaceEzy never edits production env automatically — then restart the backend and run
+   the admin diagnostic (§5) to confirm `oauthMode: "config_id"`.
+5. Reconnect the Meta account from Marketing → Meta Connection → Settings.
+
+> WhatsApp Embedded Signup uses its **own, separate** configuration
+> (`WA_ES_CONFIG_ID` in `src/lib/whatsappEmbeddedSignup.js`) and is unaffected by
+> `META_OAUTH_CONFIG_ID`.
+
+---
+
+## 4. Troubleshooting: "Can't load URL — The domain of this URL isn't included in the app's domains"
 
 This error is produced **by Meta's dialog**, meaning the app-side console configuration is
 incomplete. SpaceEzy cannot fix it automatically and deliberately never rewrites your
@@ -83,11 +141,11 @@ production URLs or credentials.
 | `Can't load URL … isn't included in the app's domains` | Add the **App Domain** (`spaceezy.com`) in *Settings → Basic → App Domains*. |
 | `redirect_uri does not match...` / `URL Blocked` during connect | Add the **exact** redirect URI (`https://spaceezy.com/api/v1/meta-ads/oauth/callback`) in *Facebook Login → Settings → Valid OAuth Redirect URIs*. |
 | Error persists after saving | Meta caches app settings for a few minutes — retry after saving; confirm you edited the **same app id** shown in Section A of the settings page. |
-| Diagnostic reports `consistent: false` | The server env (`BACKEND_URL` / `FRONTEND_URL`) is missing, relative, non-HTTPS or domain-mismatched — fix the env on the server (ops task), then restart the backend. |
+| Diagnostic reports `consistent: false` | The server env (`BACKEND_URL` / `FRONTEND_URL`) is missing, relative, non-HTTPS or domain-mismatched — or `META_OAUTH_CONFIG_ID` is set but not numeric — fix the env on the server (ops task), then restart the backend. |
 
 ---
 
-## 4. Admin-only configuration diagnostic
+## 5. Admin-only configuration diagnostic
 
 **UI:** Marketing → Meta Connection → **Settings** → *OAuth configuration diagnostic*
 (admins / super-admins only; non-admins never see the card and the API returns `403`).
@@ -102,23 +160,26 @@ The diagnostic reports:
 | `oauthRedirectUri` | Exact URI to enter in *Valid OAuth Redirect URIs* — identical to the `redirect_uri` used for initiation and token exchange. |
 | `frontendUrl` | The configured `FRONTEND_URL`. |
 | `backendUrl` | The configured `BACKEND_URL` (the value `redirect_uri` is built from). |
+| `oauthConfigId` | The `META_OAUTH_CONFIG_ID` in effect (public OAuth metadata — it appears in the authorize URL), or `null` when unset. |
+| `oauthMode` | `"config_id"` (Facebook Login for Business — authorize URL sends `config_id`, no `scope`) or `"legacy_scopes"` (scope-based flow). |
+| `oauthFlowNote` | Human-readable explanation of the authorization mode in effect, including the System User non-expiring-token note. |
 | `consistent` | `true` when all values are internally consistent. |
-| `issues` | Human-readable reasons when `consistent` is `false` (missing/relative/non-HTTPS `BACKEND_URL`, missing/relative `FRONTEND_URL`, backend/frontend domain mismatch, redirect URI drift). |
+| `issues` | Human-readable reasons when `consistent` is `false` (missing/relative/non-HTTPS `BACKEND_URL`, missing/relative `FRONTEND_URL`, backend/frontend domain mismatch, redirect URI drift, malformed `META_OAUTH_CONFIG_ID`). |
 | `troubleshooting` | The message explaining that **App Domains** *and* **Valid OAuth Redirect URIs** must also be configured in the Meta Developer Console. |
 
 Safety properties (covered by tests in
 `backend/tests/meta-oauth-diagnostics.test.js`):
 
 - **Read-only** — the diagnostic derives everything from `BACKEND_URL` / `FRONTEND_URL`
-  and never modifies any configured URL or credential.
-- **No secrets** — the payload contains only the seven fields above; no App Secret, no
-  access token, no settings key.
+  and `META_OAUTH_CONFIG_ID` and never modifies any configured URL or credential.
+- **No secrets** — the payload contains only the ten fields above; no App Secret, no
+  access token, no settings key. (`oauthConfigId` is public metadata, not a secret.)
 - **Admin-only** — `ADMIN`/`SUPER_ADMIN` only; managers/executives get `403`,
   anonymous callers `401`.
 
 ---
 
-## 5. Server environment reference
+## 6. Server environment reference
 
 Set in `backend/.env.production` on the server (see `backend/.env.example` for the full
 list and [`META_ADS_CREDENTIAL_MANAGEMENT.md`](./META_ADS_CREDENTIAL_MANAGEMENT.md) for
@@ -131,6 +192,7 @@ why each stays deployment-only):
 | `CORS_ORIGINS` | `https://spaceezy.com,https://www.spaceezy.com` |
 | `META_ADS_SETTINGS_KEY` | 64-hex AES-256-GCM key (server-only, `chmod 600`) |
 | `META_APP_ID` / `META_APP_SECRET` | Legacy env fallbacks — prefer saving them in Settings → Section A (encrypted) |
+| `META_OAUTH_CONFIG_ID` | Optional: Facebook Login for Business configuration id (e.g. `2088777191773830`) — blank = legacy `scope` flow. Set manually; SpaceEzy never writes production env (§3). |
 
 Changing `BACKEND_URL` or `FRONTEND_URL` **requires a matching update in the Meta
 Developer Console** (both fields in §2) — re-run the diagnostic afterwards to confirm
@@ -138,7 +200,7 @@ Developer Console** (both fields in §2) — re-run the diagnostic afterwards to
 
 ---
 
-## 6. Related documents
+## 7. Related documents
 
 - [`META_ADS_PHASE1.md`](./META_ADS_PHASE1.md) — OAuth flow architecture, route table, rate limits.
 - [`META_ADS_CREDENTIAL_MANAGEMENT.md`](./META_ADS_CREDENTIAL_MANAGEMENT.md) — Settings UI sections A–E, env-var rationale.
