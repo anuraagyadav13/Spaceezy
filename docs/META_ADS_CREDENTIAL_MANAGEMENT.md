@@ -77,13 +77,21 @@ ignored — admins manage them in Marketing → Meta Connection → Settings ins
 
 ## Manual Meta Developer configuration (not automatable)
 
-1. In Meta App Dashboard → **Webhooks**, subscribe the `leadgen` field to
+1. In Meta App Dashboard → **Settings → Basic → App Domains**, add the deployment domain
+   (`spaceezy.com` in production), and in **Facebook Login → Settings → Valid OAuth
+   Redirect URIs**, add `<BACKEND_URL>/api/v1/meta-ads/oauth/callback`. Missing either
+   produces Meta's *"Can't load URL — The domain of this URL isn't included in the app's
+   domains."* The admin-only **OAuth configuration diagnostic** (Settings page → *OAuth
+   configuration diagnostic*, or `GET /api/v1/meta-ads/settings/oauth-diagnostics`) prints
+   the exact App Domain and redirect URI plus an internal-consistency check — full
+   walkthrough in [`META_ADS_PRODUCTION_SETUP.md`](./META_ADS_PRODUCTION_SETUP.md).
+2. In Meta App Dashboard → **Webhooks**, subscribe the `leadgen` field to
    `<BACKEND_URL>/api/v1/webhooks/meta/leadgen`, using the CRM's verify token
    (Section B) — the callback URL is shown read-only in the UI.
-2. Ensure the app has the required permissions approved
+3. Ensure the app has the required permissions approved
    (`ads_read`, `leads_retrieval`, `pages_show_list`, `pages_read_engagement`,
    `instagram_basic`) and the token holder has access to the ad accounts/Pages.
-3. For production tokens, generate a long-lived/system-user token in Business
+4. For production tokens, generate a long-lived/system-user token in Business
    Integrations and save it in Section A (or use Reconnect for the OAuth flow).
 
 ## Tests

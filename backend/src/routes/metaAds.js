@@ -5,6 +5,7 @@ const {
     listCampaigns,
     getInsights,
     getSettings,
+    getOauthDiagnostics,
     saveSettings,
     rotateSecret,
     removeSecret,
@@ -162,6 +163,11 @@ router.get('/insights', requirePermission('marketing:view'), validate(insightsQu
 // asset/organization actions).
 const adminOnly = () => requireRole(['SUPER_ADMIN', 'ADMIN']);
 router.get('/settings', requirePermission('marketing:view'), getSettings);
+// Admin-only OAuth configuration diagnostic (App Domain / OAuth Redirect
+// URI / Frontend URL / Backend URL + consistency). Read-only env
+// derivation — no secrets, no mutation — but gated like the credential
+// surface so deployment topology stays internal.
+router.get('/settings/oauth-diagnostics', adminOnly(), getOauthDiagnostics);
 router.put('/settings', adminOnly(), validate(saveSettingsSchema), saveSettings);
 router.post('/settings/sync', requirePermission('marketing:manage'), syncAssets);
 router.post('/oauth/state', metaConnectLimiter, requirePermission('marketing:manage'), startOAuth);

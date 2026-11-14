@@ -199,14 +199,19 @@ Audit actions added: `meta.settings_updated`, `meta.oauth_connected`, `meta.asse
 
 ## 4. Meta Developer configuration still required (manual, outside this repo)
 
-1. App Dashboard → **Facebook Login → Settings**: set the Valid OAuth Redirect URI to
-   `${BACKEND_URL}/api/v1/meta-ads/oauth/callback`.
-2. **App Review → Permissions and Features**: ensure the app can request
+1. App Dashboard → **Settings → Basic → App Domains**: add the deployment domain
+   (`spaceezy.com` in production). Without it Meta rejects the dialog with
+   *"Can't load URL — The domain of this URL isn't included in the app's domains."*
+2. App Dashboard → **Facebook Login → Settings**: set the Valid OAuth Redirect URI to
+   `${BACKEND_URL}/api/v1/meta-ads/oauth/callback`. The admin-only *OAuth configuration
+   diagnostic* (Settings page, or `GET /api/v1/meta-ads/settings/oauth-diagnostics`)
+   prints both exact values — see [`META_ADS_PRODUCTION_SETUP.md`](./META_ADS_PRODUCTION_SETUP.md).
+3. **App Review → Permissions and Features**: ensure the app can request
    `ads_read`, `leads_retrieval`, `pages_show_list`, `pages_read_engagement`,
    `instagram_basic`, `public_profile` (system user or the connecting admin must hold them).
-3. **Webhooks**: subscribe the `leadgen` field pointing at
+4. **Webhooks**: subscribe the `leadgen` field pointing at
    `${BACKEND_URL}/api/v1/webhooks/meta/leadgen` (verify handshake unchanged).
-4. Set `META_ADS_SETTINGS_KEY` (and the `META_RATE_LIMIT_*` vars if tightening) in the
+5. Set `META_ADS_SETTINGS_KEY` (and the `META_RATE_LIMIT_*` vars if tightening) in the
    **server** env file — placeholder only in `backend/.env.example`.
 
 ---

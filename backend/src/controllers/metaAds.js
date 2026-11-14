@@ -149,6 +149,16 @@ const getPages = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data, message: 'Pages fetched successfully' });
 });
 
+// Admin-only OAuth configuration diagnostic: the exact App Domain and
+// OAuth Redirect URI the administrator must register in the Meta Developer
+// Console, the configured Frontend/Backend URLs, and whether those values
+// are internally consistent. URLs only — never a secret or token, and it
+// never modifies any configured value.
+const getOauthDiagnostics = asyncHandler(async (req, res) => {
+    const data = MetaAdsSettingsService.getOauthDiagnostics();
+    res.status(200).json({ success: true, data, message: 'OAuth configuration diagnostics' });
+});
+
 const getInstagramAccounts = asyncHandler(async (req, res) => {
     const data = await MetaAdsService.listInstagramAccounts({ ...req.query, organizationId: req.auth.organizationId });
     res.status(200).json({ success: true, data, message: 'Instagram accounts fetched successfully' });
@@ -487,6 +497,7 @@ module.exports = {
     syncAssets,
     getPages,
     getInstagramAccounts,
+    getOauthDiagnostics,
     startOAuth,
     oauthCallback,
     getLeadForms,

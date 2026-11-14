@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     Megaphone, AlertCircle, CheckCircle2, Loader2, RefreshCw, Save,
     ShieldCheck, XCircle, ChevronRight, PlugZap, Layers, Globe, AtSign, Clock3,
-    KeyRound, Webhook, Trash2, Activity, Copy,
+    KeyRound, Webhook, Trash2, Activity, Copy, Link2, AlertTriangle,
 } from "lucide-react";
 import { usePermissions } from "../../../../../features/auth/hooks/usePermissions";
 import { showToast } from "../../../../../lib/toast";
@@ -24,6 +24,7 @@ import {
     syncMetaAssets,
     fetchMetaPages,
     fetchMetaInstagramAccounts,
+    fetchMetaOauthDiagnostics,
     startMetaOAuth,
 } from "../../../../../lib/api/metaAds";
 
@@ -322,6 +323,16 @@ function MetaAdsSettingsContent() {
         queryFn: fetchMetaStatus,
         enabled: canView,
         staleTime: 30_000,
+        retry: 1,
+    });
+
+    // Admin-only OAuth configuration diagnostic (App Domain / redirect URI
+    // / consistency). Never fetched for non-admins — the API would 403 it.
+    const oauthDiagQuery = useQuery({
+        queryKey: ["meta-ads", "oauth-diagnostics"],
+        queryFn: fetchMetaOauthDiagnostics,
+        enabled: isAdmin,
+        staleTime: 60_000,
         retry: 1,
     });
 
@@ -897,6 +908,109 @@ function MetaAdsSettingsContent() {
                         <ErrorBox error={credSaveMutation.error} />
                     </form>
                 )}
+            </SectionCard>
+            )}
+
+            {/* Section A2: OAuth configuration diagnostic (admin-only).
+                Shows the exact values to register in the Meta Developer
+                Console (App Domains + Valid OAuth Redirect URIs) and flags
+                internal inconsistencies. URLs only — no secrets. */}
+            {isAdmin && (
+            <SectionCard
+                icon={Link2}
+                title="OAuth configuration diagnostic"
+                subtitle="Exact values to register in the Meta Developer Console. Read-only — SpaceEzy never changes these automatically."
+                action={
+                    oauthDiagQuery.data && (
+                        <span
+                            className={`text-[11px] font-black uppercase px-3 py-1.5 rounded-full border ${
+                                oauthDiagQuery.data.consistent
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}
+                        >
+                            {oauthDiagQuery.data.consistent ? "Internally consistent" : "Needs review"}
+                        </span>
+                    )
+                }
+            >
+                {oauthDiagQuery.isLoading ? (
+                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                        <Loader2 size={14} className="animate-spin" /> Loading diagnostics…
+                    </p>
+                ) : oauthDiagQuery.error ? (
+                    <ErrorBox error={oauthDiagQuery.error} onRetry={() => oauthDiagQuery.refetch()} />
+                ) : oauthDiagQuery.data ? (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {[
+                                ["App Domain", oauthDiagQuery.data.appDomain, "Meta app → Settings → Basic → App Domains"],
+                                ["OAuth Redirect URI", oauthDiagQuery.data.oauthRedirectUri, "Facebook Login → Settings → Valid OAuth Redirect URIs"],
+                                ["Frontend URL", oauthDiagQuery.data.frontendUrl, "Public origin of this app"],
+                                ["Backend URL", oauthDiagQuery.data.backendUrl, "Origin the redirect_uri is built from"],
+                            ].map(([label, value, hint]) => (
+                                <div key={label}>
+                                    <label className={labelClass}>{label}</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            readOnly
+                                            value={value || "Not configured"}
+                                            onFocus={(e) => e.target.select()}
+                                            className={`${inputClass} font-mono text-xs`}
+                                        />
+                                        {value && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    navigator.clipboard?.writeText(value);
+                                                    showToast(`${label} copied`, "success");
+                                                }}
+                                                className="p-2.5 rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 shrink-0"
+                                                title={`Copy ${label}`}
+                                            >
+                                                <Copy size={15} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] text-gray-400 mt-1">{hint}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {oauthDiagQuery.data.consistent ? (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 flex items-start gap-2">
+                                <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 shrink-0" />
+                                <p className="text-sm text-emerald-800">
+                                    Backend, frontend and redirect URI are internally consistent. If Meta still shows
+                                    &quot;Can&apos;t load URL&quot;, the missing entry is on Meta&apos;s side — see the
+                                    note below.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                                <p className="text-sm font-bold text-amber-800 mb-1 flex items-center gap-2">
+                                    <AlertTriangle size={15} className="shrink-0" /> Configuration issues
+                                </p>
+                                <ul className="list-disc pl-5 space-y-0.5 text-sm text-amber-800">
+                                    {oauthDiagQuery.data.issues.map((issue) => (
+                                        <li key={issue}>{issue}</li>
+                                    ))}
+                                </ul>
+                                <p className="text-[11px] text-amber-700 mt-2">
+                                    Fix these in the server environment (BACKEND_URL / FRONTEND_URL). SpaceEzy will not
+                                    change production URLs for you.
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                            <p className="text-[11px] font-black uppercase text-gray-400 mb-1">
+                                Still seeing &quot;Can&apos;t load URL&quot;?
+                            </p>
+                            <p className="text-sm text-gray-600">{oauthDiagQuery.data.troubleshooting}</p>
+                        </div>
+                    </div>
+                ) : null}
             </SectionCard>
             )}
 

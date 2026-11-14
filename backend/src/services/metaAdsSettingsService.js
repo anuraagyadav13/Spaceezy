@@ -61,6 +61,22 @@ const OAUTH_SCOPES = [
 const ID_LIST_FIELDS = ['selectedAdAccountIds', 'pageIds', 'instagramAccountIds'];
 const ID_PATTERN = /^(act_)?\d{1,32}$/;
 
+// Single source of truth for the OAuth callback path: the route registered
+// in routes/metaAds.js and the redirect_uri sent to Meta are both derived
+// from this constant, so they cannot drift apart.
+const OAUTH_CALLBACK_PATH = '/api/v1/meta-ads/oauth/callback';
+
+// Shown by the admin-only OAuth diagnostics whenever the deployment URLs
+// look misconfigured. Explains that Meta's side of the contract is MANUAL
+// configuration in the Developer Console — this CRM never edits it.
+const OAUTH_TROUBLESHOOTING =
+    'Meta\'s "Can\'t load URL — The domain of this URL isn\'t included in the app\'s domains" error is fixed in the ' +
+    'Meta Developer Console (developers.facebook.com → your app), not in SpaceEzy: (1) Settings → Basic → ' +
+    '"App Domains" must contain the App Domain shown here, and (2) Facebook Login → Settings → ' +
+    '"Valid OAuth Redirect URIs" must contain the OAuth Redirect URI shown here exactly (scheme, host and path). ' +
+    'SpaceEzy never changes these values automatically — re-check them after any domain, BACKEND_URL or ' +
+    'FRONTEND_URL change.';
+
 // ---------------------------------------------------------------------------
 // Validation helpers (values only; never log inputs)
 // ---------------------------------------------------------------------------
@@ -164,7 +180,73 @@ function verifyOAuthState(state) {
 }
 
 function callbackRedirectUrl() {
-    return new URL('/api/v1/meta-ads/oauth/callback', process.env.BACKEND_URL || '').toString();
+    return new URL(OAUTH_CALLBACK_PATH, process.env.BACKEND_URL || '').toString();
+}
+
+// --- OAuth configuration diagnostic (admin-only) --------------------------
+// Reports the exact values an administrator must register in the Meta
+// Developer Console (App Domains + Valid OAuth Redirect URIs) and whether
+// the deployment URLs are internally consistent. Read-only: derives
+// everything from BACKEND_URL / FRONTEND_URL, never mutates configuration,
+// and never includes the App Secret, access tokens or any other credential
+// (URLs and the public app domain only).
+function parseOrigin(value) {
+    try {
+        const url = new URL(String(value));
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+        return url.origin;
+    } catch {
+        return null; // missing / relative / unparsable → flagged as an issue
+    }
+}
+
+function oauthDiagnostics() {
+    const backendUrl = (process.env.BACKEND_URL || '').trim();
+    const frontendUrl = (process.env.FRONTEND_URL || '').trim();
+    const issues = [];
+
+    const backendOrigin = parseOrigin(backendUrl);
+    if (!backendUrl) issues.push('BACKEND_URL is not set — the OAuth redirect URI cannot be constructed.');
+    else if (!backendOrigin) issues.push('BACKEND_URL is not an absolute http(s) URL.');
+
+    const frontendOrigin = parseOrigin(frontendUrl);
+    if (!frontendUrl) issues.push('FRONTEND_URL is not set — the OAuth callback cannot redirect the browser back to the app.');
+    else if (!frontendOrigin) issues.push('FRONTEND_URL is not an absolute http(s) URL.');
+
+    // The redirect URI must be exactly BACKEND_URL origin + the registered
+    // callback path — the same value used to initiate AND complete OAuth.
+    let oauthRedirectUri = null;
+    if (backendOrigin) {
+        oauthRedirectUri = `${backendOrigin}${OAUTH_CALLBACK_PATH}`;
+        if (oauthRedirectUri !== callbackRedirectUrl()) {
+            issues.push('OAuth redirect URI does not match BACKEND_URL + the registered callback route.');
+        }
+        if (!backendOrigin.startsWith('https://') && !/\/\/localhost(:|$)|\/\/127\.0\.0\.1(:|$)/.test(backendOrigin)) {
+            issues.push('BACKEND_URL is not HTTPS — Meta requires an https redirect URI outside localhost.');
+        }
+    }
+
+    if (backendOrigin && frontendOrigin) {
+        const registrable = (origin) => new URL(origin).hostname.replace(/^www\./, '');
+        if (registrable(backendOrigin) !== registrable(frontendOrigin)) {
+            issues.push('BACKEND_URL and FRONTEND_URL use different domains — verify both are registered in the Meta app.');
+        }
+    }
+
+    // Public host to register under "App Domains" (registrable domain:
+    // leading www. stripped, subdomains reported alongside for clarity).
+    const host = backendOrigin ? new URL(backendOrigin).hostname : null;
+    const appDomain = host ? host.replace(/^www\./, '') : null;
+
+    return {
+        appDomain,
+        oauthRedirectUri,
+        frontendUrl: frontendUrl || null,
+        backendUrl: backendUrl || null,
+        consistent: issues.length === 0,
+        issues,
+        troubleshooting: OAUTH_TROUBLESHOOTING,
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -445,6 +527,13 @@ class MetaAdsSettingsService {
 
     static verifyState(state) {
         return verifyOAuthState(state);
+    }
+
+    // Admin-only configuration diagnostic (App Domain / OAuth Redirect URI /
+    // Frontend URL / Backend URL + internal consistency). Pure env derivation:
+    // no DB row, no secrets, no mutation of any configured value.
+    static getOauthDiagnostics() {
+        return oauthDiagnostics();
     }
 
     // Exchanges Meta's one-time code server-side and persists the token

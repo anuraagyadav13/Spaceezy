@@ -31,6 +31,14 @@ export const fetchMetaSettings = async () => {
     return response;
 };
 
+// Admin-only OAuth configuration diagnostic: App Domain, OAuth Redirect
+// URI, Frontend URL, Backend URL and internal consistency (URLs only —
+// the API never returns secrets).
+export const fetchMetaOauthDiagnostics = async () => {
+    const response = await apiClient.get("/meta-ads/settings/oauth-diagnostics");
+    return response;
+};
+
 export const saveMetaSettings = async (payload) => {
     const response = await apiClient.put("/meta-ads/settings", payload);
     return response;
