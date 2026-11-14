@@ -3,6 +3,7 @@ const CallService = require('../services/callService');
 const WhatsAppService = require('../services/whatsappService');
 const WhatsappSettingsService = require('../services/whatsappSettingsService');
 const MetaAdsService = require('../services/metaAdsService');
+const MetaAdsSettingsService = require('../services/metaAdsSettingsService');
 
 // Public webhook endpoints (authenticated by provider HMAC signature, not
 // by session). Bodies are verified against req.rawBody captured in app.js.
@@ -34,12 +35,16 @@ const whatsappWebhookVerify = asyncHandler(async (req, res) => {
     res.status(403).json({ success: false, code: 'WEBHOOK_VERIFY_FAILED', message: 'Verification failed' });
 });
 
-// Meta Lead Ads verification handshake.
+// Meta Lead Ads verification handshake. Token resolution lives in
+// MetaAdsSettingsService.verifyWebhookToken: a saved settings row is
+// authoritative (stored token, fail closed on decrypt errors), legacy env
+// applies only when no row exists. Comparison is timing-safe there; nothing
+// is ever logged.
 const metaLeadgenVerify = asyncHandler(async (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-    if (mode === 'subscribe' && token && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
+    if (mode === 'subscribe' && await MetaAdsSettingsService.verifyWebhookToken(token)) {
         res.status(200).send(String(challenge || ''));
         return;
     }

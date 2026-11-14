@@ -3,14 +3,37 @@ const request = require('supertest');
 const app = require('../src/app');
 const prisma = require('../src/db/prisma');
 
-jest.mock('../src/db/prisma', () => ({
-  session: { findUnique: jest.fn() },
-  organization: { findFirst: jest.fn() },
-  lead: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn() },
-  leadActivity: { create: jest.fn() },
-  auditLog: { create: jest.fn() },
-  $transaction: jest.fn(),
-}));
+jest.mock('../src/db/prisma', () => {
+  const mock = {
+    session: { findUnique: jest.fn() },
+    organization: { findFirst: jest.fn() },
+    metaAdsSettings: { findUnique: jest.fn(), update: jest.fn(), upsert: jest.fn() },
+    metaLeadFormConfig: {
+      findUnique: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(),
+      upsert: jest.fn(), create: jest.fn(), update: jest.fn(),
+    },
+    metaLeadSyncEvent: {
+      findUnique: jest.fn(), create: jest.fn(), update: jest.fn(),
+      findMany: jest.fn(), count: jest.fn(),
+    },
+    metaLeadSyncRun: {
+      create: jest.fn(), update: jest.fn(), findFirst: jest.fn(),
+      findMany: jest.fn(), count: jest.fn(),
+    },
+    lead: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn() },
+    leadActivity: { create: jest.fn() },
+    auditLog: { create: jest.fn() },
+    whatsappSettings: { findUnique: jest.fn() },
+    project: { findFirst: jest.fn() },
+    property: { findFirst: jest.fn() },
+    configuration: { findFirst: jest.fn(), findMany: jest.fn() },
+    user: { findFirst: jest.fn(), findUnique: jest.fn() },
+  };
+  // Lead creation now runs through LeadService.createLead, which opens a
+  // transaction: the shim executes the callback against the same mock.
+  mock.$transaction = jest.fn(async (fn) => fn(mock));
+  return mock;
+});
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const PAGE_ID = '111222333444';
@@ -179,8 +202,14 @@ describe('Phase 12: Native envelope parsing and mapping', () => {
       })
     );
     const created = prisma.lead.create.mock.calls[0][0].data;
-    expect(created.message).toContain('city: Noida');
-    expect(created.message).not.toContain('full_name');
+    // Unmapped answers are preserved structurally, never dumped into `message`.
+    expect(created.message).toBeNull();
+    const answers = created.metaAnswers;
+    expect(answers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ questionKey: 'city', values: ['Noida'], mappedField: null }),
+      expect.objectContaining({ questionKey: 'full_name', values: ['Rohit Sharma'] }),
+    ]));
+    expect(JSON.stringify(answers)).not.toContain('full_name: Rohit Sharma');
     expect(created.metaCreatedAt).toEqual(new Date(1729000000 * 1000));
   });
 

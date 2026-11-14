@@ -153,6 +153,7 @@ const locationRoutes = require('./routes/locations');
 const uploadRoutes = require('./routes/uploads');
 const mediaRoutes = require('./routes/media');
 const metaAdsRoutes = require('./routes/metaAds');
+const { metaWebhookLimiter } = require('./middleware/metaRateLimits');
 const auditLogRoutes = require('./routes/auditLogs');
 const webhookRoutes = require('./controllers/webhooks');
 const notificationRoutes = require('./routes/notifications');
@@ -185,7 +186,7 @@ app.post('/api/v1/webhooks/telephony/:provider', webhookRoutes.telephonyWebhook)
 app.post('/api/v1/webhooks/whatsapp/:provider', webhookRoutes.whatsappWebhook);
 // Meta Lead Ads (dedicated path; no conflict with provider webhooks above)
 app.get('/api/v1/webhooks/meta/leadgen', webhookRoutes.metaLeadgenVerify);
-app.post('/api/v1/webhooks/meta/leadgen', webhookRoutes.metaLeadgen);
+app.post('/api/v1/webhooks/meta/leadgen', metaWebhookLimiter, webhookRoutes.metaLeadgen);
 
 // Error handling
 app.use(notFoundHandler);

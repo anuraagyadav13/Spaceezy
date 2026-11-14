@@ -24,11 +24,18 @@ const { AppError } = require('./errors');
 const PREFIX = 'v1';
 const KEY_PATTERN = /^[0-9a-fA-F]{64}$/;
 
-function getKey() {
-    const hex = process.env.WHATSAPP_SETTINGS_KEY || '';
+// Optional integration-specific key/label. Defaults preserve the original
+// WhatsApp behaviour byte-for-byte; Meta Ads callers pass
+// { keyEnv: 'META_ADS_SETTINGS_KEY', label: 'Meta Ads' } so each integration
+// has its own key and its own fail-closed error message. Callers must NOT
+// fall back to another integration's key: a missing key always fails closed.
+function getKey(options = {}) {
+    const keyEnv = options.keyEnv || 'WHATSAPP_SETTINGS_KEY';
+    const label = options.label || 'WhatsApp settings';
+    const hex = process.env[keyEnv] || '';
     if (!KEY_PATTERN.test(hex)) {
         throw new AppError(
-            'WhatsApp settings encryption is not configured (WHATSAPP_SETTINGS_KEY must be 64 hex characters)',
+            `${label} encryption is not configured (${keyEnv} must be 64 hex characters)`,
             500,
             'SETTINGS_KEY_MISSING'
         );
@@ -36,8 +43,8 @@ function getKey() {
     return Buffer.from(hex, 'hex');
 }
 
-function encryptSecret(plaintext) {
-    const key = getKey();
+function encryptSecret(plaintext, options = {}) {
+    const key = getKey(options);
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     const ciphertext = Buffer.concat([cipher.update(String(plaintext), 'utf8'), cipher.final()]);
@@ -46,9 +53,10 @@ function encryptSecret(plaintext) {
     return `${PREFIX}.${b64u(iv)}.${b64u(ciphertext)}.${b64u(tag)}`;
 }
 
-function decryptSecret(envelope) {
+function decryptSecret(envelope, options = {}) {
+    const label = (options && options.label) || 'WhatsApp credential';
     const fail = () => {
-        throw new AppError('Stored WhatsApp credential cannot be decrypted', 500, 'SETTINGS_DECRYPT_FAILED');
+        throw new AppError(`Stored ${label} cannot be decrypted`, 500, 'SETTINGS_DECRYPT_FAILED');
     };
     if (typeof envelope !== 'string') fail();
     const parts = envelope.split('.');
@@ -65,7 +73,7 @@ function decryptSecret(envelope) {
     }
     if (iv.length !== 12 || tag.length !== 16 || ciphertext.length === 0) fail();
     try {
-        const key = getKey();
+        const key = getKey(options);
         const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
         decipher.setAuthTag(tag);
         return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');

@@ -13,9 +13,32 @@ const { AppError } = require('../utils/errors');
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
+// Marketing API version. META_GRAPH_VERSION stays the single source of
+// configuration (never silently replaced) but its FORMAT is now validated:
+// a typo'd version would otherwise surface as confusing downstream 404s.
 function graphVersion() {
-    return process.env.META_GRAPH_VERSION || 'v22.0';
+    const raw = process.env.META_GRAPH_VERSION || 'v22.0';
+    if (!/^v\d{1,2}\.\d{1,2}$/.test(String(raw))) {
+        throw new AppError('META_GRAPH_VERSION must look like v22.0', 500, 'META_CONFIG_INVALID');
+    }
+    return String(raw);
 }
+
+// Explicit caller version (settings row) is validated the same way; the
+// env default is used when none is supplied.
+function resolveVersion(versionOverride) {
+    if (versionOverride === undefined || versionOverride === null || versionOverride === '') {
+        return graphVersion();
+    }
+    if (!/^v\d{1,2}\.\d{1,2}$/.test(String(versionOverride))) {
+        throw new AppError('Graph API version must look like v22.0', 500, 'META_CONFIG_INVALID');
+    }
+    return String(versionOverride);
+}
+
+// Optional per-call credential overrides so a stored settings row can be
+// authoritative (Phase 1) without changing any caller that still relies on
+// the legacy environment defaults. Omitted values behave exactly as before.
 
 // Meta rate-limit signals: HTTP 429 or platform throttling codes.
 function isRateLimit(status, code) {
@@ -40,17 +63,54 @@ function mapMetaError(status, data) {
     return attach(new AppError(`Meta API error: ${message}`, 502, 'META_API_ERROR'));
 }
 
-async function graphRequest({ path, method = 'GET', params = {}, body, timeoutMs = DEFAULT_TIMEOUT_MS }) {
-    const token = process.env.META_ACCESS_TOKEN || '';
+// Precedence: explicit caller token (settings row) → legacy env token.
+// Same security rules apply to either source: header only, never logged,
+// never echoed in errors or URLs.
+function resolveToken(tokenOverride) {
+    const token = tokenOverride !== undefined && tokenOverride !== null
+        ? String(tokenOverride)
+        : (process.env.META_ACCESS_TOKEN || '');
     if (!token) {
         throw new AppError('Meta integration is not configured. Set META_ACCESS_TOKEN.', 409, 'META_NOT_CONFIGURED');
     }
+    return token;
+}
+
+// Shared response handling for every Graph transport in this module: parse
+// the JSON body (non-JSON = provider failure) and map errors to operational
+// AppErrors. Raw provider payloads never pass through to callers.
+async function readGraphResponse(res) {
+    let data = null;
+    try {
+        data = await res.json();
+    } catch {
+        throw new AppError('Meta API returned a non-JSON response', 502, 'META_API_ERROR');
+    }
+    if (!res.ok) throw mapMetaError(res.status, data);
+    return data;
+}
+
+// Shared network-failure mapping (timeouts vs unreachable).
+function rethrowNetworkError(err) {
+    const timedOut = err && (err.name === 'TimeoutError' || String(err.message || '').toLowerCase().includes('timed out'));
+    throw new AppError(
+        timedOut ? 'Meta API request timed out.' : `Meta API unreachable: ${err?.message || 'network error'}`,
+        timedOut ? 504 : 502,
+        timedOut ? 'META_TIMEOUT' : 'META_PROVIDER_ERROR'
+    );
+}
+
+async function graphRequest({ path, method = 'GET', params = {}, body, timeoutMs = DEFAULT_TIMEOUT_MS, token: tokenOverride, version: versionOverride }) {
+    const token = resolveToken(tokenOverride);
+    const apiVersion = resolveVersion(versionOverride);
     const cleanPath = String(path || '').replace(/^\/+/, '');
-    const url = new URL(`https://graph.facebook.com/${graphVersion()}/${cleanPath}`);
-    if (method === 'GET') {
-        for (const [key, value] of Object.entries(params)) {
-            if (value !== undefined && value !== null && value !== '') url.searchParams.append(key, String(value));
-        }
+    const url = new URL(`https://graph.facebook.com/${apiVersion}/${cleanPath}`);
+    // Query params ride on EVERY method (GET keeps its historical behavior;
+    // Meta documents query parameters on writes too — e.g.
+    // DELETE act_{id}/adimages?hash=…). Additive: existing POST/DELETE
+    // callers never passed params, so their URLs are unchanged.
+    for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && value !== '') url.searchParams.append(key, String(value));
     }
     let res;
     try {
@@ -67,21 +127,34 @@ async function graphRequest({ path, method = 'GET', params = {}, body, timeoutMs
             signal: AbortSignal.timeout(timeoutMs),
         });
     } catch (err) {
-        const timedOut = err && (err.name === 'TimeoutError' || String(err.message || '').toLowerCase().includes('timed out'));
-        throw new AppError(
-            timedOut ? 'Meta API request timed out.' : `Meta API unreachable: ${err?.message || 'network error'}`,
-            timedOut ? 504 : 502,
-            timedOut ? 'META_TIMEOUT' : 'META_PROVIDER_ERROR'
-        );
+        rethrowNetworkError(err);
     }
-    let data = null;
+    return readGraphResponse(res);
+}
+
+// Multipart (form-data) transport for endpoints that document file uploads
+// as form data — Meta ad videos (`source` = file, plus `name`/`description`).
+// Identical security rules to graphRequest: the token travels only in the
+// Authorization header, never in the URL or logs; fetch sets the multipart
+// Content-Type boundary itself. No retries (a retry could duplicate an
+// upload side effect) — callers surface failures honestly.
+async function graphFormRequest({ path, method = 'POST', form, timeoutMs = DEFAULT_TIMEOUT_MS, token: tokenOverride, version: versionOverride }) {
+    const token = resolveToken(tokenOverride);
+    const apiVersion = resolveVersion(versionOverride);
+    const cleanPath = String(path || '').replace(/^\/+/, '');
+    const url = `https://graph.facebook.com/${apiVersion}/${cleanPath}`;
+    let res;
     try {
-        data = await res.json();
-    } catch {
-        throw new AppError('Meta API returned a non-JSON response', 502, 'META_API_ERROR');
+        res = await fetch(url, {
+            method,
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+    } catch (err) {
+        rethrowNetworkError(err);
     }
-    if (!res.ok) throw mapMetaError(res.status, data);
-    return data;
+    return readGraphResponse(res);
 }
 
 function withMetaCode(appError, code) {
@@ -91,4 +164,4 @@ function withMetaCode(appError, code) {
     return appError;
 }
 
-module.exports = { graphRequest, mapMetaError, graphVersion };
+module.exports = { graphRequest, graphFormRequest, mapMetaError, graphVersion };

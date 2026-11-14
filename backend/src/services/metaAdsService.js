@@ -1,28 +1,76 @@
 const { AppError } = require('../utils/errors');
 const { graphRequest } = require('./metaGraph');
+const MetaAdsSettingsService = require('./metaAdsSettingsService');
+const MetaLeadImportService = require('./metaLeadImportService');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
 const { verifyHmacSha256 } = require('../utils/hmac');
 const prisma = require('../db/prisma');
-const WhatsappNotifyService = require('./whatsappNotifyService');
 
 // Read-only Meta Marketing API surface for SpaceEzy's own ad assets
-// (single-tenant system-user token from env — see backend/.env.example).
+// (single-company connection: settings row first, legacy env fallback —
+// see metaAdsSettingsService.js and backend/.env.example).
 //
 // Notes on scope and safety:
-// - No Prisma usage in this module: Meta reporting data is never stored and
-//   can never leak across organisations (there is nothing org-scoped to leak;
-//   the connection itself is deployment-global by task scope).
 // - Campaign write operations are intentionally NOT implemented here
 //   (read-only phase; POST routes do not exist).
 // - Derived metrics (cost per lead) are computed only when inputs exist;
 //   zero denominators yield null, never Infinity or fabricated numbers.
+// - Credentials are always passed to graphRequest EXPLICITLY: in db mode an
+//   absent/failed secret must never silently fall back to the environment.
 
-const REQUIRED_PERMISSIONS = ['ads_read'];
+// Single source of truth for permission sets lives in
+// metaAdsSettingsService (connection tests report from the same arrays).
+const { REQUIRED_PERMISSIONS, RECOMMENDED_PERMISSIONS } = MetaAdsSettingsService;
 
-function requiredConfig() {
-    const accessToken = process.env.META_ACCESS_TOKEN || '';
-    const adAccountId = (process.env.META_AD_ACCOUNT_ID || '').replace(/^act_/, '');
-    return { accessToken, adAccountId };
+async function effectiveConfig(organizationId) {
+    return MetaAdsSettingsService.getEffectiveConfig(organizationId || null);
+}
+
+// Effective token for Graph calls. Throws 409 when unusable — db mode never
+// falls back to a legacy env token (row is authoritative).
+function requireToken(eff) {
+    const token = eff.accessToken || '';
+    if (!token) {
+        throw new AppError(
+            eff.source === 'db'
+                ? 'Meta connection is not configured. Connect Meta in Ads settings first.'
+                : 'Meta integration is not configured. Set META_ACCESS_TOKEN.',
+            409,
+            'META_NOT_CONFIGURED'
+        );
+    }
+    return token;
+}
+
+// Same rule for the webhook path, but 503 (not 409): a delivery that fails
+// because the connection is not ready must keep Meta's automatic retry
+// instead of being permanently dropped with the batch.
+function webhookToken(eff) {
+    const token = eff.accessToken || '';
+    if (!token) {
+        throw new AppError(
+            eff.source === 'db'
+                ? 'Meta connection is not configured for this workspace.'
+                : 'Meta integration is not configured. Set META_ACCESS_TOKEN.',
+            503,
+            'META_NOT_CONFIGURED'
+        );
+    }
+    return token;
+}
+
+function requireAdAccount(eff, override) {
+    const accountId = String(override || eff.adAccountId || '').replace(/^act_/, '');
+    if (!accountId) {
+        throw new AppError(
+            eff.source === 'db'
+                ? 'No ad account is selected. Save an ad account selection in Meta Ads settings.'
+                : 'Meta integration is not configured. Set META_AD_ACCOUNT_ID.',
+            409,
+            'META_NOT_CONFIGURED'
+        );
+    }
+    return accountId;
 }
 
 function numOrNull(value) {
@@ -48,32 +96,95 @@ function sumAction(actions, type) {
 }
 
 class MetaAdsService {
-    static async getStatus() {
-        const { accessToken, adAccountId } = requiredConfig();
+    // Exposed for Phase 2 services (form discovery, historical backfill) so
+    // the single "no usable token" rule and its 409 contract stay defined in
+    // exactly one place instead of being duplicated.
+    static requireToken(eff) {
+        return requireToken(eff);
+    }
+
+    // Phase 3+4: the campaign management service reuses the exact same
+    // effective-config and ad-account rules (same fail-closed behavior).
+    static async effectiveConfig(organizationId) {
+        return effectiveConfig(organizationId);
+    }
+
+    static requireAdAccount(eff, override) {
+        return requireAdAccount(eff, override);
+    }
+
+    static async getStatus({ organizationId } = {}) {
+        const eff = await effectiveConfig(organizationId);
+        const accessToken = eff.accessToken || '';
+        const adAccountId = String(eff.adAccountId || '').replace(/^act_/, '');
+        const base = {
+            configSource: eff.source,
+            tokenExpiresAt: eff.tokenExpiresAt ? new Date(eff.tokenExpiresAt) : null,
+            tokenExpired: false,
+            reauthRequired: false,
+        };
         if (!accessToken || !adAccountId) {
-            return { connected: false, reason: 'MISSING_CONFIG', missing: [
-                ...(!accessToken ? ['META_ACCESS_TOKEN'] : []),
-                ...(!adAccountId ? ['META_AD_ACCOUNT_ID'] : []),
-            ] };
+            // Env-mode labels stay the legacy META_* names (documented API);
+            // db-mode labels avoid them so no response body ever contains an
+            // access-token-like substring (phase11 leak assertions).
+            const missing = [];
+            if (!accessToken) missing.push(eff.source === 'db' ? 'storedCredentials' : 'META_ACCESS_TOKEN');
+            if (!adAccountId) missing.push(eff.source === 'db' ? 'selectedAdAccountIds' : 'META_AD_ACCOUNT_ID');
+            return {
+                connected: false,
+                reason: 'MISSING_CONFIG',
+                missing,
+                ...base,
+                missingPermissions: [],
+                missingRecommendedPermissions: [],
+                grantedPermissions: [],
+                user: null,
+                adAccount: null,
+            };
+        }
+        // Known-expired token: report honestly without calling Meta — the
+        // call would only re-confirm the rejection. Reconnect required.
+        if (base.tokenExpiresAt && base.tokenExpiresAt.getTime() <= Date.now()) {
+            return {
+                connected: false,
+                reason: 'TOKEN_EXPIRED',
+                missing: [],
+                ...base,
+                tokenExpired: true,
+                reauthRequired: true,
+                missingPermissions: [],
+                missingRecommendedPermissions: [],
+                grantedPermissions: [],
+                user: null,
+                adAccount: null,
+            };
         }
         // Live validation: token, account access, and granted permissions.
         // Any classified failure degrades to an honest disconnected status
         // (expiry and permission detection) instead of throwing.
         try {
-            const me = await graphRequest({ path: 'me', params: { fields: 'id,name' } });
+            const me = await graphRequest({ path: 'me', params: { fields: 'id,name' }, token: accessToken, version: eff.graphVersion });
             const account = await graphRequest({
                 path: `act_${adAccountId}`,
                 params: { fields: 'id,name,account_status,currency,timezone_name' },
+                token: accessToken,
+                version: eff.graphVersion,
             });
-            const perms = await graphRequest({ path: 'me/permissions' });
+            const perms = await graphRequest({ path: 'me/permissions', params: {}, token: accessToken, version: eff.graphVersion });
             const granted = Array.isArray(perms.data)
                 ? perms.data.filter((p) => p && p.status === 'granted').map((p) => p.permission)
                 : [];
             const missingPermissions = REQUIRED_PERMISSIONS.filter((p) => !granted.includes(p));
+            const missingRecommendedPermissions = RECOMMENDED_PERMISSIONS.filter((p) => !granted.includes(p));
+            const reason = missingPermissions.length === 0 ? null : 'PERMISSION_DENIED';
             return {
                 connected: missingPermissions.length === 0,
-                reason: missingPermissions.length === 0 ? null : 'PERMISSION_DENIED',
+                reason,
+                missing: [],
                 missingPermissions,
+                missingRecommendedPermissions,
+                // Advisory-safe: permission NAMES only (no token material).
+                grantedPermissions: granted,
                 user: me && me.id ? { id: me.id, name: me.name || null } : null,
                 adAccount: account && account.id ? {
                     id: String(account.id),
@@ -82,19 +193,29 @@ class MetaAdsService {
                     currency: account.currency || null,
                     timezone: account.timezone_name || null,
                 } : null,
+                ...base,
+                reauthRequired: reason === 'META_TOKEN_INVALID',
             };
         } catch (err) {
+            const reason = (err && err.code) || 'API_ERROR';
             return {
                 connected: false,
-                reason: (err && err.code) || 'API_ERROR',
+                reason,
+                missing: [],
                 missingPermissions: [],
+                missingRecommendedPermissions: [],
+                grantedPermissions: [],
                 user: null,
                 adAccount: null,
+                ...base,
+                reauthRequired: reason === 'META_TOKEN_INVALID',
             };
         }
     }
 
-    static async listAdAccounts({ limit = 100, after } = {}) {
+    static async listAdAccounts({ organizationId, limit = 100, after } = {}) {
+        const eff = await effectiveConfig(organizationId);
+        const token = requireToken(eff);
         const data = await graphRequest({
             path: 'me/adaccounts',
             params: {
@@ -102,6 +223,8 @@ class MetaAdsService {
                 limit: Math.min(Math.max(parseInt(limit, 10) || 100, 1), 100),
                 ...(after ? { after } : {}),
             },
+            token,
+            version: eff.graphVersion,
         });
         const items = Array.isArray(data.data) ? data.data.map((a) => ({
             id: a.id,
@@ -113,21 +236,22 @@ class MetaAdsService {
         return { items, paging: data.paging || null };
     }
 
-    static async listCampaigns({ adAccountId, status, limit = 50, after } = {}) {
-        const { adAccountId: defaultAccount } = requiredConfig();
-        const accountId = String(adAccountId || defaultAccount).replace(/^act_/, '');
-        if (!accountId) {
-            throw new AppError('Meta integration is not configured. Set META_AD_ACCOUNT_ID.', 409, 'META_NOT_CONFIGURED');
-        }
+    static async listCampaigns({ organizationId, adAccountId, status, objective, limit = 50, after } = {}) {
+        const eff = await effectiveConfig(organizationId);
+        const token = requireToken(eff);
+        const accountId = requireAdAccount(eff, adAccountId);
         const params = {
-            fields: 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time',
+            fields: 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,spend_cap,start_time,stop_time,created_time,updated_time',
             limit: Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100),
             ...(after ? { after } : {}),
         };
-        if (status) {
-            params.filtering = JSON.stringify([{ field: 'effective_status', operator: 'IN', value: [status] }]);
-        }
-        const data = await graphRequest({ path: `act_${accountId}/campaigns`, params });
+        // Phase 3+4: status and objective filters share the documented
+        // filtering parameter (IN operator), so both can apply at once.
+        const filtering = [];
+        if (status) filtering.push({ field: 'effective_status', operator: 'IN', value: [status] });
+        if (objective) filtering.push({ field: 'objective', operator: 'IN', value: [objective] });
+        if (filtering.length > 0) params.filtering = JSON.stringify(filtering);
+        const data = await graphRequest({ path: `act_${accountId}/campaigns`, params, token, version: eff.graphVersion });
         const items = Array.isArray(data.data) ? data.data.map((c) => ({
             id: c.id,
             name: c.name || null,
@@ -136,40 +260,59 @@ class MetaAdsService {
             objective: c.objective || null,
             dailyBudget: c.daily_budget ?? null,
             lifetimeBudget: c.lifetime_budget ?? null,
+            spendCap: c.spend_cap ?? null,
             startTime: c.start_time || null,
             stopTime: c.stop_time || null,
+            createdTime: c.created_time || null,
+            updatedTime: c.updated_time || null,
         })) : [];
         return { adAccountId: accountId, items, paging: data.paging || null };
     }
 
     // ------------------------------------------------------------------
-    // Meta Lead Ads webhook ingestion (Phase 3). Single-tenant: the
-    // configured META_PAGE_ID is SpaceEzy's own Page; events from any other
-    // page are rejected, and leads land in the primary organisation.
+    // Meta Lead Ads webhook ingestion. Single-company: the effective page
+    // allow-list (settings row when present, legacy META_PAGE_ID otherwise)
+    // decides acceptance; every valid lead lands in the primary organization.
     // ------------------------------------------------------------------
 
-    static verifyLeadgenSignature(rawBody, signature) {
-        const secret = process.env.META_APP_SECRET || '';
+    // appSecret: the caller passes the effective secret (db row first, env
+    // when no row). Omitted → legacy env lookup for direct callers. Missing
+    // secrets fail closed inside verifyHmacSha256 (empty → false).
+    static verifyLeadgenSignature(rawBody, signature, appSecret) {
+        const secret = appSecret === undefined ? (process.env.META_APP_SECRET || '') : String(appSecret || '');
         return verifyHmacSha256(rawBody, signature, secret, { normalizePrefix: true });
     }
 
-    static async resolveLeadgenOrganization(pageId) {
-        const configuredPageId = process.env.META_PAGE_ID || '';
-        if (!configuredPageId) {
+    static async resolveLeadgenOrganization(pageId, organizationId, eff) {
+        let orgId = organizationId || null;
+        let config = eff || null;
+        if (!config) {
+            orgId = orgId || await MetaAdsSettingsService.resolvePrimaryOrganizationId();
+            config = await MetaAdsSettingsService.getEffectiveConfig(orgId);
+        }
+        // Row present → its pageIds are authoritative (empty row = explicitly
+        // unconfigured); row absent → legacy single META_PAGE_ID env value.
+        const configuredPageIds = Array.isArray(config.pageIds) ? config.pageIds : [];
+        if (configuredPageIds.length === 0) {
             throw new AppError('Meta Lead Ads is not configured. Set META_PAGE_ID.', 503, 'META_NOT_CONFIGURED');
         }
-        if (!pageId || String(pageId) !== String(configuredPageId)) {
+        if (!pageId || !configuredPageIds.includes(String(pageId))) {
             throw new AppError('Lead event is not for the configured Meta Page', 400, 'PAGE_MISMATCH');
         }
-        const org = await prisma.organization.findFirst({ select: { id: true } });
-        if (!org) {
+        if (!orgId) {
             throw new AppError('System not configured correctly (No organization found)', 500, 'INTERNAL_ERROR');
         }
-        return org.id;
+        return orgId;
     }
 
     static async processLeadgenWebhook(rawBody, signature) {
-        if (!MetaAdsService.verifyLeadgenSignature(rawBody, signature)) {
+        // Resolve the single company's effective configuration first: the
+        // webhook secret and the page allow-list both come from it (a stored
+        // secret that fails to decrypt throws here — fail closed, before any
+        // lead is touched; env is never consulted when a row exists).
+        const organizationId = await MetaAdsSettingsService.resolvePrimaryOrganizationId();
+        const eff = await MetaAdsSettingsService.getEffectiveConfig(organizationId);
+        if (!MetaAdsService.verifyLeadgenSignature(rawBody, signature, eff.appSecret || '')) {
             throw new AppError('Invalid webhook signature', 401, 'WEBHOOK_SIGNATURE_INVALID');
         }
         let payload;
@@ -185,6 +328,24 @@ class MetaAdsService {
         let processed = 0;
         let ignored = 0;
         let duplicates = 0;
+        let failed = 0;
+        let firstPermanentError = null;
+
+        // Per-entry error isolation: one malformed entry must never abort the
+        // rest of the batch. Classification:
+        //   - Transient provider failures (429 rate limit, 5xx transport/API)
+        //     are rethrown IMMEDIATELY so the HTTP status keeps Meta's
+        //     automatic retry behaviour; entries already processed in this
+        //     delivery stay written and dedupe (organizationId, metaLeadId)
+        //     makes the redelivery idempotent.
+        //   - Permanent per-entry failures (bad payload, page mismatch,
+        //     permission/config rejection) are collected, counted in
+        //     `failed`, logged with the error code only, and never reported
+        //     as processed/ignored/duplicate.
+        // If at least one entry succeeded in any way the response is 200 with
+        // accurate counts (including `failed`); when every leadgen change
+        // failed permanently the first error is thrown after the loop, so a
+        // wholly invalid batch still surfaces its original 4xx.
         for (const entry of entries) {
             const changes = (entry && entry.changes) || [];
             for (const change of changes) {
@@ -192,13 +353,33 @@ class MetaAdsService {
                     ignored += 1;
                     continue;
                 }
-                const result = await MetaAdsService.syncMetaLead(change.value);
+                let result;
+                try {
+                    result = await MetaAdsService.syncMetaLead(change.value, { organizationId, eff });
+                } catch (err) {
+                    const status = Number(err && err.statusCode) || 500;
+                    const transient = status === 429 || status >= 500;
+                    if (transient) throw err;
+                    failed += 1;
+                    if (!firstPermanentError) firstPermanentError = err;
+                    // Safe identifiers only: error code + status. No lead
+                    // data, no page/leadgen IDs, never tokens or secrets.
+                    console.warn('[meta-webhook] entry rejected', {
+                        code: (err && err.code) || 'UNKNOWN',
+                        status,
+                    });
+                    continue;
+                }
                 if (!result || result.ignored) ignored += 1;
                 else if (result.duplicate) duplicates += 1;
                 else processed += 1;
             }
         }
-        return { ok: true, processed, ignored, duplicates };
+
+        if (firstPermanentError && processed === 0 && duplicates === 0 && ignored === 0) {
+            throw firstPermanentError;
+        }
+        return { ok: true, processed, ignored, duplicates, failed };
     }
 
     static mapMetaLead(detail) {
@@ -226,138 +407,41 @@ class MetaAdsService {
         return { name, email: email.trim(), phone: phone.trim(), customs };
     }
 
-    static async syncMetaLead(value) {
+    // Phase 2: the webhook path validates the payload and the Page
+    // allow-list here (preserving the 400/503/500 contracts), then hands off
+    // to MetaLeadImportService — the ONE import service shared with
+    // historical backfill (2F), which owns dedupe, the form-enabled gate, the
+    // saved field mapping, attribution, phone-match attach, P2002 recovery
+    // and the sync event log. `resolveToken` runs only AFTER the dedupe
+    // short-circuit, preserving the duplicate-without-any-Meta-call contract.
+    static async syncMetaLead(value, ctx) {
+        // ctx ({ organizationId, eff }) is supplied by processLeadgenWebhook;
+        // resolve defensively when called directly so the effective-config
+        // rule (row authoritative, fail closed) always applies.
+        let organizationId = (ctx && ctx.organizationId) || null;
+        let eff = (ctx && ctx.eff) || null;
+        if (!organizationId) organizationId = await MetaAdsSettingsService.resolvePrimaryOrganizationId();
+        if (!eff) eff = await MetaAdsSettingsService.getEffectiveConfig(organizationId);
+
         const leadgenId = value && value.leadgen_id !== undefined ? String(value.leadgen_id) : '';
         if (!/^\d+$/.test(leadgenId)) {
             throw new AppError('Invalid leadgen payload: leadgen_id missing', 400, 'VALIDATION_ERROR');
         }
-        const organizationId = await MetaAdsService.resolveLeadgenOrganization(value.page_id);
+        const resolvedOrgId = await MetaAdsService.resolveLeadgenOrganization(value.page_id, organizationId, eff);
 
-        // Existing sync (retry or duplicate delivery) — never create twice.
-        const existingSync = await prisma.lead.findFirst({ where: { organizationId, metaLeadId: leadgenId } });
-        if (existingSync) return { ok: true, duplicate: true, leadId: existingSync.id };
-
-        // Full details always come from Meta, never from the webhook body.
-        let detail;
-        try {
-            detail = await graphRequest({
-                path: leadgenId,
-                params: { fields: 'id,created_time,field_data,ad_id,adset_id,campaign_id,form_id' },
-            });
-        } catch (err) {
-            // Deleted/inaccessible leads must not retry forever.
-            if (err && err.metaCode === 100) return { ok: true, ignored: 'lead_deleted' };
-            throw err;
-        }
-        const mapped = MetaAdsService.mapMetaLead(detail || {});
-        if (!mapped.phone) return { ok: true, ignored: 'no_identity' };
-
-        const toDate = (unixSeconds) => {
-            const n = Number(unixSeconds);
-            return Number.isFinite(n) && n > 0 ? new Date(n * 1000) : null;
-        };
-        // Campaign name is a best-effort enrichment; its failure must never
-        // block lead creation.
-        let campaignName = null;
-        const campaignId = detail.campaign_id !== undefined && detail.campaign_id !== null ? String(detail.campaign_id) : null;
-        if (campaignId && /^\d+$/.test(campaignId)) {
-            try {
-                const campaign = await graphRequest({ path: campaignId, params: { fields: 'id,name' } });
-                if (campaign && campaign.name) campaignName = String(campaign.name);
-            } catch {
-                campaignName = null;
-            }
-        }
-        const platformRaw = value.platform || value.publisher || null;
-        const metaPlatform = platformRaw === 'Facebook' || platformRaw === 'Instagram' ? platformRaw : null;
-        const attributes = {
-            metaLeadId: leadgenId,
-            metaPageId: value.page_id !== undefined ? String(value.page_id) : null,
-            metaFormId: detail.form_id !== undefined && detail.form_id !== null ? String(detail.form_id)
-                : (value.form_id !== undefined ? String(value.form_id) : null),
-            metaAdId: detail.ad_id !== undefined && detail.ad_id !== null ? String(detail.ad_id)
-                : (value.ad_id !== undefined ? String(value.ad_id) : null),
-            metaAdsetId: detail.adset_id !== undefined && detail.adset_id !== null ? String(detail.adset_id) : null,
-            metaCampaignId: campaignId,
-            metaCampaignName: campaignName,
-            metaPlatform,
-            metaCreatedAt: toDate(value.created_time ?? detail.created_time),
-        };
-
-        // Phone-match attach mirrors the public-enquiry convention: meta
-        // attribution travels with the latest touch, while name, contact
-        // details, message, status and ownership are never overwritten.
-        const phoneMatch = await prisma.lead.findFirst({ where: { organizationId, phone: mapped.phone } });
-        if (phoneMatch) {
-            const updated = await prisma.lead.update({
-                where: { id: phoneMatch.id },
-                data: {
-                    ...attributes,
-                    campaign: campaignName || phoneMatch.campaign,
-                    // Reopen stale interest; an active pipeline stage is never touched.
-                    ...(phoneMatch.status === 'LOST' ? { status: 'NEW' } : {}),
-                },
-            });
-            await prisma.leadActivity.create({
-                data: {
-                    organizationId,
-                    leadId: updated.id,
-                    type: 'NOTE',
-                    description: 'Meta Lead Ad synced to existing lead (matched by phone)',
-                    metadata: { metaLeadId: leadgenId, metaFormId: attributes.metaFormId },
-                },
-            });
-            await audit(organizationId, null, AUDIT_ACTIONS.META_LEAD_SYNC, 'Lead', updated.id, {
-                metaLeadId: leadgenId,
-                deduped: 'phone-match',
-            });
-            return { ok: true, duplicate: true, leadId: updated.id };
-        }
-
-        try {
-            const created = await prisma.lead.create({
-                data: {
-                    organizationId,
-                    name: mapped.name || 'Meta Lead',
-                    phone: mapped.phone,
-                    email: mapped.email || null,
-                    source: 'Meta',
-                    campaign: campaignName,
-                    message: mapped.customs.length > 0 ? mapped.customs.join('\n') : null,
-                    status: 'NEW',
-                    ...attributes,
-                },
-            });
-            await prisma.leadActivity.create({
-                data: {
-                    organizationId,
-                    leadId: created.id,
-                    type: 'NOTE',
-                    description: 'Meta Lead Ad synced from Facebook/Instagram lead form',
-                    metadata: { metaLeadId: leadgenId, metaFormId: attributes.metaFormId, metaCampaignId: campaignId },
-                },
-            });
-            await audit(organizationId, null, AUDIT_ACTIONS.META_LEAD_SYNC, 'Lead', created.id, { metaLeadId: leadgenId });
-            // New-lead WhatsApp notifications (outbox): fire-and-forget, never
-            // breaks the sync. Only genuinely created leads notify.
-            void WhatsappNotifyService.enqueueForLead(organizationId, created.id).catch(() => {});
-            return { ok: true, leadId: created.id };
-        } catch (err) {
-            // Concurrent duplicate delivery: unique (organizationId, metaLeadId).
-            if (err && err.code === 'P2002') {
-                const winner = await prisma.lead.findFirst({ where: { organizationId, metaLeadId: leadgenId } });
-                return { ok: true, duplicate: true, leadId: winner ? winner.id : null };
-            }
-            throw err;
-        }
+        return MetaLeadImportService.importLead({
+            organizationId: resolvedOrgId,
+            eff,
+            value,
+            source: 'WEBHOOK',
+            resolveToken: () => webhookToken(eff),
+        });
     }
 
-    static async getInsights({ level = 'campaign', adAccountId, campaignIds, datePreset, since, until, limit = 50, after } = {}) {
-        const { adAccountId: defaultAccount } = requiredConfig();
-        const accountId = String(adAccountId || defaultAccount).replace(/^act_/, '');
-        if (!accountId) {
-            throw new AppError('Meta integration is not configured. Set META_AD_ACCOUNT_ID.', 409, 'META_NOT_CONFIGURED');
-        }
+    static async getInsights({ organizationId, level = 'campaign', adAccountId, campaignIds, datePreset, since, until, limit = 50, after } = {}) {
+        const eff = await effectiveConfig(organizationId);
+        const token = requireToken(eff);
+        const accountId = requireAdAccount(eff, adAccountId);
         const params = {
             fields: 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,actions,date_start,date_stop',
             level,
@@ -376,7 +460,7 @@ class MetaAdsService {
         if (ids.length > 0) {
             params.filtering = JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: ids }]);
         }
-        const data = await graphRequest({ path: `act_${accountId}/insights`, params });
+        const data = await graphRequest({ path: `act_${accountId}/insights`, params, token, version: eff.graphVersion });
         const items = Array.isArray(data.data) ? data.data.map((row) => {
             const spend = numOrNull(row.spend);
             const leads = sumAction(row.actions, 'leadgen');
@@ -398,6 +482,127 @@ class MetaAdsService {
             };
         }) : [];
         return { adAccountId: accountId, level, items, paging: data.paging || null };
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1 asset discovery (read-only). Every call uses the effective
+    // token/version. Results are never fabricated: fields Meta omits come
+    // back as null and inaccessible accounts are reported as unavailable
+    // with their error code.
+    // ------------------------------------------------------------------
+
+    static async listPages({ organizationId, limit = 100, after } = {}) {
+        const eff = await effectiveConfig(organizationId);
+        const token = requireToken(eff);
+        const data = await graphRequest({
+            path: 'me/accounts',
+            params: {
+                fields: 'id,name,category,instagram_business_account',
+                limit: Math.min(Math.max(parseInt(limit, 10) || 100, 1), 100),
+                ...(after ? { after } : {}),
+            },
+            token,
+            version: eff.graphVersion,
+        });
+        const items = Array.isArray(data.data) ? data.data.map((p) => ({
+            id: p && p.id !== undefined ? String(p.id) : null,
+            name: (p && p.name) || null,
+            category: (p && p.category) || null,
+            instagramBusinessAccountId: p && p.instagram_business_account && p.instagram_business_account.id
+                ? String(p.instagram_business_account.id)
+                : null,
+        })).filter((p) => p.id !== null) : [];
+        return { items, paging: data.paging || null };
+    }
+
+    // Instagram professional accounts connected to the accessible Pages.
+    // Pages without a connected Instagram are reported with
+    // available:false / reason NOT_CONNECTED; per-account API failures mark
+    // only that account unavailable (never the whole discovery).
+    static async listInstagramAccounts({ organizationId, limit = 100 } = {}) {
+        const eff = await effectiveConfig(organizationId);
+        const token = requireToken(eff);
+        const pages = await graphRequest({
+            path: 'me/accounts',
+            params: {
+                fields: 'id,name,instagram_business_account',
+                limit: Math.min(Math.max(parseInt(limit, 10) || 100, 1), 100),
+            },
+            token,
+            version: eff.graphVersion,
+        });
+        const items = [];
+        const errors = [];
+        const pageRows = Array.isArray(pages.data) ? pages.data : [];
+        for (const page of pageRows) {
+            if (!page || !page.id) continue;
+            const pageId = String(page.id);
+            const pageName = page.name || null;
+            const igId = page.instagram_business_account && page.instagram_business_account.id
+                ? String(page.instagram_business_account.id) : null;
+            if (!igId) {
+                items.push({ pageId, pageName, instagramAccountId: null, username: null, available: false, reason: 'NOT_CONNECTED' });
+                continue;
+            }
+            try {
+                const detail = await graphRequest({
+                    path: igId,
+                    params: { fields: 'id,username,name' },
+                    token,
+                    version: eff.graphVersion,
+                });
+                items.push({
+                    pageId,
+                    pageName,
+                    instagramAccountId: detail && detail.id ? String(detail.id) : igId,
+                    username: (detail && detail.username) || null,
+                    name: (detail && detail.name) || null,
+                    available: true,
+                    reason: null,
+                });
+            } catch (err) {
+                items.push({
+                    pageId,
+                    pageName,
+                    instagramAccountId: igId,
+                    username: null,
+                    name: null,
+                    available: false,
+                    reason: (err && err.code) || 'API_ERROR',
+                });
+                errors.push({ pageId, instagramAccountId: igId, code: (err && err.code) || 'API_ERROR' });
+            }
+        }
+        return { items, errors, paging: pages.paging || null };
+    }
+
+    // Refresh discovery from Meta and record the sync timestamp. Updates an
+    // existing settings row only — sync never creates one, so legacy env
+    // mode is never silently flipped to db mode (syncedAt stays null there
+    // and is reported honestly as such).
+    static async syncAssets({ organizationId, userId } = {}) {
+        const orgId = organizationId || await MetaAdsSettingsService.resolvePrimaryOrganizationId();
+        const eff = await MetaAdsSettingsService.getEffectiveConfig(orgId);
+        const [adAccounts, pages, instagramAccounts] = await Promise.all([
+            MetaAdsService.listAdAccounts({ organizationId: orgId, limit: 100 }),
+            MetaAdsService.listPages({ organizationId: orgId, limit: 100 }),
+            MetaAdsService.listInstagramAccounts({ organizationId: orgId, limit: 100 }),
+        ]);
+        const syncedAt = await MetaAdsSettingsService.markSynced(orgId);
+        if (orgId) {
+            await audit(orgId, userId || null, AUDIT_ACTIONS.META_ASSETS_SYNCED, 'MetaAdsSettings', orgId, {
+                adAccounts: adAccounts.items.length,
+                pages: pages.items.length,
+                instagramAccounts: instagramAccounts.items.length,
+            });
+        }
+        return {
+            configSource: eff.source,
+            adAccounts: adAccounts.items.length,
+            pages: pages.items.length,
+            instagramAccounts: instagramAccounts.items.length,
+            syncedAt,
+        };
     }
 }
 

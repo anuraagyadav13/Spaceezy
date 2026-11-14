@@ -35,6 +35,10 @@ model Organization {
   whatsappMessages      WhatsAppMessage[]
   whatsappTemplates     WhatsAppTemplate[]
   whatsappSettings      WhatsappSettings?
+  metaAdsSettings       MetaAdsSettings?
+  metaLeadFormConfigs   MetaLeadFormConfig[]
+  metaLeadSyncRuns      MetaLeadSyncRun[]
+  metaLeadSyncEvents    MetaLeadSyncEvent[]
   whatsappNotifications WhatsappNotification[]
   notifications         Notification[]
   auditLogs   AuditLog[]
@@ -288,6 +292,13 @@ model Lead {
   metaPlatform     String?
   metaCreatedAt    DateTime? // submission time reported by Meta (UTC)
 
+  // Phase 2: structured snapshot of EVERY Meta question/answer for this lead
+  // (original question keys/labels and submitted values, plus which CRM field
+  // each answer was mapped to). Additive JSON column: unmapped answers are
+  // preserved here instead of being dumped into `message`, and mapped answers
+  // keep their original wording next to the normalized column values.
+  metaAnswers Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -309,6 +320,13 @@ model Lead {
   @@index([organizationId, assignedToId])
   @@index([organizationId, projectId])
   @@index([organizationId, configurationId])
+  // Meta attribution reporting joins (Step 0 hardening): organization-scoped
+  // lookups by ad/campaign/form/page. The dedupe constraint below stays
+  // exactly as-is — nothing here weakens it.
+  @@index([organizationId, metaAdId])
+  @@index([organizationId, metaCampaignId])
+  @@index([organizationId, metaFormId])
+  @@index([organizationId, metaPageId])
   @@unique([organizationId, metaLeadId])
 }
 
@@ -996,6 +1014,144 @@ model WhatsappSettings {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+}
+
+// Company-level Meta (Marketing API) Ads settings — SpaceEzy is a
+// single-company CRM, so exactly one row exists for the primary
+// organization (organizationId @unique mirrors WhatsappSettings above).
+// Secrets are AES-256-GCM envelopes (never plaintext); see
+// src/utils/whatsappSecrets.js with { keyEnv: 'META_ADS_SETTINGS_KEY' }.
+// Non-secret selection/config fields are stored plainly.
+//
+// Effective-configuration rule (same as WhatsappSettings): row absent →
+// legacy META_* environment behavior; row present → the row is authoritative
+// (env is NOT consulted afterwards, and a decryption failure fails closed
+// instead of falling back to an environment token).
+model MetaAdsSettings {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Encrypted credentials (only the secrets; raw tokens never appear
+  // in the JSON selection fields below). META_APP_ID is public OAuth
+  // metadata (it appears in authorize URLs), so it is stored plain —
+  // exactly like WhatsappSettings.appId.
+  accessTokenEnc       String?
+  appSecretEnc         String?
+  webhookVerifyTokenEnc String?
+  metaAppId            String?
+
+  // Non-secret single-company asset configuration. JSON arrays of
+  // digit-only IDs, validated server-side: one or more selected ad
+  // accounts, multiple Facebook Pages, multiple Instagram accounts.
+  selectedAdAccountIds Json @default("[]")
+  pageIds              Json @default("[]")
+  instagramAccountIds  Json @default("[]")
+
+  graphVersion   String    @default("v22.0")
+  tokenExpiresAt DateTime? // null = unknown/non-expiring (never assumed)
+  syncedAt       DateTime? // last successful asset discovery from Meta
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+// Phase 2: per-form Instant Form sync configuration. Additive model — no Meta
+// credentials here (those live only in MetaAdsSettings); rows are created by
+// explicit admin action (enable sync / save mapping) and hold the saved
+// question→CRM field mapping for that form.
+//
+// Uniqueness (organizationId, formId) makes duplicate configuration records
+// impossible by construction. A missing row means "never configured": the
+// form still ingests leads by default (Phase 1 behavior) until an admin
+// disables it explicitly — see metaLeadImportService.
+model MetaLeadFormConfig {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  formId    String
+  pageId    String
+  formName  String?
+  isEnabled Boolean @default(true)
+
+  // Saved mapping: [{ questionKey, questionLabel, crmField }] where crmField
+  // is one of the standard CRM fields or null for an intentionally unmapped
+  // question. Original Meta labels are stored alongside the machine key.
+  fieldMapping Json @default("[]")
+
+  lastSyncedAt DateTime? // actual last successful lead import for this form
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([organizationId, formId])
+  @@index([organizationId, pageId])
+}
+
+// Phase 2: one row per sync run (webhook delivery entry, backfill or retry)
+// with accurate counts — this is what the Sync History tab renders. Only Meta
+// identifiers, counts, statuses and error codes: no raw lead PII, no
+// credentials.
+model MetaLeadSyncRun {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  formId  String
+  pageId  String
+  source  String // WEBHOOK | BACKFILL | RETRY
+  status  String // RUNNING | COMPLETED | PARTIAL | FAILED
+  errorCode String? // safe code only when the whole run failed
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  fetchedCount   Int @default(0)
+  importedCount  Int @default(0)
+  duplicateCount Int @default(0)
+  skippedCount   Int @default(0)
+  failedCount    Int @default(0)
+
+  events MetaLeadSyncEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, startedAt])
+  @@index([organizationId, formId])
+}
+
+// Phase 2 (2I): per-lead sync event log shared by webhook and backfill.
+// idempotencyKey is the Meta lead ID, unique per organization — repeated
+// webhook deliveries and repeated backfills update ONE row (attemptCount)
+// instead of creating duplicates. Deliberately free of raw PII: Meta
+// identifiers, status, attempt count and a safe error code only.
+model MetaLeadSyncEvent {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  idempotencyKey String // Meta lead ID (digits)
+  metaLeadId     String?
+  pageId         String?
+  formId         String?
+  leadId         String? // CRM lead when imported (no lead data beyond the id)
+  source         String // WEBHOOK | BACKFILL | RETRY (latest attempt)
+  status         String // IMPORTED | DUPLICATE | IGNORED | FAILED
+  attemptCount   Int     @default(1)
+  errorCode      String? // FORM_DISABLED | META_RATE_LIMITED | ... (safe code)
+  runId          String?
+  run            MetaLeadSyncRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  createdAt    DateTime  @default(now())
+  processedAt  DateTime? // terminal status reached
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status])
+  @@index([organizationId, formId])
+  @@index([organizationId, createdAt])
 }
 
 // Outbox record for exactly-once new-lead WhatsApp notifications.

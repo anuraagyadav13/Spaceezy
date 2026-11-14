@@ -9,6 +9,7 @@ import {
     BarChart3, Megaphone, ChevronDown, ChevronRight, Settings
 } from "lucide-react";
 import { useAuth } from "../../features/auth/hooks/useAuth";
+import { usePermissions } from "../../features/auth/hooks/usePermissions";
 
 const NAVIGATION_GROUPS = [
     {
@@ -93,8 +94,17 @@ const NAVIGATION_GROUPS = [
         items: [
             { label: "Lead Sources", href: "/dashboard/marketing/sources" },
             { label: "Campaigns", href: "/dashboard/marketing/campaigns" },
-            { label: "Meta Ads", href: "/dashboard/marketing/meta-ads" },
-            { label: "Website Enquiries", href: "/dashboard/marketing/website" }
+            { label: "Website Enquiries", href: "/dashboard/marketing/website" },
+            // --- Meta Ads (visible with marketing:view) ---
+            { label: "Ads Overview", href: "/dashboard/marketing/meta-ads", permission: "marketing:view" },
+            { label: "Ad Campaigns", href: "/dashboard/marketing/meta-ads/campaigns", permission: "marketing:view" },
+            { label: "Creative Studio", href: "/dashboard/marketing/meta-ads/creatives", permission: "marketing:view" },
+            { label: "Advertisements", href: "/dashboard/marketing/meta-ads/ads", permission: "marketing:view" },
+            { label: "Audiences", href: "/dashboard/marketing/meta-ads/audiences", permission: "marketing:view" },
+            { label: "Lead Forms & Sync", href: "/dashboard/marketing/meta-ads/lead-sync", permission: "marketing:view" },
+            { label: "Performance", href: "/dashboard/marketing/meta-ads/analytics", permission: "marketing:view" },
+            // --- Technical configuration: administrators only ---
+            { label: "Meta Connection", href: "/dashboard/marketing/meta-ads/settings", permission: "marketing:view", adminOnly: true }
         ]
     },
     {
@@ -111,17 +121,32 @@ const NAVIGATION_GROUPS = [
 ];
 
 function NavGroup({ group, pathname, setIsOpen, isCollapsed }) {
-    const isChildActive = (group.items || []).some(item => 
+    const { hasPermission, hasRole } = usePermissions();
+
+    // Client/admin separation: items marked with `permission` only appear when
+    // the user holds it; `adminOnly` items are hidden from non-administrators
+    // (they still exist — admins keep full access).
+    const visibleItems = (group.items || []).filter((item) => {
+        if (item.permission && !hasPermission(item.permission)) return false;
+        if (item.adminOnly && !hasRole(["SUPER_ADMIN", "ADMIN"])) return false;
+        return true;
+    });
+
+    const isChildActive = visibleItems.some(item => 
         item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href)
     );
     const [userToggled, setUserToggled] = useState(null);
     const isExpanded = userToggled !== null ? userToggled : (isChildActive || group.title === "DASHBOARD");
 
+    if (visibleItems.length === 0) {
+        return null;
+    }
+
     if (isCollapsed) {
         return (
             <div className="mb-2 flex justify-center">
                 <Link
-                    href={group.items[0]?.href || "/dashboard"}
+                    href={visibleItems[0]?.href || "/dashboard"}
                     title={group.title}
                     className={`p-2.5 rounded-xl transition-all ${
                         isChildActive
@@ -156,7 +181,7 @@ function NavGroup({ group, pathname, setIsOpen, isCollapsed }) {
             
             {isExpanded && (
                 <div className="mt-1 ml-4 pl-3 flex flex-col gap-1 border-l-2 border-purple-100">
-                    {group.items.map(item => {
+                    {visibleItems.map(item => {
                         const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname === item.href;
                         return (
                             <Link 

@@ -7,6 +7,8 @@ jest.mock('../src/db/prisma', () => ({
   session: { findUnique: jest.fn() },
   user: { findFirst: jest.fn() },
   organization: { findFirst: jest.fn() },
+  metaAdsSettings: { findUnique: jest.fn(), update: jest.fn(), upsert: jest.fn() },
+  auditLog: { create: jest.fn() },
   $transaction: jest.fn(),
 }));
 
@@ -143,12 +145,36 @@ describe('Phase 11: Meta RBAC and pending write ops', () => {
     expect(res.status).toBe(200);
   });
 
-  test('campaign write operations do not exist (404, never simulated)', async () => {
+  // Phase 3 replaced the read-only contract: POST /campaigns and
+  // PATCH /campaigns/:id now exist but are zod-validated and RBAC-gated
+  // before any Graph call, creates are schema-forced to PAUSED, and
+  // activation requires confirm:true. DELETE on campaigns stays absent by
+  // design (campaigns are paused/activated, never deleted from here).
+  test('campaign writes are validated Phase 3 routes, never simulated', async () => {
     admin();
-    for (const [method, path] of [['post', '/api/v1/meta-ads/campaigns'], ['patch', '/api/v1/meta-ads/campaigns/123'], ['delete', '/api/v1/meta-ads/campaigns/123']]) {
-      const res = await request(app)[method](path).set('Cookie', 'spaceezy_session=admin-token').send({});
-      expect(res.status).toBe(404);
-    }
+    const spy = jest.spyOn(global, 'fetch');
+
+    const create = await request(app)
+      .post('/api/v1/meta-ads/campaigns')
+      .set('Cookie', 'spaceezy_session=admin-token')
+      .send({});
+    expect(create.status).toBe(400);
+    expect(create.body.code).toBe('VALIDATION_ERROR');
+
+    const activate = await request(app)
+      .post('/api/v1/meta-ads/campaigns/123/status')
+      .set('Cookie', 'spaceezy_session=admin-token')
+      .send({ status: 'ACTIVE' });
+    expect(activate.status).toBe(400);
+    expect(activate.body.code).toBe('VALIDATION_ERROR');
+
+    const del = await request(app)
+      .delete('/api/v1/meta-ads/campaigns/123')
+      .set('Cookie', 'spaceezy_session=admin-token');
+    expect(del.status).toBe(404);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 });
 
