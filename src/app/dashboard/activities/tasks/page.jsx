@@ -175,7 +175,7 @@ export default function TasksPage() {
                                     <Icon size={16} /> {section.title}
                                     <span className="text-gray-400 font-medium">({section.tasks.length})</span>
                                 </h3>
-                                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-lg transition-shadow">
                                     <div className="divide-y divide-gray-100">
                                         {section.tasks.length === 0 ? (
                                             <p className="px-4 py-5 text-sm text-gray-400">Nothing here.</p>

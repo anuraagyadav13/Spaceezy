@@ -33,15 +33,13 @@ const TABS = [
     { id: "sales", label: "Sales & Productivity", icon: TrendingUp },
     { id: "site-visits", label: "Site Visits", icon: Calendar },
     { id: "bookings", label: "Bookings & Revenue", icon: DollarSign },
-    { id: "inventory", label: "Inventory Occupancy", icon: Home },
     { id: "custom", label: "Custom Builder", icon: Layers }
 ];
 
 const REPORT_TYPES = [
     { id: "leads", name: "Leads & Acquisition", desc: "Analyze lead distribution by source, stage, and channel." },
     { id: "site-visits", name: "Site Visit Outcomes", desc: "Track scheduled vs completed site visits by project." },
-    { id: "sales", name: "Sales & Conversions", desc: "Evaluate deal velocity and booking conversion." },
-    { id: "inventory", name: "Inventory Occupancy", desc: "Analyze available vs reserved vs booked units." }
+    { id: "sales", name: "Sales & Conversions", desc: "Evaluate deal velocity and booking conversion." }
 ];
 
 const DIMENSIONS = ["Lead Source", "Lead Stage", "Sales Employee", "Project Name", "Month / Date"];
@@ -389,7 +387,7 @@ function ReportsPageContent() {
                         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Reports &amp; Analytics</h1>
                     </div>
                     <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                        Unified business intelligence hub: sales performance, lead acquisition, bookings revenue, site visits, and inventory.
+                        Unified business intelligence hub: sales performance, lead acquisition, bookings revenue, and site visits.
                     </p>
                 </div>
 
@@ -975,81 +973,6 @@ function ReportsPageContent() {
                                                 {bookings.length === 0 && (
                                                     <tr>
                                                         <td colSpan={5} className="p-6 text-center text-gray-400">No bookings available</td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ================= INVENTORY TAB ================= */}
-                        {activeTab === "inventory" && (
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Total Properties</p>
-                                        <p className="text-2xl font-black text-gray-900 mt-1">{properties.length}</p>
-                                    </div>
-                                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Total Portfolio Units</p>
-                                        <p className="text-2xl font-black text-blue-600 mt-1">{totalUnits}</p>
-                                    </div>
-                                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Occupied Units</p>
-                                        <p className="text-2xl font-black text-emerald-600 mt-1">{occupiedUnits}</p>
-                                    </div>
-                                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Portfolio Occupancy</p>
-                                        <p className="text-2xl font-black text-purple-700 mt-1">{occupancyRate}%</p>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white rounded-3xl border border-gray-200 shadow-xs overflow-hidden">
-                                    <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-                                        <div>
-                                            <h3 className="font-bold text-sm text-gray-900">Project Occupancy Breakdown</h3>
-                                            <p className="text-xs text-gray-500">Live units allocation across projects</p>
-                                        </div>
-                                        <Link href="/dashboard/inventory/grid" className="text-xs font-bold text-purple-600 hover:underline">
-                                            Inventory Grid
-                                        </Link>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-xs border-collapse">
-                                            <thead>
-                                                <tr className="bg-gray-50/70 border-b border-gray-100 text-gray-500 font-bold">
-                                                    <th className="p-3.5">Property / Project</th>
-                                                    <th className="p-3.5">Location</th>
-                                                    <th className="p-3.5">Total Units</th>
-                                                    <th className="p-3.5">Occupied</th>
-                                                    <th className="p-3.5">Occupancy Bar</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100 font-medium">
-                                                {properties.map((p) => {
-                                                    const rate = p.totalUnits ? Math.round(((p.occupiedUnits || 0) / p.totalUnits) * 100) : 0;
-                                                    return (
-                                                        <tr key={p.id} className="hover:bg-gray-50">
-                                                            <td className="p-3.5 font-bold text-gray-900">{p.title || p.name}</td>
-                                                            <td className="p-3.5 text-gray-500">{p.location || "Wave City"}</td>
-                                                            <td className="p-3.5 font-bold">{p.totalUnits || 0}</td>
-                                                            <td className="p-3.5 text-emerald-600 font-bold">{p.occupiedUnits || 0}</td>
-                                                            <td className="p-3.5 w-48">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                                        <div className="h-full bg-purple-600 rounded-full" style={{ width: `${rate}%` }} />
-                                                                    </div>
-                                                                    <span className="text-[10px] font-bold text-gray-500">{rate}%</span>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                                {properties.length === 0 && (
-                                                    <tr>
-                                                        <td colSpan={5} className="p-6 text-center text-gray-400">No properties recorded</td>
                                                     </tr>
                                                 )}
                                             </tbody>

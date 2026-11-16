@@ -21,8 +21,8 @@ const getTasks = asyncHandler(async (req, res) => {
 
 const getTaskById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { organizationId, role } = req.auth;
-    const task = await TaskService.getTaskById(id, organizationId);
+    const { organizationId, role, userId } = req.auth;
+    const task = await TaskService.getTaskById(id, organizationId, role, userId);
 
     res.status(200).json({
         success: true,
@@ -32,8 +32,8 @@ const getTaskById = asyncHandler(async (req, res) => {
 });
 
 const createTask = asyncHandler(async (req, res) => {
-    const { organizationId, userId } = req.auth;
-    const task = await TaskService.createTask(req.body, organizationId, userId);
+    const { organizationId, userId, role } = req.auth;
+    const task = await TaskService.createTask(req.body, organizationId, userId, role);
 
     res.status(201).json({
         success: true,

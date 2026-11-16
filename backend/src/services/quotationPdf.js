@@ -21,8 +21,8 @@
 // - Money rows are REAL values only (unit price + project charge sheet +
 //   the employee's own edits). Unknown rows simply do not render and an
 //   unknown total prints "On request".
-// - Per the CRM rule, the PDF never prints the unit's house number —
-//   configuration / tower / floor identify the apartment instead.
+// - Per the CRM rule, the PDF never prints the unit's house number or floor —
+//   configuration and tower identify the apartment instead.
 // - Fonts are PDF standard faces (Helvetica family) — no font files to ship.
 
 const crypto = require('crypto');
@@ -219,7 +219,6 @@ const PROPERTY_SELECT = {
     configuration: true,
     bhk: true,
     tower: true,
-    floor: true,
     area: true,
     areaSaleable: true,
     price: true
@@ -370,8 +369,8 @@ function stampFooter(doc, page, total) {
 }
 
 // Two rows of label/value pairs — the commercial identity of the document in
-// one scan. House numbers are deliberately absent: the configuration, tower
-// and floor identify the apartment.
+// one scan. House numbers and floors are deliberately absent: configuration
+// and tower identify the apartment.
 function drawMetaGrid(doc, y, cells) {
     const colW = CONTENT_W / 2;
     for (let row = 0; row * 2 < cells.length; row += 1) {
@@ -741,9 +740,10 @@ async function generateQuotation({ projectId, propertyId, by, customer, organiza
                 },
                 { label: 'Expiry Date', value: fmtDate(expiry) },
                 {
-                    label: 'Unit Type / Floor',
-                    // House numbers stay inside the CRM: configuration + floor.
-                    value: property && property.floor != null ? `${config} · Floor ${property.floor}` : config
+                    label: 'Unit Type',
+                    // House numbers and floors stay inside the CRM; the
+                    // configuration identifies the apartment.
+                    value: config
                 },
                 { label: 'Sales Consultant', value: sender || 'Sales Desk' },
                 {

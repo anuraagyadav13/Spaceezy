@@ -6,6 +6,7 @@ import { useAuth } from "../../features/auth/hooks/useAuth";
 import { useNotifications } from "../../features/notifications/hooks/useNotifications";
 import { useMarkNotificationRead, useMarkAllNotificationsRead } from "../../features/notifications/hooks/useMarkNotificationsRead";
 import Image from "next/image";
+import ThemeToggle from "../shared/ThemeToggle";
 
 const timeAgo = (iso) => {
     if (!iso) return "";
@@ -49,8 +50,8 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
     };
 
     return (
-        <header className="h-16 bg-[#F8F9FD] flex items-center justify-between px-6 sm:px-8 shrink-0 sticky top-0 z-30">
-            <div className="flex items-center gap-3">
+        <header className="h-16 bg-[#F8F9FD] flex items-center justify-between gap-2 px-4 sm:px-8 shrink-0 sticky top-0 z-30">
+            <div className="flex items-center gap-2 sm:gap-3">
                 {/* Mobile open hamburger */}
                 <button
                     onClick={onOpenSidebar}
@@ -75,7 +76,7 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
                 </button>
             </div>
 
-            <div className="flex items-center gap-5 sm:gap-6">
+            <div className="flex items-center gap-2 sm:gap-5 lg:gap-6">
                 {/* Notification bell */}
                 <div className="relative" ref={menuRef}>
                     <button
@@ -135,8 +136,8 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
                 </div>
 
                 {/* User info */}
-                <div className="flex items-center gap-3">
-                    <div className="text-right">
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="hidden sm:block text-right">
                         <p className="text-sm font-bold text-gray-900 leading-tight">{user?.name || "Admin User"}</p>
                         <div className="flex items-center justify-end gap-1.5 mt-0.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -145,7 +146,7 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
                             </p>
                         </div>
                     </div>
-                    <div className="relative w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-purple-100 flex items-center justify-center">
+                    <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-purple-100 flex items-center justify-center">
                         <Image
                             src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces"}
                             alt="Profile"
@@ -154,6 +155,7 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
                             height={40}
                         />
                     </div>
+                    <ThemeToggle />
                 </div>
             </div>
         </header>

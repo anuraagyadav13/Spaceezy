@@ -45,7 +45,11 @@ const TEMPLATE_LIBRARY = [
         name: 'Site Visit Invitation',
         group: 'Schedule a Site Visit',
         description: 'Invite a lead to visit a project on a proposed slot.',
-        body: 'Hi {{customer_name}}, would you like to visit {{project_name}} on {{visit_date}} at {{visit_time}}? I will personally walk you through the site. Please confirm, or suggest a time that suits you. - {{salesperson_name}}',
+        // Approved Meta structure: no variable may start or end a template
+        // body, variables must be ascending and never adjacent. The literal
+        // "- Spaceezy Team" signature closes the message; the salesperson is
+        // named inside the sentence instead.
+        body: 'Hi {{customer_name}}, would you like to visit {{project_name}} on {{visit_date}} at {{visit_time}}? My name is {{salesperson_name}} and I will personally walk you through the site. Please confirm this slot, or reply with a time that suits you better. - Spaceezy Team',
         variables: ['customer_name', 'project_name', 'visit_date', 'visit_time', 'salesperson_name'],
         metaCategory: 'UTILITY'
     },
@@ -85,7 +89,7 @@ const TEMPLATE_LIBRARY = [
         description: 'Remind a lead of a scheduled site visit.',
         // {{project_name}}, never {{property_name}} — house numbers stay out
         // of WhatsApp text; {{site_address}} already carries where to go.
-        body: 'Hi {{customer_name}}, a friendly reminder of your site visit to {{project_name}} on {{visit_date}} at {{visit_time}}. Site address: {{site_address}}. Reply here if you need to reschedule. - {{salesperson_name}}',
+        body: 'Hi {{customer_name}}, a friendly reminder of your site visit to {{project_name}} on {{visit_date}} at {{visit_time}}. Site address: {{site_address}}. Your host is {{salesperson_name}}. Reply here if you need to reschedule. - Spaceezy Team',
         variables: ['customer_name', 'project_name', 'visit_date', 'visit_time', 'site_address', 'salesperson_name'],
         metaCategory: 'UTILITY'
     },
@@ -93,7 +97,7 @@ const TEMPLATE_LIBRARY = [
         name: 'Booking Next Steps',
         group: 'Booking & Documentation',
         description: 'Share documentation steps after a booking decision.',
-        body: 'Hi {{customer_name}}, thank you for choosing {{project_name}}. To proceed, please complete the documentation here: {{document_link}}. For any help, contact {{booking_contact}}. - {{salesperson_name}}',
+        body: 'Hi {{customer_name}}, thank you for choosing {{project_name}}. To proceed, please complete the documentation here: {{document_link}}. For any help, {{booking_contact}} will assist you, and {{salesperson_name}} is also available on this chat. - Spaceezy Team',
         variables: ['customer_name', 'project_name', 'document_link', 'booking_contact', 'salesperson_name'],
         metaCategory: 'UTILITY'
     }

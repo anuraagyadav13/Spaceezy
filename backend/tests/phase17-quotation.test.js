@@ -239,9 +239,9 @@ describe('Phase 17: quotation PDF render', () => {
     // House numbers never appear anywhere in the document.
     expect(text).not.toContain('A-101');
     expect(text).not.toContain('A-102');
-    // The apartment is identified by tower / floor / area instead.
+    // Nor does the floor: the apartment is identified by tower + configuration.
+    expect(text).not.toContain('Floor 3');
     expect(text).toContain('Tower A');
-    expect(text).toContain('Floor 3');
     expect(text).toContain('950 Sq. Ft.');
   });
 

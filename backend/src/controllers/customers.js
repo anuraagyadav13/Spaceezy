@@ -16,8 +16,8 @@ const getCustomers = asyncHandler(async (req, res) => {
 
 const getCustomerById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { organizationId, role } = req.auth;
-    const customer = await CustomerService.getCustomerById(id, organizationId);
+    const { organizationId, role, userId } = req.auth;
+    const customer = await CustomerService.getCustomerById(id, organizationId, role, userId);
 
     res.status(200).json({
         success: true,

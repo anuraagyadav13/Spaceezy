@@ -1,1 +1,688 @@
 @import "tailwindcss";
+
+/* Class-based dark mode. The class is only ever set on CRM routes (see
+   providers/ThemeProvider.jsx), so the public website is always light. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+    :root {
+        color-scheme: light;
+    }
+
+    html.dark {
+        color-scheme: dark;
+        background-color: #171b22;
+    }
+
+    html.dark body {
+        background-color: #171b22;
+        color: #f1f4fa;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Accent tints.
+   Soft brand tints (`bg-emerald-50`, `border-purple-100`, …) are near-white by
+   default and turn into glaring blocks on a dark canvas. Remapping the theme
+   variables keeps every tinted chip/border/gradient readable while leaving the
+   saturated brand shades (500/600 on primary buttons) untouched.
+   --------------------------------------------------------------------------- */
+.dark {
+    --color-purple-50: color-mix(in srgb, var(--color-purple-400) 15%, #262d38);
+    --color-purple-100: color-mix(in srgb, var(--color-purple-400) 28%, #262d38);
+    --color-purple-200: color-mix(in srgb, var(--color-purple-400) 40%, #262d38);
+    --color-violet-50: color-mix(in srgb, var(--color-violet-400) 15%, #262d38);
+    --color-violet-100: color-mix(in srgb, var(--color-violet-400) 28%, #262d38);
+    --color-violet-200: color-mix(in srgb, var(--color-violet-400) 40%, #262d38);
+    --color-indigo-50: color-mix(in srgb, var(--color-indigo-400) 15%, #262d38);
+    --color-indigo-100: color-mix(in srgb, var(--color-indigo-400) 28%, #262d38);
+    --color-indigo-200: color-mix(in srgb, var(--color-indigo-400) 40%, #262d38);
+    --color-blue-50: color-mix(in srgb, var(--color-blue-400) 15%, #262d38);
+    --color-blue-100: color-mix(in srgb, var(--color-blue-400) 30%, #262d38);
+    --color-blue-200: color-mix(in srgb, var(--color-blue-400) 42%, #262d38);
+    --color-sky-50: color-mix(in srgb, var(--color-sky-400) 15%, #262d38);
+    --color-sky-100: color-mix(in srgb, var(--color-sky-400) 30%, #262d38);
+    --color-sky-200: color-mix(in srgb, var(--color-sky-400) 42%, #262d38);
+    --color-cyan-50: color-mix(in srgb, var(--color-cyan-400) 15%, #262d38);
+    --color-cyan-100: color-mix(in srgb, var(--color-cyan-400) 30%, #262d38);
+    --color-cyan-200: color-mix(in srgb, var(--color-cyan-400) 42%, #262d38);
+    --color-teal-50: color-mix(in srgb, var(--color-teal-400) 15%, #262d38);
+    --color-teal-100: color-mix(in srgb, var(--color-teal-400) 30%, #262d38);
+    --color-teal-200: color-mix(in srgb, var(--color-teal-400) 42%, #262d38);
+    --color-emerald-50: color-mix(in srgb, var(--color-emerald-400) 15%, #262d38);
+    --color-emerald-100: color-mix(in srgb, var(--color-emerald-400) 30%, #262d38);
+    --color-emerald-200: color-mix(in srgb, var(--color-emerald-400) 42%, #262d38);
+    --color-green-50: color-mix(in srgb, var(--color-green-400) 15%, #262d38);
+    --color-green-100: color-mix(in srgb, var(--color-green-400) 30%, #262d38);
+    --color-green-200: color-mix(in srgb, var(--color-green-400) 42%, #262d38);
+    --color-lime-50: color-mix(in srgb, var(--color-lime-400) 15%, #262d38);
+    --color-lime-100: color-mix(in srgb, var(--color-lime-400) 30%, #262d38);
+    --color-lime-200: color-mix(in srgb, var(--color-lime-400) 42%, #262d38);
+    --color-yellow-50: color-mix(in srgb, var(--color-yellow-400) 15%, #262d38);
+    --color-yellow-100: color-mix(in srgb, var(--color-yellow-400) 30%, #262d38);
+    --color-yellow-200: color-mix(in srgb, var(--color-yellow-400) 42%, #262d38);
+    --color-amber-50: color-mix(in srgb, var(--color-amber-400) 15%, #262d38);
+    --color-amber-100: color-mix(in srgb, var(--color-amber-400) 30%, #262d38);
+    --color-amber-200: color-mix(in srgb, var(--color-amber-400) 42%, #262d38);
+    --color-orange-50: color-mix(in srgb, var(--color-orange-400) 15%, #262d38);
+    --color-orange-100: color-mix(in srgb, var(--color-orange-400) 30%, #262d38);
+    --color-orange-200: color-mix(in srgb, var(--color-orange-400) 42%, #262d38);
+    --color-rose-50: color-mix(in srgb, var(--color-rose-400) 15%, #262d38);
+    --color-rose-100: color-mix(in srgb, var(--color-rose-400) 30%, #262d38);
+    --color-rose-200: color-mix(in srgb, var(--color-rose-400) 42%, #262d38);
+    --color-red-50: color-mix(in srgb, var(--color-red-400) 15%, #262d38);
+    --color-red-100: color-mix(in srgb, var(--color-red-400) 30%, #262d38);
+    --color-red-200: color-mix(in srgb, var(--color-red-400) 42%, #262d38);
+    --color-pink-50: color-mix(in srgb, var(--color-pink-400) 15%, #262d38);
+    --color-pink-100: color-mix(in srgb, var(--color-pink-400) 30%, #262d38);
+    --color-pink-200: color-mix(in srgb, var(--color-pink-400) 42%, #262d38);
+    --color-fuchsia-50: color-mix(in srgb, var(--color-fuchsia-400) 15%, #262d38);
+    --color-fuchsia-100: color-mix(in srgb, var(--color-fuchsia-400) 30%, #262d38);
+    --color-fuchsia-200: color-mix(in srgb, var(--color-fuchsia-400) 42%, #262d38);
+}
+
+/* The CRM is built on the neutral utility palette, so the dark theme remaps
+   those same utilities instead of duplicating a `dark:` class on every node. */
+@layer utilities {
+    /* ------------------------------- surfaces ------------------------------- */
+    .dark .bg-white {
+        background-color: #262d38;
+    }
+    .dark .bg-white\/70 {
+        background-color: rgb(38 45 56 / 0.7);
+    }
+    .dark .bg-white\/80 {
+        background-color: rgb(38 45 56 / 0.8);
+    }
+    .dark .bg-white\/90 {
+        background-color: rgb(38 45 56 / 0.9);
+    }
+    .dark .bg-white\/95 {
+        background-color: rgb(38 45 56 / 0.95);
+    }
+    .dark .hover\:bg-white:hover,
+    .dark .focus\:bg-white:focus {
+        background-color: #303845;
+    }
+
+    .dark .bg-gray-50 {
+        background-color: #1c2129;
+    }
+    .dark .bg-gray-50\/40 {
+        background-color: rgb(28 33 41 / 0.4);
+    }
+    .dark .bg-gray-50\/50 {
+        background-color: rgb(28 33 41 / 0.5);
+    }
+    .dark .bg-gray-50\/60 {
+        background-color: rgb(28 33 41 / 0.6);
+    }
+    .dark .bg-gray-50\/70 {
+        background-color: rgb(28 33 41 / 0.7);
+    }
+    .dark .hover\:bg-gray-50:hover {
+        background-color: #272d37;
+    }
+    .dark .hover\:bg-gray-50\/60:hover {
+        background-color: rgb(39 45 55 / 0.6);
+    }
+    .dark .hover\:bg-gray-50\/80:hover {
+        background-color: rgb(39 45 55 / 0.8);
+    }
+
+    .dark .bg-gray-100 {
+        background-color: #2f3642;
+    }
+    .dark .bg-gray-100\/70 {
+        background-color: rgb(47 54 66 / 0.7);
+    }
+    .dark .hover\:bg-gray-100:hover {
+        background-color: #353c49;
+    }
+
+    .dark .bg-gray-200,
+    .dark .disabled\:bg-gray-200:disabled {
+        background-color: #3f4855;
+    }
+    .dark .hover\:bg-gray-200:hover {
+        background-color: #525d6d;
+    }
+    .dark .bg-gray-300 {
+        background-color: #566172;
+    }
+
+    /* slate is used by the communication/timeline widgets */
+    .dark .bg-slate-50 {
+        background-color: #1a1f27;
+    }
+    .dark .hover\:bg-slate-50:hover {
+        background-color: #2b3240;
+    }
+    .dark .bg-slate-100 {
+        background-color: #2f3642;
+    }
+
+    /* -------------------------------- text --------------------------------- */
+    .dark .text-gray-900 {
+        color: #f6f8fb;
+    }
+    .dark .text-gray-800 {
+        color: #eaeef4;
+    }
+    .dark .text-gray-700 {
+        color: #dbe1ea;
+    }
+    .dark .text-gray-600 {
+        color: #c3cbd8;
+    }
+    .dark .text-gray-500 {
+        color: #b2bccb;
+    }
+    .dark .text-gray-400 {
+        color: #a3aebf;
+    }
+    .dark .text-gray-300 {
+        color: #bac3d0;
+    }
+    .dark .hover\:text-gray-900:hover {
+        color: #ffffff;
+    }
+    .dark .hover\:text-gray-800:hover {
+        color: #ffffff;
+    }
+    .dark .hover\:text-gray-700:hover {
+        color: #f6f8fb;
+    }
+    .dark .hover\:text-gray-600:hover {
+        color: #d6dde7;
+    }
+    .dark .hover\:text-gray-500:hover {
+        color: #d2dae5;
+    }
+
+    .dark .text-slate-800 {
+        color: #f6f8fb;
+    }
+    .dark .text-slate-600 {
+        color: #c3cbd8;
+    }
+    .dark .text-slate-500 {
+        color: #b2bccb;
+    }
+    .dark .text-slate-400 {
+        color: #a3aebf;
+    }
+
+    .dark .text-\[\#0F172A\] {
+        color: #f6f8fb;
+    }
+
+    /* ------------------------------- borders -------------------------------- */
+    .dark .border-gray-50 {
+        border-color: #2f3641;
+    }
+    .dark .border-gray-100 {
+        border-color: #363e4a;
+    }
+    .dark .border-gray-200 {
+        border-color: #46505f;
+    }
+    .dark .border-gray-300 {
+        border-color: #576374;
+    }
+    .dark .border-gray-400 {
+        border-color: #687689;
+    }
+    .dark .border-gray-500 {
+        border-color: #7a899e;
+    }
+    .dark .hover\:border-gray-200:hover {
+        border-color: #576374;
+    }
+    .dark .hover\:border-gray-300:hover {
+        border-color: #687689;
+    }
+    .dark .divide-gray-50 > :not(:last-child) {
+        border-color: #2f3641;
+    }
+    .dark .divide-gray-100 > :not(:last-child) {
+        border-color: #363e4a;
+    }
+
+    .dark .border-slate-200 {
+        border-color: #46505f;
+    }
+    .dark .border-slate-300,
+    .dark .hover\:border-slate-300:hover {
+        border-color: #576374;
+    }
+
+    /* --------------- light surfaces written as arbitrary hex ---------------- */
+    .dark .bg-\[\#f7f5f9\],
+    .dark .bg-\[\#F8F9FD\],
+    .dark .bg-\[\#F1F5F9\],
+    .dark .bg-\[\#f5f3f6\],
+    .dark .bg-\[\#f5f3f7\],
+    .dark .bg-\[\#f4f0f9\] {
+        background-color: #1e232b;
+    }
+    .dark .bg-\[\#F1F5F9\]\/80 {
+        background-color: rgb(30 35 43 / 0.8);
+    }
+    .dark .bg-\[\#faf7ff\],
+    .dark .bg-\[\#f4f1f9\],
+    .dark .bg-\[\#f7f3ff\],
+    .dark .bg-\[\#f5f1ff\] {
+        background-color: #262b35;
+    }
+    .dark .bg-\[\#f5f0ff\],
+    .dark .bg-\[\#f3edff\] {
+        background-color: #2a303a;
+    }
+    .dark .bg-\[\#efe9ff\] {
+        background-color: #2e343f;
+    }
+    .dark .bg-\[\#ece5ff\] {
+        background-color: #39404f;
+    }
+    .dark .bg-\[\#cabef7\] {
+        background-color: #55617a;
+    }
+    .dark .bg-\[\#e7e2ee\] {
+        background-color: #2c323d;
+    }
+    .dark .bg-\[\#efe7dd\] {
+        background-color: #171b22;
+    }
+    .dark .bg-\[\#d9fdd3\] {
+        background-color: #175934;
+    }
+
+    .dark .border-\[\#F8F9FD\] {
+        border-color: #363e4a;
+    }
+    .dark .border-\[\#E2E8F0\] {
+        border-color: #46505f;
+    }
+    .dark .border-\[\#d9d2e3\] {
+        border-color: #343b47;
+    }
+    .dark .border-\[\#e7e0ee\],
+    .dark .border-\[\#e8e1f0\] {
+        border-color: #363d49;
+    }
+    .dark .border-\[\#ebe2f5\] {
+        border-color: #46505f;
+    }
+    .dark .border-\[\#e7e2ee\] {
+        border-color: #373e4a;
+    }
+    .dark .border-\[\#d2cce2\],
+    .dark .border-\[\#d7d2de\] {
+        border-color: #414a59;
+    }
+
+    /* ACCENT_TEXT_RULES */
+    /* Lighten coloured text so it's readable on the tinted dark surfaces.
+       Each family keeps its own hue: mapping every accent to one colour turned
+       status text (green = won, red = lost, amber = pending) into an
+       indistinguishable purple. */
+    .dark .text-purple-600,
+    .dark .text-purple-700 {
+        color: var(--color-purple-300);
+    }
+    .dark .text-violet-600,
+    .dark .text-violet-700 {
+        color: var(--color-violet-300);
+    }
+    .dark .text-indigo-600,
+    .dark .text-indigo-700 {
+        color: var(--color-indigo-300);
+    }
+    .dark .text-blue-600,
+    .dark .text-blue-700 {
+        color: var(--color-blue-300);
+    }
+    .dark .text-sky-600,
+    .dark .text-sky-700 {
+        color: var(--color-sky-300);
+    }
+    .dark .text-cyan-600,
+    .dark .text-cyan-700 {
+        color: var(--color-cyan-300);
+    }
+    .dark .text-teal-600,
+    .dark .text-teal-700 {
+        color: var(--color-teal-300);
+    }
+    .dark .text-emerald-600,
+    .dark .text-emerald-700 {
+        color: var(--color-emerald-300);
+    }
+    .dark .text-green-600,
+    .dark .text-green-700 {
+        color: var(--color-green-300);
+    }
+    .dark .text-lime-600,
+    .dark .text-lime-700 {
+        color: var(--color-lime-300);
+    }
+    .dark .text-yellow-600,
+    .dark .text-yellow-700 {
+        color: var(--color-yellow-300);
+    }
+    .dark .text-amber-600,
+    .dark .text-amber-700 {
+        color: var(--color-amber-300);
+    }
+    .dark .text-orange-600,
+    .dark .text-orange-700 {
+        color: var(--color-orange-300);
+    }
+    .dark .text-rose-600,
+    .dark .text-rose-700 {
+        color: var(--color-rose-300);
+    }
+    .dark .text-red-600,
+    .dark .text-red-700 {
+        color: var(--color-red-300);
+    }
+    .dark .text-pink-600,
+    .dark .text-pink-700 {
+        color: var(--color-pink-300);
+    }
+    .dark .text-fuchsia-600,
+    .dark .text-fuchsia-700 {
+        color: var(--color-fuchsia-300);
+    }
+
+    .dark .hover\:text-purple-600:hover,
+    .dark .hover\:text-purple-700:hover {
+        color: color-mix(in srgb, var(--color-purple-300) 85%, white);
+    }
+    .dark .hover\:text-violet-600:hover,
+    .dark .hover\:text-violet-700:hover {
+        color: color-mix(in srgb, var(--color-violet-300) 85%, white);
+    }
+    .dark .hover\:text-indigo-600:hover,
+    .dark .hover\:text-indigo-700:hover {
+        color: color-mix(in srgb, var(--color-indigo-300) 85%, white);
+    }
+    .dark .hover\:text-blue-600:hover,
+    .dark .hover\:text-blue-700:hover {
+        color: color-mix(in srgb, var(--color-blue-300) 85%, white);
+    }
+    .dark .hover\:text-sky-600:hover,
+    .dark .hover\:text-sky-700:hover {
+        color: color-mix(in srgb, var(--color-sky-300) 85%, white);
+    }
+    .dark .hover\:text-cyan-600:hover,
+    .dark .hover\:text-cyan-700:hover {
+        color: color-mix(in srgb, var(--color-cyan-300) 85%, white);
+    }
+    .dark .hover\:text-teal-600:hover,
+    .dark .hover\:text-teal-700:hover {
+        color: color-mix(in srgb, var(--color-teal-300) 85%, white);
+    }
+    .dark .hover\:text-emerald-600:hover,
+    .dark .hover\:text-emerald-700:hover {
+        color: color-mix(in srgb, var(--color-emerald-300) 85%, white);
+    }
+    .dark .hover\:text-green-600:hover,
+    .dark .hover\:text-green-700:hover {
+        color: color-mix(in srgb, var(--color-green-300) 85%, white);
+    }
+    .dark .hover\:text-lime-600:hover,
+    .dark .hover\:text-lime-700:hover {
+        color: color-mix(in srgb, var(--color-lime-300) 85%, white);
+    }
+    .dark .hover\:text-yellow-600:hover,
+    .dark .hover\:text-yellow-700:hover {
+        color: color-mix(in srgb, var(--color-yellow-300) 85%, white);
+    }
+    .dark .hover\:text-amber-600:hover,
+    .dark .hover\:text-amber-700:hover {
+        color: color-mix(in srgb, var(--color-amber-300) 85%, white);
+    }
+    .dark .hover\:text-orange-600:hover,
+    .dark .hover\:text-orange-700:hover {
+        color: color-mix(in srgb, var(--color-orange-300) 85%, white);
+    }
+    .dark .hover\:text-rose-600:hover,
+    .dark .hover\:text-rose-700:hover {
+        color: color-mix(in srgb, var(--color-rose-300) 85%, white);
+    }
+    .dark .hover\:text-red-600:hover,
+    .dark .hover\:text-red-700:hover {
+        color: color-mix(in srgb, var(--color-red-300) 85%, white);
+    }
+    .dark .hover\:text-pink-600:hover,
+    .dark .hover\:text-pink-700:hover {
+        color: color-mix(in srgb, var(--color-pink-300) 85%, white);
+    }
+    .dark .hover\:text-fuchsia-600:hover,
+    .dark .hover\:text-fuchsia-700:hover {
+        color: color-mix(in srgb, var(--color-fuchsia-300) 85%, white);
+    }
+
+    /* Deep accent shades (800/900/950) carry status and alert copy. On a dark
+       canvas they are nearly black, so lift them to the bright 200 tint. */
+    .dark .text-purple-800, .dark .text-purple-900, .dark .text-purple-950 { color: var(--color-purple-300); }
+    .dark .text-violet-800, .dark .text-violet-900, .dark .text-violet-950 { color: var(--color-violet-300); }
+    .dark .text-indigo-800, .dark .text-indigo-900, .dark .text-indigo-950 { color: var(--color-indigo-300); }
+    .dark .text-blue-800, .dark .text-blue-900, .dark .text-blue-950 { color: var(--color-blue-300); }
+    .dark .text-sky-800, .dark .text-sky-900, .dark .text-sky-950 { color: var(--color-sky-300); }
+    .dark .text-cyan-800, .dark .text-cyan-900, .dark .text-cyan-950 { color: var(--color-cyan-300); }
+    .dark .text-teal-800, .dark .text-teal-900, .dark .text-teal-950 { color: var(--color-teal-300); }
+    .dark .text-emerald-800, .dark .text-emerald-900, .dark .text-emerald-950 { color: var(--color-emerald-300); }
+    .dark .text-green-800, .dark .text-green-900, .dark .text-green-950 { color: var(--color-green-300); }
+    .dark .text-lime-800, .dark .text-lime-900, .dark .text-lime-950 { color: var(--color-lime-300); }
+    .dark .text-yellow-800, .dark .text-yellow-900, .dark .text-yellow-950 { color: var(--color-yellow-300); }
+    .dark .text-amber-800, .dark .text-amber-900, .dark .text-amber-950 { color: var(--color-amber-300); }
+    .dark .text-orange-800, .dark .text-orange-900, .dark .text-orange-950 { color: var(--color-orange-300); }
+    .dark .text-rose-800, .dark .text-rose-900, .dark .text-rose-950 { color: var(--color-rose-300); }
+    .dark .text-red-800, .dark .text-red-900, .dark .text-red-950 { color: var(--color-red-300); }
+    .dark .text-pink-800, .dark .text-pink-900, .dark .text-pink-950 { color: var(--color-pink-300); }
+    .dark .text-fuchsia-800, .dark .text-fuchsia-900, .dark .text-fuchsia-950 { color: var(--color-fuchsia-300); }
+
+    .dark .hover\:text-purple-800:hover, .dark .hover\:text-purple-900:hover { color: color-mix(in srgb, var(--color-purple-300) 85%, white); }
+    .dark .hover\:text-violet-800:hover, .dark .hover\:text-violet-900:hover { color: color-mix(in srgb, var(--color-violet-300) 85%, white); }
+    .dark .hover\:text-indigo-800:hover, .dark .hover\:text-indigo-900:hover { color: color-mix(in srgb, var(--color-indigo-300) 85%, white); }
+    .dark .hover\:text-blue-800:hover, .dark .hover\:text-blue-900:hover { color: color-mix(in srgb, var(--color-blue-300) 85%, white); }
+    .dark .hover\:text-sky-800:hover, .dark .hover\:text-sky-900:hover { color: color-mix(in srgb, var(--color-sky-300) 85%, white); }
+    .dark .hover\:text-cyan-800:hover, .dark .hover\:text-cyan-900:hover { color: color-mix(in srgb, var(--color-cyan-300) 85%, white); }
+    .dark .hover\:text-teal-800:hover, .dark .hover\:text-teal-900:hover { color: color-mix(in srgb, var(--color-teal-300) 85%, white); }
+    .dark .hover\:text-emerald-800:hover, .dark .hover\:text-emerald-900:hover { color: color-mix(in srgb, var(--color-emerald-300) 85%, white); }
+    .dark .hover\:text-green-800:hover, .dark .hover\:text-green-900:hover { color: color-mix(in srgb, var(--color-green-300) 85%, white); }
+    .dark .hover\:text-lime-800:hover, .dark .hover\:text-lime-900:hover { color: color-mix(in srgb, var(--color-lime-300) 85%, white); }
+    .dark .hover\:text-yellow-800:hover, .dark .hover\:text-yellow-900:hover { color: color-mix(in srgb, var(--color-yellow-300) 85%, white); }
+    .dark .hover\:text-amber-800:hover, .dark .hover\:text-amber-900:hover { color: color-mix(in srgb, var(--color-amber-300) 85%, white); }
+    .dark .hover\:text-orange-800:hover, .dark .hover\:text-orange-900:hover { color: color-mix(in srgb, var(--color-orange-300) 85%, white); }
+    .dark .hover\:text-rose-800:hover, .dark .hover\:text-rose-900:hover { color: color-mix(in srgb, var(--color-rose-300) 85%, white); }
+    .dark .hover\:text-red-800:hover, .dark .hover\:text-red-900:hover { color: color-mix(in srgb, var(--color-red-300) 85%, white); }
+    .dark .hover\:text-pink-800:hover, .dark .hover\:text-pink-900:hover { color: color-mix(in srgb, var(--color-pink-300) 85%, white); }
+    .dark .hover\:text-fuchsia-800:hover, .dark .hover\:text-fuchsia-900:hover { color: color-mix(in srgb, var(--color-fuchsia-300) 85%, white); }
+}
+
+/* ---------------------------------------------------------------------------
+   Dark chrome details: native controls and scrollbars default to light grey
+   and read as bright smears against the carbon canvas.
+   --------------------------------------------------------------------------- */
+.dark {
+    scrollbar-color: #46505f #171b22;
+    scrollbar-width: thin;
+}
+
+.dark ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+    background-color: #1c2129;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background-color: #46505f;
+    border: 2px solid #1c2129;
+    border-radius: 8px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background-color: #576374;
+}
+
+.dark ::-webkit-scrollbar-corner {
+    background-color: #1c2129;
+}
+
+.dark ::placeholder {
+    color: #a3aebf;
+    opacity: 1;
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+    color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------
+   Interaction feedback.
+   On light surfaces Tailwind's shadows carry the "lift"; on carbon they are
+   invisible, so cards look flat and unresponsive. These darker shadows restore
+   the depth cue, and the focus/active rules give keyboard and pointer feedback
+   that works on every control.
+   --------------------------------------------------------------------------- */
+.dark .shadow-2xs,
+.dark .shadow-xs {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.45);
+}
+
+.dark .shadow-sm {
+    box-shadow:
+        0 1px 2px 0 rgb(0 0 0 / 0.5),
+        0 1px 3px 0 rgb(0 0 0 / 0.35);
+}
+
+.dark .shadow-md {
+    box-shadow:
+        0 2px 4px -1px rgb(0 0 0 / 0.45),
+        0 8px 20px -8px rgb(0 0 0 / 0.6);
+}
+
+.dark .shadow-lg {
+    box-shadow:
+        0 4px 8px -2px rgb(0 0 0 / 0.45),
+        0 16px 34px -12px rgb(0 0 0 / 0.65);
+}
+
+.dark .shadow-xl {
+    box-shadow:
+        0 6px 12px -4px rgb(0 0 0 / 0.5),
+        0 24px 48px -16px rgb(0 0 0 / 0.7);
+}
+
+.dark .hover\:shadow-sm:hover {
+    box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.55);
+}
+
+.dark .hover\:shadow-md:hover {
+    box-shadow:
+        0 4px 8px -2px rgb(0 0 0 / 0.5),
+        0 14px 30px -10px rgb(0 0 0 / 0.65);
+}
+
+.dark .hover\:shadow-lg:hover {
+    box-shadow:
+        0 6px 14px -4px rgb(0 0 0 / 0.5),
+        0 22px 44px -14px rgb(0 0 0 / 0.7);
+}
+
+.dark .hover\:shadow-xl:hover {
+    box-shadow:
+        0 8px 18px -6px rgb(0 0 0 / 0.55),
+        0 28px 56px -18px rgb(0 0 0 / 0.75);
+}
+
+/* Keyboard focus is always visible, including inside scroll containers.
+   Form controls are excluded because they get their own focus ring below. */
+.dark :focus-visible:not(input):not(textarea):not(select) {
+    outline: 2px solid var(--color-purple-400);
+    outline-offset: 2px;
+}
+
+/* Smooth colour transitions on interactive elements that don't already opt
+   into one. Declared in `base` so any `transition-*` utility still wins. */
+@layer base {
+    html.dark :where(a, button, [role="button"], input, select, textarea, summary, label[for]) {
+        transition-property: background-color, border-color, color, box-shadow, opacity;
+        transition-duration: 160ms;
+        transition-timing-function: ease;
+    }
+}
+
+.dark ::selection {
+    background-color: #6d28d9;
+    color: #ffffff;
+}
+
+/* Press feedback for every clickable control. */
+.dark button:not(:disabled):active,
+.dark [role="button"]:not([aria-disabled="true"]):active,
+.dark a[role="button"]:active {
+    transform: translateY(1px);
+}
+
+/* Inputs read as recessed wells, not flat rectangles. */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+    box-shadow: inset 0 1px 2px 0 rgb(0 0 0 / 0.35);
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]):focus,
+.dark textarea:focus,
+.dark select:focus {
+    box-shadow:
+        inset 0 1px 2px 0 rgb(0 0 0 / 0.25),
+        0 0 0 3px rgb(192 132 252 / 0.25);
+}
+
+/* ---------------------------------------------------------------------------
+   Phone safety net (CRM only — `.crm-shell` is set by DashboardShell).
+   Individual pages handle their own breakpoints; these rules stop the few
+   structural leftovers (wide tables, unbreakable strings, oversized media)
+   from widening the viewport and breaking every page at once.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+    .crm-shell {
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+
+    /* Keep the column layout and let the table scroll horizontally instead of
+       squeezing cells into unreadable slivers or pushing the page sideways. */
+    .crm-shell table {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Long emails, URLs and references wrap instead of widening the layout. */
+    .crm-shell :where(p, span, a, td, th, li, h1, h2, h3, h4, dd, dt) {
+        overflow-wrap: break-word;
+    }
+
+    .crm-shell :where(img, video, canvas) {
+        max-width: 100%;
+    }
+
+    .crm-shell :where(pre, code) {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+}

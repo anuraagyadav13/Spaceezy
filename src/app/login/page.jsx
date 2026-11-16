@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { showToast } from "../../lib/toast";
 import { useAuth } from "../../features/auth/hooks/useAuth";
-
 export default function LoginPage() {
     const router = useRouter();
     const { login } = useAuth();
@@ -40,9 +39,23 @@ export default function LoginPage() {
         try {
             const user = await login(email, password);
             const normalizedRole = String(user?.role ?? "").toUpperCase();
-            const destination = normalizedRole === "ADMIN" || normalizedRole === "SUPER_ADMIN"
-                ? "/dashboard"
-                : "/dashboard/employee";
+            
+            // Determine destination based on the selected mode (owner/employee)
+            // Owner portal requires ADMIN or SUPER_ADMIN role; employee portal for other roles
+            let destination;
+            if (mode === "owner") {
+                // Owner portal: only ADMIN/SUPER_ADMIN can access
+                if (normalizedRole === "ADMIN" || normalizedRole === "SUPER_ADMIN") {
+                    destination = "/dashboard";
+                } else {
+                    showToast("Owner portal requires ADMIN or SUPER_ADMIN role", "error");
+                    setIsLoading(false);
+                    return;
+                }
+            } else {
+                // Employee portal: all roles can access
+                destination = "/dashboard/employee";
+            }
 
             showToast("Logged in successfully", "success");
             router.push(destination);
@@ -74,6 +87,10 @@ export default function LoginPage() {
             </div>
 
             {/* Main Content Layout */}
+            <div className="absolute right-4 top-4 z-20 sm:right-8 sm:top-8">
+                
+            </div>
+
             <div className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 xl:px-16 py-4 sm:py-6 lg:py-8 flex flex-col lg:flex-row items-center justify-between gap-8 min-h-[100dvh]">
                 {/* Left Column: Hero Branding & Feature Badges (Desktop Only) */}
                 <div className="hidden lg:block w-full max-w-xl text-left my-auto">

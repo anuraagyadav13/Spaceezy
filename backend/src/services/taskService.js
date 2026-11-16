@@ -1,7 +1,7 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const { audit, AUDIT_ACTIONS } = require('../utils/audit');
-const { isExecRole } = require('../utils/roles');
+const { isExecRole, assertLeadAccess } = require('../utils/roles');
 const { assertOwnership } = require('../utils/roles');
 
 const TERMINAL = ['COMPLETED', 'CANCELLED'];
@@ -51,23 +51,38 @@ class TaskService {
         return { tasks, total, pages: Math.ceil(total / limit) };
     }
 
-    static async getTaskById(id, organizationId) {
+    static async getTaskById(id, organizationId, role, userId) {
         const task = await prisma.task.findFirst({
             where: { id, organizationId },
             include: {
-                lead: { select: { id: true, name: true, phone: true, email: true } },
+                lead: { select: { id: true, name: true, phone: true, email: true, assignedToId: true } },
                 assignedTo: { select: { id: true, name: true } }
             }
         });
         if (!task) throw new AppError('Task not found', 404, 'NOT_FOUND');
+        TaskService.assertTaskAccess(task, role, userId);
         return task;
     }
 
-    static async createTask(data, organizationId, userId) {
+    // A restricted role can read a task only when the task is assigned to it
+    // or its lead is. Keeps task detail from becoming a side door into
+    // another employee's lead.
+    static assertTaskAccess(task, role, userId) {
+        if (!isExecRole(role)) return;
+        const ownsTask = task.assignedToId === userId;
+        const ownsLead = task.lead && task.lead.assignedToId === userId;
+        if (!ownsTask && !ownsLead) {
+            throw new AppError('You do not have access to this task', 403, 'FORBIDDEN');
+        }
+    }
+
+    static async createTask(data, organizationId, userId, role) {
         // Validate lead if provided
         if (data.leadId) {
             const lead = await prisma.lead.findFirst({ where: { id: data.leadId, organizationId } });
             if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+            // Employees cannot create work against a lead that is not theirs.
+            assertLeadAccess(lead, role, userId);
         }
         if (data.sourceCallId) {
             const call = await prisma.call.findFirst({ where: { id: data.sourceCallId, organizationId } });

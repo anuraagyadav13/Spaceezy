@@ -1413,12 +1413,23 @@ class LeadService {
         });
     }
 
-    static async toggleFollowupStatus(taskId, organizationId) {
+    static async toggleFollowupStatus(taskId, organizationId, role, userId) {
         const task = await prisma.task.findFirst({
-            where: { id: taskId, organizationId }
+            where: { id: taskId, organizationId },
+            include: { lead: { select: { id: true, assignedToId: true } } }
         });
 
         if (!task) throw new AppError('Follow-up not found', 404, 'NOT_FOUND');
+
+        // Restricted roles may only toggle their own follow-up, or one that
+        // belongs to a lead assigned to them. Everyone else stays unscoped.
+        if (isExecRole(role)) {
+            const ownsTask = task.assignedToId === userId;
+            const ownsLead = task.lead && task.lead.assignedToId === userId;
+            if (!ownsTask && !ownsLead) {
+                throw new AppError('You do not have access to this follow-up', 403, 'FORBIDDEN');
+            }
+        }
 
         const newStatus = task.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
 

@@ -239,7 +239,7 @@ export default async function PropertyDetailPage({ params }) {
                                 className="mb-8"
                                 text={
                                     property.description ||
-                                    `Unit ${property.unitNumber || property.title} is a ${property.configuration || "premium"} residence in ${project.name || "this project"}. Contact us for full details, pricing and a site visit.`
+                                    `${property.title} is a ${property.configuration || "premium"} residence in ${project.name || "this project"}. Contact us for full details, pricing and a site visit.`
                                 }
                             />
 

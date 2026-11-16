@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
-    Search, Plus, UploadCloud, LayoutGrid, Building2, MapPin,
+    Search, Plus, UploadCloud, Building2, MapPin,
     Loader2, AlertCircle, ArrowRight, Home
 } from "lucide-react";
 import { fetchProjects } from "../../../lib/api/projects";
@@ -83,12 +83,6 @@ export default function DashboardInventoryPage() {
                         <p className="text-gray-500 text-sm mt-1">Projects, configurations, units, availability and pricing.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                            href="/dashboard/inventory/grid"
-                            className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-all inline-flex items-center gap-2"
-                        >
-                            <LayoutGrid size={16} /> Availability Grid
-                        </Link>
                         <PermissionGate permission="inventory:create">
                             <Link
                                 href="/dashboard/inventory/grid"

@@ -92,7 +92,7 @@ export function PublicHeader() {
                     <Link href="/contact" className={navLinkClass(isSolid)}>Contact</Link>
                 </nav>
 
-                <div className="hidden md:block">
+                <div className="hidden md:flex items-center gap-3">
                     <Link href="/enquiry" className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ${isSolid ? "bg-gray-900 text-white hover:bg-gray-800" : "bg-white/10 hover:bg-white text-white hover:text-gray-900 border border-white/20 backdrop-blur-sm"}`}>
                         Enquire Now
                     </Link>
@@ -113,9 +113,11 @@ export function PublicHeader() {
                             </span>
                             <span className="font-bold text-2xl tracking-tighter text-gray-900">Spaceezy<span className="text-purple-500">.</span></span>
                         </Link>
-                        <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-gray-900 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
-                            <X size={24} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-gray-900 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
                     </div>
                     <nav className="flex flex-col gap-6 p-8 mt-10 h-full overflow-y-auto">
                         <Link href="/properties" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">Properties</Link>

@@ -107,14 +107,14 @@ export default function CalendarPage() {
                 </div>
             )}
 
-            <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4">
-                <div className="grid grid-cols-7 gap-2 text-center text-xs font-black text-gray-400 uppercase py-2 border-b">
+            <div className="bg-white p-3 sm:p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4">
+                <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-black text-gray-400 uppercase py-2 border-b">
                     <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
                 </div>
                 {isLoading ? (
                     <p className="text-sm text-gray-400 text-center py-8">Loading schedule...</p>
                 ) : (
-                    <div className="grid grid-cols-7 gap-2 text-xs">
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2 text-xs">
                         {cells.map((date, idx) => {
                             if (!date) return <div key={`empty-${idx}`} />;
                             const key = dayKey(date);
@@ -123,7 +123,7 @@ export default function CalendarPage() {
                             return (
                                 <div
                                     key={key}
-                                    className={`min-h-[90px] p-2 rounded-2xl border space-y-1 ${isToday ? "border-purple-300 bg-purple-50/40" : "border-gray-100 bg-gray-50"}`}
+                                    className={`min-h-[74px] sm:min-h-[90px] p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border space-y-1 ${isToday ? "border-purple-300 bg-purple-50/40" : "border-gray-100 bg-gray-50"} hover:shadow-md transition-shadow`}
                                 >
                                     <span className={`font-bold text-[10px] ${isToday ? "text-purple-700" : "text-gray-400"}`}>
                                         {date.getDate()}

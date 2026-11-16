@@ -21,8 +21,8 @@ const getBookings = asyncHandler(async (req, res) => {
 
 const getBookingById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { organizationId, role } = req.auth;
-    const booking = await BookingService.getBookingById(id, organizationId);
+    const { organizationId, role, userId } = req.auth;
+    const booking = await BookingService.getBookingById(id, organizationId, role, userId);
 
     res.status(200).json({
         success: true,

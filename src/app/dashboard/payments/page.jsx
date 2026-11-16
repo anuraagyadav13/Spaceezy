@@ -38,7 +38,7 @@ export default function DashboardPaymentsPage() {
     return (
         <PermissionGate permission="booking:view" fallback={Denied}>
             <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-wrap justify-between items-center gap-3">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Payments Module</h1>
                         <p className="text-sm text-gray-500">Payment status and totals collected from live booking records.</p>

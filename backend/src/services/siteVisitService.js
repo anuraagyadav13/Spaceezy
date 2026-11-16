@@ -1,6 +1,6 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
-const { isExecRole } = require('../utils/roles');
+const { isExecRole, assertLeadAccess } = require('../utils/roles');
 const { assertOwnership } = require('../utils/roles');
 
 const EARLIER_THAN_SITE_VISIT = ['NEW', 'CONTACTED', 'FOLLOW_UP', 'INTERESTED', 'QUALIFIED'];
@@ -8,7 +8,7 @@ const FINAL_STATUSES = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
 const ALLOWED_FROM_SCHEDULED = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
 
 const BASE_INCLUDE = {
-    lead: { select: { id: true, name: true, phone: true, email: true, status: true, projectId: true } },
+    lead: { select: { id: true, name: true, phone: true, email: true, status: true, projectId: true, assignedToId: true } },
     project: { select: { id: true, name: true } },
     property: { select: { id: true, title: true, unitNumber: true, projectId: true } },
     assignedTo: { select: { id: true, name: true } }
@@ -197,20 +197,33 @@ class SiteVisitService {
         return { siteVisits, total, pages: Math.ceil(total / limit) };
     }
 
-    static async getSiteVisitById(id, organizationId) {
+    static async getSiteVisitById(id, organizationId, role, userId) {
         const siteVisit = await prisma.siteVisit.findFirst({
             where: { id, organizationId },
             include: BASE_INCLUDE
         });
         if (!siteVisit) throw new AppError('Site visit not found', 404, 'NOT_FOUND');
+        SiteVisitService.assertVisitAccess(siteVisit, role, userId);
         return siteVisit;
     }
 
-    static async createSiteVisit(data, organizationId, userId) {
+    // Restricted roles may only open a visit that is theirs or belongs to a
+    // lead assigned to them.
+    static assertVisitAccess(siteVisit, role, userId) {
+        if (!isExecRole(role)) return;
+        const ownsVisit = siteVisit.assignedToId === userId;
+        const ownsLead = siteVisit.lead && siteVisit.lead.assignedToId === userId;
+        if (!ownsVisit && !ownsLead) {
+            throw new AppError('You do not have access to this site visit', 403, 'FORBIDDEN');
+        }
+    }
+
+    static async createSiteVisit(data, organizationId, userId, role) {
         let lead = null;
         if (data.leadId) {
             lead = await prisma.lead.findFirst({ where: { id: data.leadId, organizationId } });
             if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+            assertLeadAccess(lead, role, userId);
         }
 
         const refs = await SiteVisitService.resolveRefs(prisma, data, organizationId, lead);
@@ -299,6 +312,8 @@ class SiteVisitService {
         if (data.leadId !== undefined && data.leadId) {
             lead = await prisma.lead.findFirst({ where: { id: data.leadId, organizationId } });
             if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+            // Employees cannot re-point a visit at a lead that is not theirs.
+            assertLeadAccess(lead, role, userId);
         }
 
         const refs = await SiteVisitService.resolveRefs(

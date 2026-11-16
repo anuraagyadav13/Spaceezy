@@ -92,7 +92,6 @@ const NAVIGATION_GROUPS = [
         title: "MARKETING",
         icon: Megaphone,
         items: [
-            { label: "Lead Sources", href: "/dashboard/marketing/sources" },
             { label: "Campaigns", href: "/dashboard/marketing/campaigns" },
             { label: "Website Enquiries", href: "/dashboard/marketing/website" },
             // --- Meta Ads (visible with marketing:view) ---
@@ -142,6 +141,30 @@ function NavGroup({ group, pathname, setIsOpen, isCollapsed }) {
         return null;
     }
 
+    // Sidebar flattening: any group with exactly one visible item renders as a
+    // single direct link (no chevron/children). Applies to LEADS and
+    // REPORTS & ANALYTICS.
+    if (visibleItems.length === 1) {
+        const item = visibleItems[0];
+        return (
+            <div className="mb-1">
+                <Link
+                    href={item.href}
+                    onClick={() => setIsOpen(false)}
+                    title={group.title}
+                    className={`w-full flex items-center justify-start gap-3 px-3.5 py-2.5 rounded-2xl font-bold text-xs tracking-wider transition-colors ${
+                        isChildActive
+                            ? "bg-purple-50/70 text-purple-900"
+                            : "text-gray-700 hover:text-purple-700 hover:bg-purple-50/40"
+                    }`}
+                >
+                    <group.icon size={17} className={`shrink-0 ${isChildActive ? "text-purple-600" : "text-purple-400"}`} />
+                    <span className="text-left leading-tight whitespace-nowrap">{group.title}</span>
+                </Link>
+            </div>
+        );
+    }
+
     if (isCollapsed) {
         return (
             <div className="mb-2 flex justify-center">
@@ -164,18 +187,18 @@ function NavGroup({ group, pathname, setIsOpen, isCollapsed }) {
         <div className="mb-1">
             <button 
                 onClick={() => setUserToggled(!isExpanded)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl font-bold text-xs tracking-wider transition-colors ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl font-bold text-xs tracking-wider transition-colors text-left ${
                     isChildActive ? "text-purple-900" : "text-gray-700 hover:text-purple-700 hover:bg-purple-50/40"
                 }`}
             >
-                <div className="flex items-center gap-3">
-                    <group.icon size={17} className={isChildActive ? "text-purple-600" : "text-purple-400"} />
-                    <span>{group.title}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                    <group.icon size={17} className={`shrink-0 ${isChildActive ? "text-purple-600" : "text-purple-400"}`} />
+                    <span className="whitespace-nowrap">{group.title}</span>
                 </div>
                 {isExpanded ? (
-                    <ChevronDown size={14} className="text-gray-400" />
+                    <ChevronDown size={14} className="text-gray-400 shrink-0" />
                 ) : (
-                    <ChevronRight size={14} className="text-gray-400" />
+                    <ChevronRight size={14} className="text-gray-400 shrink-0" />
                 )}
             </button>
             
@@ -212,7 +235,7 @@ export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
     const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
     if (!mounted) {
-        return <div className={`${collapsed ? "w-20" : "w-64"} border-r border-purple-50 bg-white hidden lg:block`} />;
+        return <div className={`${collapsed ? "w-20" : "w-70"} border-r border-purple-50 bg-white hidden lg:block`} />;
     }
 
     return (
@@ -224,7 +247,7 @@ export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
                 />
             )}
 
-            <aside className={`fixed inset-y-0 left-0 z-50 ${collapsed ? "w-20" : "w-64"} bg-white border-r border-purple-50 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+            <aside className={`fixed inset-y-0 left-0 z-50 ${collapsed ? "w-20" : "w-70"} bg-white border-r border-purple-50 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
                 {/* Brand Logo Header */}
                 <div className={`h-18 flex items-center ${collapsed ? "justify-center px-2" : "justify-between px-5"} shrink-0`}>
                     <Link href="/dashboard" className="flex items-center gap-3">
