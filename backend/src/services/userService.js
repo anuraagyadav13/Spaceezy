@@ -34,6 +34,7 @@ class UserService {
                     role: true,
                     status: true,
                     selfClaimLimit: true,
+                    extraPermissions: true,
                     createdAt: true
                 }
             }),
@@ -54,6 +55,7 @@ class UserService {
                 role: true,
                 status: true,
                 selfClaimLimit: true,
+                extraPermissions: true,
                 createdAt: true
             }
         });
@@ -62,13 +64,18 @@ class UserService {
         return user;
     }
 
-    static async createUser(data, organizationId) {
+    static async createUser(data, organizationId, requestUserRole) {
         const existing = await prisma.user.findFirst({
             where: { email: data.email, organizationId }
         });
 
         if (existing) {
             throw new AppError('User with this email already exists', 400, 'BAD_REQUEST');
+        }
+
+        // Prevent escalating privileges: only a SUPER_ADMIN may create one.
+        if (data.role === 'SUPER_ADMIN' && requestUserRole !== 'SUPER_ADMIN') {
+            throw new AppError('Cannot create user with SUPER_ADMIN role', 403, 'FORBIDDEN');
         }
 
         const passwordHash = await argon2.hash(data.password);
@@ -114,7 +121,8 @@ class UserService {
                 phone: true,
                 role: true,
                 status: true,
-                selfClaimLimit: true
+                selfClaimLimit: true,
+                extraPermissions: true
             }
         });
 
@@ -146,6 +154,7 @@ class UserService {
                 role: true,
                 status: true,
                 selfClaimLimit: true,
+                extraPermissions: true,
                 createdAt: true
             }
         });

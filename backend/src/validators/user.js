@@ -1,9 +1,31 @@
 const { z } = require('zod');
 
-// Two-role model: owner (ADMIN) and employees (SALES_EXECUTIVE). Other enum
-// values stay valid in the database but can no longer be assigned through
-// the API; SUPER_ADMIN elevation is additionally guarded in userService.
-const assignableRoles = z.enum(['ADMIN', 'SALES_EXECUTIVE']);
+// All five roles shown on the Roles & Permissions page are assignable through
+// the API. SUPER_ADMIN creation/elevation stays guarded in userService
+// (only a SUPER_ADMIN requester may do it) so an owner cannot escalate.
+const assignableRoles = z.enum([
+    'SUPER_ADMIN',
+    'ADMIN',
+    'SALES_MANAGER',
+    'SALES_EXECUTIVE',
+    'CHANNEL_PARTNER'
+]);
+
+// Per-user permission grants on top of the role matrix. Whitelisted so a
+// request can never smuggle in employee:create, lead:delete, etc.
+const GRANTABLE_PERMISSIONS = ['marketing:view', 'marketing:manage'];
+
+const grantablePermissions = z
+    .array(z.enum(GRANTABLE_PERMISSIONS))
+    .superRefine((perms, ctx) => {
+        // marketing:manage without marketing:view would be incoherent.
+        if (perms.includes('marketing:manage') && !perms.includes('marketing:view')) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'marketing:manage requires marketing:view'
+            });
+        }
+    });
 
 const getUsersQuerySchema = {
     query: z.object({
@@ -34,12 +56,15 @@ const updateUserSchema = {
         phone: z.string().optional(),
         role: assignableRoles.optional(),
         status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
-        selfClaimLimit: z.number().int().min(0, 'selfClaimLimit must be 0 or greater').max(1000, 'selfClaimLimit cannot exceed 1000').nullable().optional()
+        selfClaimLimit: z.number().int().min(0, 'selfClaimLimit must be 0 or greater').max(1000, 'selfClaimLimit cannot exceed 1000').nullable().optional(),
+        extraPermissions: grantablePermissions.optional()
     })
 };
 
 module.exports = {
     getUsersQuerySchema,
     createUserSchema,
-    updateUserSchema
+    updateUserSchema,
+    assignableRoles,
+    GRANTABLE_PERMISSIONS
 };

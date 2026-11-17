@@ -1,4 +1,5 @@
 const { AppError, asyncHandler } = require('../utils/errors');
+const { extractSessionToken, getEffectivePermissions } = require('../middleware/auth');
 const prisma = require("../db/prisma");
 const crypto = require('crypto');
 const argon2 = require('argon2');
@@ -63,6 +64,15 @@ const login = asyncHandler(async (req, res, next) => {
             name: user.name,
             email: user.email,
             role: user.role,
+            // Owner-granted permission overrides + the effective matrix so
+            // clients render navigation without re-deriving it.
+            extraPermissions: user.extraPermissions || [],
+            permissions: getEffectivePermissions(user.role, user.extraPermissions),
+            // Opaque session token for non-browser clients (mobile). The web
+            // CRM ignores this field and keeps using the httpOnly cookie.
+            // Only the raw token is returned — never its hash.
+            token,
+            tokenExpiresAt: expiresAt.toISOString(),
             organization: {
                 id: user.organization.id,
                 name: user.organization.name
@@ -74,7 +84,8 @@ const login = asyncHandler(async (req, res, next) => {
 
 const logout = asyncHandler(async (req, res, next) => {
     const cookieName = process.env.SESSION_COOKIE_NAME || 'spaceezy_session';
-    const sessionToken = req.cookies?.[cookieName];
+    // Revoke whichever session authenticated this request (cookie or Bearer).
+    const sessionToken = extractSessionToken(req);
 
     if (sessionToken) {
         const tokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
@@ -109,6 +120,8 @@ const getMe = asyncHandler(async (req, res, next) => {
             name: user.name,
             email: user.email,
             role: user.role,
+            extraPermissions: user.extraPermissions || [],
+            permissions: getEffectivePermissions(user.role, user.extraPermissions),
             organization: {
                 id: user.organization.id,
                 name: user.organization.name
@@ -118,8 +131,26 @@ const getMe = asyncHandler(async (req, res, next) => {
     });
 });
 
+const getPermissions = asyncHandler(async (req, res, next) => {
+    // Role comes from the authenticated session (resolved from DB on every
+    // request by requireAuth) — never from client input. Serves the SAME
+    // ROLE_PERMISSIONS matrix that requirePermission() enforces, so mobile
+    // navigation cannot drift from the server's authorization decisions.
+    const permissions = getEffectivePermissions(req.auth.role, req.auth.extraPermissions);
+
+    res.status(200).json({
+        success: true,
+        data: {
+            role: req.auth.role,
+            permissions
+        },
+        message: 'Success'
+    });
+});
+
 module.exports = {
     login,
     logout,
-    getMe
+    getMe,
+    getPermissions
 };

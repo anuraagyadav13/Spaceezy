@@ -40,7 +40,7 @@ beforeEach(() => {
   delete process.env.SESSION_COOKIE_NAME;
 });
 
-describe('Phase 10: Admin employee management (two-role model)', () => {
+describe('Phase 10: Admin employee management (five-role model with guarded Super Admin)', () => {
   it('ADMIN creates a sales executive (201, password hashed, never echoed)', async () => {
     admin();
     prisma.user.findFirst.mockResolvedValue(null);
@@ -78,24 +78,84 @@ describe('Phase 10: Admin employee management (two-role model)', () => {
     expect(response.status).toBe(201);
   });
 
-  it('rejects non-two-role assignments on create and update (400)', async () => {
+  it('accepts all five documented roles on create and update (201/200)', async () => {
     admin();
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue(user({ role: 'SALES_MANAGER' }));
 
     const created = await request(app)
       .post('/api/v1/users')
       .set('Cookie', 'spaceezy_session=admin-token')
       .send({ name: 'X', email: 'x@example.com', password: 'Secret1234', role: 'SALES_MANAGER' });
+    expect(created.status).toBe(201);
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: 'SALES_MANAGER' }) })
+    );
+
+    prisma.user.findFirst.mockResolvedValue(user());
+    prisma.user.update.mockResolvedValue(user({ role: 'CHANNEL_PARTNER' }));
+    const updated = await request(app)
+      .patch(`/api/v1/users/${TARGET}`)
+      .set('Cookie', 'spaceezy_session=admin-token')
+      .send({ role: 'CHANNEL_PARTNER' });
+    expect(updated.status).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: 'CHANNEL_PARTNER' }) })
+    );
+  });
+
+  it('rejects unknown roles (not in the five-role enum) with 400', async () => {
+    admin();
+
+    const created = await request(app)
+      .post('/api/v1/users')
+      .set('Cookie', 'spaceezy_session=admin-token')
+      .send({ name: 'X', email: 'x@example.com', password: 'Secret1234', role: 'NOT_A_ROLE' });
     expect(created.status).toBe(400);
 
     prisma.user.findFirst.mockResolvedValue(user());
     const updated = await request(app)
       .patch(`/api/v1/users/${TARGET}`)
       .set('Cookie', 'spaceezy_session=admin-token')
-      .send({ role: 'CHANNEL_PARTNER' });
+      .send({ role: 'NOT_A_ROLE' });
     expect(updated.status).toBe(400);
 
     expect(prisma.user.create).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('ADMIN cannot create a SUPER_ADMIN (403)', async () => {
+    admin();
+    prisma.user.findFirst.mockResolvedValue(null);
+
+    const response = await request(app)
+      .post('/api/v1/users')
+      .set('Cookie', 'spaceezy_session=admin-token')
+      .send({ name: 'Escalate', email: 'escalate@example.com', password: 'Secret1234', role: 'SUPER_ADMIN' });
+
+    expect(response.status).toBe(403);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it('only accepts whitelisted extraPermissions grants (400 otherwise)', async () => {
+    admin();
+    prisma.user.findFirst.mockResolvedValue(user());
+    prisma.user.update.mockResolvedValue(user());
+
+    const smuggled = await request(app)
+      .patch(`/api/v1/users/${TARGET}`)
+      .set('Cookie', 'spaceezy_session=admin-token')
+      .send({ extraPermissions: ['employee:create'] });
+    expect(smuggled.status).toBe(400);
+
+    const granted = await request(app)
+      .patch(`/api/v1/users/${TARGET}`)
+      .set('Cookie', 'spaceezy_session=admin-token')
+      .send({ extraPermissions: ['marketing:view', 'marketing:manage'] });
+    expect(granted.status).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ extraPermissions: ['marketing:view', 'marketing:manage'] }) })
+    );
   });
 
   it('rejects duplicate emails within the organization (400)', async () => {
@@ -154,9 +214,9 @@ describe('Phase 10: Admin employee management (two-role model)', () => {
       .set('Cookie', 'spaceezy_session=admin-token')
       .send({ role: 'SUPER_ADMIN' });
 
-    // Rejected by the two-role validator (400); the service-level elevation
-    // guard remains as defense-in-depth behind it.
-    expect([400, 403]).toContain(response.status);
+    // The role enum accepts SUPER_ADMIN, but the service-level elevation
+    // guard rejects a non-SUPER_ADMIN requester.
+    expect(response.status).toBe(403);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 

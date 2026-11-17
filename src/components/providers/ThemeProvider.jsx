@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation";
 export const THEME_STORAGE_KEY = "spaceezy-theme";
 
 // Keep in sync with THEME_BOOTSTRAP in app/layout.jsx.
-export const DARK_BACKGROUND = "#171b22";
+export const DARK_BACKGROUND = "#050505";
 
 // Dark mode is a CRM-only feature: the public marketing site always renders
 // with the light palette.
@@ -31,10 +31,12 @@ const readTheme = () => {
     return document.documentElement.classList.contains("dark") ? "dark" : "light";
 };
 
-const applyTheme = (theme) => {
+const applyTheme = (theme, crm = true) => {
     if (typeof document === "undefined") return;
     const root = document.documentElement;
     root.classList.toggle("dark", theme === "dark");
+    // Marks CRM routes for the light-theme token layer in globals.css.
+    root.classList.toggle("crm", Boolean(crm));
     root.style.colorScheme = theme;
     // Mirrors the pre-CSS bootstrap (avoids a white canvas flash) and is
     // cleared again when switching back to light.
@@ -78,7 +80,7 @@ export function ThemeProvider({ children }) {
         (next) => {
             // The public site has no toggle; never let it opt into dark.
             const value = next === "dark" && crm ? "dark" : "light";
-            applyTheme(value);
+            applyTheme(value, crm);
             try {
                 window.localStorage.setItem(THEME_STORAGE_KEY, value);
             } catch {
@@ -95,7 +97,7 @@ export function ThemeProvider({ children }) {
 
     useEffect(() => {
         if (!crm) {
-            applyTheme("light");
+            applyTheme("light", false);
             setThemeState("light");
             return undefined;
         }
@@ -103,7 +105,7 @@ export function ThemeProvider({ children }) {
         // Saved choice wins; otherwise follow the OS preference.
         const sync = () => {
             const next = readStoredTheme();
-            applyTheme(next);
+            applyTheme(next, true);
             setThemeState(next);
         };
         sync();

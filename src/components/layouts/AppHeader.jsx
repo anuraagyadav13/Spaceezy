@@ -50,7 +50,7 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
     };
 
     return (
-        <header className="h-16 bg-[#F8F9FD] flex items-center justify-between gap-2 px-4 sm:px-8 shrink-0 sticky top-0 z-30">
+        <header className="h-16 crm-chrome flex items-center justify-between gap-2 px-4 sm:px-8 shrink-0 sticky top-0 z-30">
             <div className="flex items-center gap-2 sm:gap-3">
                 {/* Mobile open hamburger */}
                 <button

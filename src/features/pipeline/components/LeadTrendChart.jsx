@@ -48,14 +48,19 @@ export default function LeadTrendChart({ trends }) {
                                     </linearGradient>
                                 ))}
                             </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
-                            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--chart-axis)" }} tickLine={false} axisLine={false} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--chart-axis)" }} tickLine={false} axisLine={false} />
                             <Tooltip
-                                contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                                contentStyle={{
+                                    borderRadius: 12,
+                                    border: "1px solid var(--chart-border)",
+                                    backgroundColor: "var(--chart-tooltip-bg)",
+                                    fontSize: 12,
+                                }}
                                 labelStyle={{ fontWeight: 700 }}
                             />
-                            <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
+                            <Legend wrapperStyle={{ fontSize: 11, color: "var(--chart-axis)" }} iconType="circle" iconSize={8} />
                             {SERIES.map((s) => (
                                 <Area
                                     key={s.key}

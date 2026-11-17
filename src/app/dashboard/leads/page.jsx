@@ -550,7 +550,7 @@ function LeadsListContent({ isExecutive = false }) {
             {/* Table */}
             <div className="flex-1 overflow-auto bg-white">
                 <table className="w-full text-left border-collapse min-w-[1000px]">
-                    <thead className="bg-gray-50/50 sticky top-0 z-10 shadow-[0_1px_0_rgba(0,0,0,0.05)]">
+                    <thead className="bg-gray-50 sticky top-0 z-10 shadow-[0_1px_0_rgba(0,0,0,0.05)]">
                         <tr>
                             <th className="px-4 py-3 w-12 text-center">
                                 <button onClick={toggleSelectAll} className="text-gray-400 hover:text-purple-600 transition-colors">

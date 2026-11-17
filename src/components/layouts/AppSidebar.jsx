@@ -16,7 +16,9 @@ const NAVIGATION_GROUPS = [
         title: "DASHBOARD",
         icon: LayoutDashboard,
         items: [
-            { label: "Owner Overview", href: "/dashboard" },
+            // Owner Overview is owner-only — employees never see this link
+            // (the page itself also redirects non-owner roles).
+            { label: "Owner Overview", href: "/dashboard", ownerOnly: true },
             { label: "Employee Dashboard", href: "/dashboard/employee" },
             { label: "Today's Agenda", href: "/dashboard/agenda" },
             { label: "Productivity", href: "/dashboard/productivity" }
@@ -92,8 +94,10 @@ const NAVIGATION_GROUPS = [
         title: "MARKETING",
         icon: Megaphone,
         items: [
-            { label: "Campaigns", href: "/dashboard/marketing/campaigns" },
-            { label: "Website Enquiries", href: "/dashboard/marketing/website" },
+            // Campaigns + Website Enquiries are marketing pages: owners have
+            // them by default, employees need an owner-granted marketing:view.
+            { label: "Campaigns", href: "/dashboard/marketing/campaigns", permission: "marketing:view" },
+            { label: "Website Enquiries", href: "/dashboard/marketing/website", permission: "marketing:view" },
             // --- Meta Ads (visible with marketing:view) ---
             { label: "Ads Overview", href: "/dashboard/marketing/meta-ads", permission: "marketing:view" },
             { label: "Ad Campaigns", href: "/dashboard/marketing/meta-ads/campaigns", permission: "marketing:view" },
@@ -128,6 +132,7 @@ function NavGroup({ group, pathname, setIsOpen, isCollapsed }) {
     const visibleItems = (group.items || []).filter((item) => {
         if (item.permission && !hasPermission(item.permission)) return false;
         if (item.adminOnly && !hasRole(["SUPER_ADMIN", "ADMIN"])) return false;
+        if (item.ownerOnly && !hasRole(["SUPER_ADMIN", "ADMIN"])) return false;
         return true;
     });
 
@@ -146,6 +151,28 @@ function NavGroup({ group, pathname, setIsOpen, isCollapsed }) {
     // REPORTS & ANALYTICS.
     if (visibleItems.length === 1) {
         const item = visibleItems[0];
+
+        // Collapsed rail: icon only — rendering the label here made LEADS and
+        // REPORTS & ANALYTICS overflow past the w-20 sidebar.
+        if (isCollapsed) {
+            return (
+                <div className="mb-2 flex justify-center">
+                    <Link
+                        href={item.href}
+                        onClick={() => setIsOpen(false)}
+                        title={group.title}
+                        className={`p-2.5 rounded-xl transition-all ${
+                            isChildActive
+                                ? "bg-purple-100 text-purple-700 shadow-2xs"
+                                : "text-gray-500 hover:text-purple-700 hover:bg-purple-50"
+                        }`}
+                    >
+                        <group.icon size={20} />
+                    </Link>
+                </div>
+            );
+        }
+
         return (
             <div className="mb-1">
                 <Link
@@ -235,7 +262,7 @@ export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
     const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
     if (!mounted) {
-        return <div className={`${collapsed ? "w-20" : "w-70"} border-r border-purple-50 bg-white hidden lg:block`} />;
+        return <div className={`${collapsed ? "w-20" : "w-70"} border-r border-purple-50 crm-chrome hidden lg:block`} />;
     }
 
     return (
@@ -247,7 +274,7 @@ export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
                 />
             )}
 
-            <aside className={`fixed inset-y-0 left-0 z-50 ${collapsed ? "w-20" : "w-70"} bg-white border-r border-purple-50 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+            <aside className={`fixed inset-y-0 left-0 z-50 ${collapsed ? "w-20" : "w-70"} crm-chrome border-r border-purple-50 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
                 {/* Brand Logo Header */}
                 <div className={`h-18 flex items-center ${collapsed ? "justify-center px-2" : "justify-between px-5"} shrink-0`}>
                     <Link href="/dashboard" className="flex items-center gap-3">

@@ -8,6 +8,11 @@ import Image from "next/image";
 import { showToast } from "../../../../lib/toast";
 import { PermissionGate } from "../../../../features/auth/components/PermissionGate";
 import { useAuth } from "../../../../features/auth/hooks/useAuth";
+import { ROLE_OPTIONS, isSuperAdminAssignable } from "../../../../features/team/constants/roles";
+
+// Per-user grants stored on User.extraPermissions (see GRANTABLE_PERMISSIONS
+// in backend/src/validators/user.js). A single switch manages both together.
+const MARKETING_PERMISSIONS = ["marketing:view", "marketing:manage"];
 
 const VISIT_STYLES = {
     Scheduled: "bg-purple-100 text-purple-700",
@@ -26,7 +31,7 @@ export default function DashboardEmployeeDetailPage({ params }) {
     const { user: currentUser } = useAuth();
     const [employee, setEmployee] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [editForm, setEditForm] = useState({ name: "", phone: "", role: "SALES_EXECUTIVE", status: "ACTIVE" });
+    const [editForm, setEditForm] = useState({ name: "", phone: "", role: "SALES_EXECUTIVE", status: "ACTIVE", extraPermissions: [] });
     const [saving, setSaving] = useState(false);
     const [deactivating, setDeactivating] = useState(false);
 
@@ -39,6 +44,7 @@ export default function DashboardEmployeeDetailPage({ params }) {
                     phone: data.phone || "",
                     role: data.role || "SALES_EXECUTIVE",
                     status: data.status || "ACTIVE",
+                    extraPermissions: Array.isArray(data.extraPermissions) ? data.extraPermissions : [],
                 });
             })
             .catch(err => showToast("Failed to load employee profile", "error"))
@@ -92,6 +98,25 @@ export default function DashboardEmployeeDetailPage({ params }) {
     const siteVisits = employee.siteVisits || [];
     const bookings = employee.bookings || [];
 
+    // Owner-granted marketing access (User.extraPermissions). The switch
+    // saves immediately — it's a grant, not part of the edit form draft.
+    const hasMarketingAccess = editForm.extraPermissions.includes("marketing:view");
+
+    const toggleMarketingAccess = async () => {
+        const nextPermissions = hasMarketingAccess
+            ? editForm.extraPermissions.filter((p) => !MARKETING_PERMISSIONS.includes(p))
+            : [...editForm.extraPermissions, ...MARKETING_PERMISSIONS];
+        try {
+            await updateUser({ id: resolvedParams.employeeId, extraPermissions: nextPermissions });
+            setEditForm((f) => ({ ...f, extraPermissions: nextPermissions }));
+            showToast(hasMarketingAccess
+                ? `Marketing access revoked for ${employee.name}`
+                : `Marketing access granted to ${employee.name}`);
+        } catch (err) {
+            showToast(err?.message || "Failed to update marketing access", "error");
+        }
+    };
+
     // The backend doesn't explicitly have "dailyWork" grouped by day right now,
     // so we'll mock that specific visual from the followups/activities
     const dailyWork = []; 
@@ -144,8 +169,15 @@ export default function DashboardEmployeeDetailPage({ params }) {
                                     onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
                                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:border-purple-500 disabled:opacity-50"
                                 >
-                                    <option value="SALES_EXECUTIVE">Sales Executive (employee)</option>
-                                    <option value="ADMIN">Admin (owner)</option>
+                                    {ROLE_OPTIONS.map((option) => (
+                                        <option
+                                            key={option.value}
+                                            value={option.value}
+                                            disabled={option.value === "SUPER_ADMIN" && !isSuperAdminAssignable(currentUser?.role)}
+                                        >
+                                            {option.label}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div>
@@ -162,27 +194,46 @@ export default function DashboardEmployeeDetailPage({ params }) {
                                 </select>
                             </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 mt-4">
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="px-5 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 disabled:opacity-60"
-                            >
-                                {saving ? "Saving..." : "Save changes"}
-                            </button>
-                            <PermissionGate permission="employee:delete">
-                                {employee.status !== "INACTIVE" && (
-                                    <button
-                                        type="button"
-                                        onClick={handleDeactivate}
-                                        disabled={deactivating || isSelf}
-                                        title={isSelf ? "You cannot deactivate your own account" : "Deactivate (preserves history)"}
-                                        className="px-5 py-2.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 disabled:opacity-50"
-                                    >
-                                        {deactivating ? "Deactivating..." : "Deactivate"}
-                                    </button>
-                                )}
-                            </PermissionGate>
+                        <div className="flex flex-wrap items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={hasMarketingAccess}
+                                    onClick={toggleMarketingAccess}
+                                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${hasMarketingAccess ? "bg-purple-600" : "bg-gray-300"}`}
+                                >
+                                    <span
+                                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${hasMarketingAccess ? "translate-x-5" : "translate-x-0.5"}`}
+                                    />
+                                </button>
+                                <div>
+                                    <p className="text-xs font-bold text-gray-700 uppercase">Marketing access</p>
+                                    <p className="text-xs text-gray-400">Show Campaigns, Website Enquiries &amp; Meta Ads pages to this employee</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="px-5 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 disabled:opacity-60"
+                                >
+                                    {saving ? "Saving..." : "Save changes"}
+                                </button>
+                                <PermissionGate permission="employee:delete">
+                                    {employee.status !== "INACTIVE" && (
+                                        <button
+                                            type="button"
+                                            onClick={handleDeactivate}
+                                            disabled={deactivating || isSelf}
+                                            title={isSelf ? "You cannot deactivate your own account" : "Deactivate (preserves history)"}
+                                            className="px-5 py-2.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 disabled:opacity-50"
+                                        >
+                                            {deactivating ? "Deactivating..." : "Deactivate"}
+                                        </button>
+                                    )}
+                                </PermissionGate>
+                            </div>
                         </div>
                     </form>
                 </div>

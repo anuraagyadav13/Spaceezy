@@ -69,6 +69,11 @@ model User {
   role         UserRole   @default(SALES_EXECUTIVE)
   status       UserStatus @default(ACTIVE)
 
+  // Owner-granted permission overrides on top of the role matrix (currently
+  // only marketing:view / marketing:manage — see GRANTABLE_PERMISSIONS in
+  // validators/user.js). Empty array = role permissions only.
+  extraPermissions String[] @default([])
+
   // Max active self-claimed leads for SALES_EXECUTIVE. Null = claiming not configured (0).
   selfClaimLimit Int?
 

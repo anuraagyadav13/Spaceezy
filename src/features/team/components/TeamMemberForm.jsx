@@ -2,8 +2,11 @@
 import { useState } from "react";
 import { createUser } from "../../../lib/api/users";
 import { showToast } from "../../../lib/toast";
+import { useAuth } from "../../auth/hooks/useAuth";
+import { ROLE_OPTIONS, isSuperAdminAssignable } from "../constants/roles";
 
 export function TeamMemberForm({ onSaved }) {
+    const { user } = useAuth();
     const [form, setForm] = useState({ name: "", email: "", phone: "", role: "SALES_EXECUTIVE", password: "" });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,8 +35,15 @@ export function TeamMemberForm({ onSaved }) {
             <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
             <input required placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm">
-                <option value="SALES_EXECUTIVE">Sales Executive (employee)</option>
-                <option value="ADMIN">Admin (owner)</option>
+                {ROLE_OPTIONS.map((option) => (
+                    <option
+                        key={option.value}
+                        value={option.value}
+                        disabled={option.value === "SUPER_ADMIN" && !isSuperAdminAssignable(user?.role)}
+                    >
+                        {option.label}
+                    </option>
+                ))}
             </select>
             <input required type="password" minLength={10} placeholder="Login password (min 10 characters)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
             <button type="submit" disabled={isSubmitting} className="mt-2 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50">

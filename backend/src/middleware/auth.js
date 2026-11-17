@@ -1,17 +1,32 @@
 const { AppError, asyncHandler } = require('../utils/errors');
 const prisma = require('../db/prisma');
 
+// Extract the opaque session token from either transport:
+//   1. Authorization: Bearer <token>  (mobile / non-browser clients)
+//   2. the session cookie             (existing web CRM — unchanged behavior)
+// The raw token is never logged. Malformed Authorization headers are
+// ignored so a bad header cannot break cookie-based sessions.
+const extractSessionToken = (req) => {
+    const authHeader = req.headers?.authorization;
+    if (typeof authHeader === 'string') {
+        const match = /^Bearer\s+(\S+)$/i.exec(authHeader.trim());
+        if (match) {
+            return match[1];
+        }
+    }
+    const cookieName = process.env.SESSION_COOKIE_NAME || 'spaceezy_session';
+    return req.cookies?.[cookieName] || null;
+};
+
 const requireAuth = () => {
     return asyncHandler(async (req, res, next) => {
-        const cookieName = process.env.SESSION_COOKIE_NAME || 'spaceezy_session';
-        const sessionToken = req.cookies?.[cookieName];
+        const sessionToken = extractSessionToken(req);
 
         if (!sessionToken) {
             return next(new AppError('Not logged in', 401, 'UNAUTHORIZED'));
         }
 
-        // Import crypto or argon2 logic to verify the token hash if needed
-        // For our implementation, we'll hash the token from the cookie and find the session
+        // Hash the token and find the session (same storage for both transports)
         const crypto = require('crypto');
         const tokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
 
@@ -32,7 +47,9 @@ const requireAuth = () => {
         req.auth = {
             userId: session.user.id,
             organizationId: session.user.organizationId,
-            role: session.user.role
+            role: session.user.role,
+            // Owner-granted per-user permission overrides (User.extraPermissions)
+            extraPermissions: session.user.extraPermissions || []
         };
         
         // Update lastUsedAt optionally (might be expensive for every request, so we can skip or throttle)
@@ -129,8 +146,9 @@ const requirePermission = (permission) => {
     return (req, res, next) => {
         const userRole = req.auth.role;
         const permissions = ROLE_PERMISSIONS[userRole] || [];
+        const extraPermissions = req.auth.extraPermissions || [];
 
-        if (!permissions.includes(permission)) {
+        if (!permissions.includes(permission) && !extraPermissions.includes(permission)) {
             return next(new AppError(`You lack the required permission: ${permission}`, 403, 'FORBIDDEN'));
         }
 
@@ -142,10 +160,19 @@ const hasPermission = (role, permission) => {
     return (ROLE_PERMISSIONS[role] || []).includes(permission);
 };
 
+// Effective permission list for a user = role matrix + per-user grants.
+const getEffectivePermissions = (role, extraPermissions = []) => {
+    const base = ROLE_PERMISSIONS[role] || [];
+    const extras = (extraPermissions || []).filter((p) => !base.includes(p));
+    return [...base, ...extras];
+};
+
 module.exports = {
     requireAuth,
     requireRole,
     requirePermission,
     hasPermission,
+    getEffectivePermissions,
+    extractSessionToken,
     ROLE_PERMISSIONS
 };

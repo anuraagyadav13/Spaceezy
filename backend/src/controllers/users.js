@@ -28,7 +28,7 @@ const getUserById = asyncHandler(async (req, res, next) => {
 const createUser = asyncHandler(async (req, res, next) => {
     const { organizationId } = req.auth;
     
-    const user = await UserService.createUser(req.body, organizationId);
+    const user = await UserService.createUser(req.body, organizationId, req.auth.role);
     
     res.status(201).json({
         success: true,

@@ -21,18 +21,23 @@ export default function LeadSourceChart({ sources }) {
                 <div className="h-[260px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={sources} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
-                            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
+                            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "var(--chart-axis)" }} tickLine={false} axisLine={false} />
                             <YAxis
                                 type="category"
                                 dataKey="source"
                                 width={110}
-                                tick={{ fontSize: 11, fill: "#64748b" }}
+                                tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
                                 tickLine={false}
                                 axisLine={false}
                             />
                             <Tooltip
                                 cursor={{ fill: "rgba(139, 92, 246, 0.06)" }}
-                                contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                                contentStyle={{
+                                    borderRadius: 12,
+                                    border: "1px solid var(--chart-border)",
+                                    backgroundColor: "var(--chart-tooltip-bg)",
+                                    fontSize: 12,
+                                }}
                                 formatter={(value, _name, item) => [`${value} leads (${item.payload.pct}%)`, "Leads"]}
                             />
                             <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={18}>

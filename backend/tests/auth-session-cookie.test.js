@@ -41,6 +41,8 @@ describe('requireAuth session cookie fallback', () => {
       userId: 'user-123',
       organizationId: 'org-123',
       role: 'SALES_EXECUTIVE',
+      // No owner grants on this user — defaults to an empty list.
+      extraPermissions: [],
     });
   });
 

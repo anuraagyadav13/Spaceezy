@@ -86,8 +86,11 @@ export const usePermissions = () => {
 
     const hasPermission = (permission) => {
         if (!user || !user.role) return false;
+        // Role matrix + owner-granted per-user overrides (extraPermissions),
+        // mirroring backend getEffectivePermissions().
         const permissions = ROLE_PERMISSIONS[user.role] || [];
-        return permissions.includes(permission);
+        const extras = Array.isArray(user.extraPermissions) ? user.extraPermissions : [];
+        return permissions.includes(permission) || extras.includes(permission);
     };
 
     return { hasRole, hasPermission };

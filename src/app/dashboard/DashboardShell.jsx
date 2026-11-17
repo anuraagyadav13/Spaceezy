@@ -44,14 +44,14 @@ export default function DashboardShell({ children }) {
 
     if (isLoading || !user) {
         return (
-            <div className="flex h-dvh items-center justify-center bg-[#F8F9FD]">
+            <div className="flex h-dvh items-center justify-center crm-canvas">
                 <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
             </div>
         );
     }
 
     return (
-        <div className="crm-shell flex h-dvh bg-[#F8F9FD] overflow-hidden font-sans">
+        <div className="crm-shell flex h-dvh crm-canvas overflow-hidden font-sans">
             <AppSidebar 
                 isOpen={isSidebarOpen} 
                 setIsOpen={setIsSidebarOpen} 

@@ -1,9 +1,12 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { fetchLeads } from "../../../../lib/api/leads";
 import { showToast } from "../../../../lib/toast";
 
 export default function LeadSourcesPage() {
+    const router = useRouter();
     const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -36,9 +39,18 @@ export default function LeadSourcesPage() {
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900">Lead Sources & Sub-sources Config</h1>
-                <p className="text-sm text-gray-500">Live attribution breakdown computed from your lead data (campaigns shown as sub-sources).</p>
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={() => router.back()}
+                    aria-label="Go back"
+                    className="p-2 -ml-2 text-gray-400 hover:bg-gray-100 rounded-xl"
+                >
+                    <ArrowLeft size={20} />
+                </button>
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Lead Sources &amp; Sub-sources Config</h1>
+                    <p className="text-sm text-gray-500">Live attribution breakdown computed from your lead data (campaigns shown as sub-sources).</p>
+                </div>
             </div>
 
             <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">

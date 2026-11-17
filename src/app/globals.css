@@ -11,13 +11,73 @@
 
     html.dark {
         color-scheme: dark;
-        background-color: #171b22;
+        background-color: #050505;
     }
 
     html.dark body {
-        background-color: #171b22;
-        color: #f1f4fa;
+        background-color: #050505;
+        color: #ffffff;
     }
+}
+
+/* ---------------------------------------------------------------------------
+   Centralized design tokens.
+
+   LIGHT (CRM): canvas #F1F3F7 · chrome/cards #FFFFFF · border #E0E4EC
+                primary #171923 · secondary #667085 · muted #98A2B3
+   DARK  (CRM): canvas #050505 · chrome #090909 · card #111318 · elevated #171A21
+                border #292D36 · primary #FFFFFF · secondary #A1A1AA · muted #71717A
+
+   The `crm` class is set on <html> for CRM routes only (see layout.jsx
+   THEME_BOOTSTRAP + providers/ThemeProvider.jsx), so the public marketing
+   site keeps its own palette. The accent stays Spaceezy purple in both themes.
+   --------------------------------------------------------------------------- */
+:root {
+    --crm-canvas: #f1f3f7;
+    --crm-chrome: #ffffff;
+    --crm-card: #ffffff;
+    --crm-elevated: #ffffff;
+    --crm-border: #e0e4ec;
+    --crm-text-primary: #171923;
+    --crm-text-secondary: #667085;
+    --crm-text-muted: #98a2b3;
+
+    /* Chart primitives (recharts reads these; keeps charts theme-aware). */
+    --chart-grid: #f1f5f9;
+    --chart-axis: #64748b;
+    --chart-border: #e2e8f0;
+    --chart-tooltip-bg: rgba(255, 255, 255, 0.97);
+}
+
+html.dark {
+    --crm-canvas: #050505;
+    --crm-chrome: #090909;
+    --crm-card: #111318;
+    --crm-elevated: #171a21;
+    --crm-border: #292d36;
+    --crm-text-primary: #ffffff;
+    --crm-text-secondary: #a1a1aa;
+    --crm-text-muted: #71717a;
+
+    --chart-grid: #1a1d24;
+    --chart-axis: #a1a1aa;
+    --chart-border: #292d36;
+    --chart-tooltip-bg: #171a21;
+}
+
+/* CRM chrome surfaces (sidebar + header) and the app canvas. Components use
+   these semantic classes instead of raw `bg-white` so both themes get the
+   exact chrome/canvas tokens without per-component overrides. */
+.crm-chrome {
+    background-color: var(--crm-chrome);
+}
+
+html.dark .crm-chrome {
+    border-color: #171a21;
+}
+
+.crm-canvas {
+    background-color: var(--crm-canvas);
 }
 
 /* ---------------------------------------------------------------------------
@@ -28,57 +88,57 @@
    saturated brand shades (500/600 on primary buttons) untouched.
    --------------------------------------------------------------------------- */
 .dark {
-    --color-purple-50: color-mix(in srgb, var(--color-purple-400) 15%, #262d38);
-    --color-purple-100: color-mix(in srgb, var(--color-purple-400) 28%, #262d38);
-    --color-purple-200: color-mix(in srgb, var(--color-purple-400) 40%, #262d38);
-    --color-violet-50: color-mix(in srgb, var(--color-violet-400) 15%, #262d38);
-    --color-violet-100: color-mix(in srgb, var(--color-violet-400) 28%, #262d38);
-    --color-violet-200: color-mix(in srgb, var(--color-violet-400) 40%, #262d38);
-    --color-indigo-50: color-mix(in srgb, var(--color-indigo-400) 15%, #262d38);
-    --color-indigo-100: color-mix(in srgb, var(--color-indigo-400) 28%, #262d38);
-    --color-indigo-200: color-mix(in srgb, var(--color-indigo-400) 40%, #262d38);
-    --color-blue-50: color-mix(in srgb, var(--color-blue-400) 15%, #262d38);
-    --color-blue-100: color-mix(in srgb, var(--color-blue-400) 30%, #262d38);
-    --color-blue-200: color-mix(in srgb, var(--color-blue-400) 42%, #262d38);
-    --color-sky-50: color-mix(in srgb, var(--color-sky-400) 15%, #262d38);
-    --color-sky-100: color-mix(in srgb, var(--color-sky-400) 30%, #262d38);
-    --color-sky-200: color-mix(in srgb, var(--color-sky-400) 42%, #262d38);
-    --color-cyan-50: color-mix(in srgb, var(--color-cyan-400) 15%, #262d38);
-    --color-cyan-100: color-mix(in srgb, var(--color-cyan-400) 30%, #262d38);
-    --color-cyan-200: color-mix(in srgb, var(--color-cyan-400) 42%, #262d38);
-    --color-teal-50: color-mix(in srgb, var(--color-teal-400) 15%, #262d38);
-    --color-teal-100: color-mix(in srgb, var(--color-teal-400) 30%, #262d38);
-    --color-teal-200: color-mix(in srgb, var(--color-teal-400) 42%, #262d38);
-    --color-emerald-50: color-mix(in srgb, var(--color-emerald-400) 15%, #262d38);
-    --color-emerald-100: color-mix(in srgb, var(--color-emerald-400) 30%, #262d38);
-    --color-emerald-200: color-mix(in srgb, var(--color-emerald-400) 42%, #262d38);
-    --color-green-50: color-mix(in srgb, var(--color-green-400) 15%, #262d38);
-    --color-green-100: color-mix(in srgb, var(--color-green-400) 30%, #262d38);
-    --color-green-200: color-mix(in srgb, var(--color-green-400) 42%, #262d38);
-    --color-lime-50: color-mix(in srgb, var(--color-lime-400) 15%, #262d38);
-    --color-lime-100: color-mix(in srgb, var(--color-lime-400) 30%, #262d38);
-    --color-lime-200: color-mix(in srgb, var(--color-lime-400) 42%, #262d38);
-    --color-yellow-50: color-mix(in srgb, var(--color-yellow-400) 15%, #262d38);
-    --color-yellow-100: color-mix(in srgb, var(--color-yellow-400) 30%, #262d38);
-    --color-yellow-200: color-mix(in srgb, var(--color-yellow-400) 42%, #262d38);
-    --color-amber-50: color-mix(in srgb, var(--color-amber-400) 15%, #262d38);
-    --color-amber-100: color-mix(in srgb, var(--color-amber-400) 30%, #262d38);
-    --color-amber-200: color-mix(in srgb, var(--color-amber-400) 42%, #262d38);
-    --color-orange-50: color-mix(in srgb, var(--color-orange-400) 15%, #262d38);
-    --color-orange-100: color-mix(in srgb, var(--color-orange-400) 30%, #262d38);
-    --color-orange-200: color-mix(in srgb, var(--color-orange-400) 42%, #262d38);
-    --color-rose-50: color-mix(in srgb, var(--color-rose-400) 15%, #262d38);
-    --color-rose-100: color-mix(in srgb, var(--color-rose-400) 30%, #262d38);
-    --color-rose-200: color-mix(in srgb, var(--color-rose-400) 42%, #262d38);
-    --color-red-50: color-mix(in srgb, var(--color-red-400) 15%, #262d38);
-    --color-red-100: color-mix(in srgb, var(--color-red-400) 30%, #262d38);
-    --color-red-200: color-mix(in srgb, var(--color-red-400) 42%, #262d38);
-    --color-pink-50: color-mix(in srgb, var(--color-pink-400) 15%, #262d38);
-    --color-pink-100: color-mix(in srgb, var(--color-pink-400) 30%, #262d38);
-    --color-pink-200: color-mix(in srgb, var(--color-pink-400) 42%, #262d38);
-    --color-fuchsia-50: color-mix(in srgb, var(--color-fuchsia-400) 15%, #262d38);
-    --color-fuchsia-100: color-mix(in srgb, var(--color-fuchsia-400) 30%, #262d38);
-    --color-fuchsia-200: color-mix(in srgb, var(--color-fuchsia-400) 42%, #262d38);
+    --color-purple-50: color-mix(in srgb, var(--color-purple-400) 15%, #111318);
+    --color-purple-100: color-mix(in srgb, var(--color-purple-400) 28%, #111318);
+    --color-purple-200: color-mix(in srgb, var(--color-purple-400) 40%, #111318);
+    --color-violet-50: color-mix(in srgb, var(--color-violet-400) 15%, #111318);
+    --color-violet-100: color-mix(in srgb, var(--color-violet-400) 28%, #111318);
+    --color-violet-200: color-mix(in srgb, var(--color-violet-400) 40%, #111318);
+    --color-indigo-50: color-mix(in srgb, var(--color-indigo-400) 15%, #111318);
+    --color-indigo-100: color-mix(in srgb, var(--color-indigo-400) 28%, #111318);
+    --color-indigo-200: color-mix(in srgb, var(--color-indigo-400) 40%, #111318);
+    --color-blue-50: color-mix(in srgb, var(--color-blue-400) 15%, #111318);
+    --color-blue-100: color-mix(in srgb, var(--color-blue-400) 30%, #111318);
+    --color-blue-200: color-mix(in srgb, var(--color-blue-400) 42%, #111318);
+    --color-sky-50: color-mix(in srgb, var(--color-sky-400) 15%, #111318);
+    --color-sky-100: color-mix(in srgb, var(--color-sky-400) 30%, #111318);
+    --color-sky-200: color-mix(in srgb, var(--color-sky-400) 42%, #111318);
+    --color-cyan-50: color-mix(in srgb, var(--color-cyan-400) 15%, #111318);
+    --color-cyan-100: color-mix(in srgb, var(--color-cyan-400) 30%, #111318);
+    --color-cyan-200: color-mix(in srgb, var(--color-cyan-400) 42%, #111318);
+    --color-teal-50: color-mix(in srgb, var(--color-teal-400) 15%, #111318);
+    --color-teal-100: color-mix(in srgb, var(--color-teal-400) 30%, #111318);
+    --color-teal-200: color-mix(in srgb, var(--color-teal-400) 42%, #111318);
+    --color-emerald-50: color-mix(in srgb, var(--color-emerald-400) 15%, #111318);
+    --color-emerald-100: color-mix(in srgb, var(--color-emerald-400) 30%, #111318);
+    --color-emerald-200: color-mix(in srgb, var(--color-emerald-400) 42%, #111318);
+    --color-green-50: color-mix(in srgb, var(--color-green-400) 15%, #111318);
+    --color-green-100: color-mix(in srgb, var(--color-green-400) 30%, #111318);
+    --color-green-200: color-mix(in srgb, var(--color-green-400) 42%, #111318);
+    --color-lime-50: color-mix(in srgb, var(--color-lime-400) 15%, #111318);
+    --color-lime-100: color-mix(in srgb, var(--color-lime-400) 30%, #111318);
+    --color-lime-200: color-mix(in srgb, var(--color-lime-400) 42%, #111318);
+    --color-yellow-50: color-mix(in srgb, var(--color-yellow-400) 15%, #111318);
+    --color-yellow-100: color-mix(in srgb, var(--color-yellow-400) 30%, #111318);
+    --color-yellow-200: color-mix(in srgb, var(--color-yellow-400) 42%, #111318);
+    --color-amber-50: color-mix(in srgb, var(--color-amber-400) 15%, #111318);
+    --color-amber-100: color-mix(in srgb, var(--color-amber-400) 30%, #111318);
+    --color-amber-200: color-mix(in srgb, var(--color-amber-400) 42%, #111318);
+    --color-orange-50: color-mix(in srgb, var(--color-orange-400) 15%, #111318);
+    --color-orange-100: color-mix(in srgb, var(--color-orange-400) 30%, #111318);
+    --color-orange-200: color-mix(in srgb, var(--color-orange-400) 42%, #111318);
+    --color-rose-50: color-mix(in srgb, var(--color-rose-400) 15%, #111318);
+    --color-rose-100: color-mix(in srgb, var(--color-rose-400) 30%, #111318);
+    --color-rose-200: color-mix(in srgb, var(--color-rose-400) 42%, #111318);
+    --color-red-50: color-mix(in srgb, var(--color-red-400) 15%, #111318);
+    --color-red-100: color-mix(in srgb, var(--color-red-400) 30%, #111318);
+    --color-red-200: color-mix(in srgb, var(--color-red-400) 42%, #111318);
+    --color-pink-50: color-mix(in srgb, var(--color-pink-400) 15%, #111318);
+    --color-pink-100: color-mix(in srgb, var(--color-pink-400) 30%, #111318);
+    --color-pink-200: color-mix(in srgb, var(--color-pink-400) 42%, #111318);
+    --color-fuchsia-50: color-mix(in srgb, var(--color-fuchsia-400) 15%, #111318);
+    --color-fuchsia-100: color-mix(in srgb, var(--color-fuchsia-400) 30%, #111318);
+    --color-fuchsia-200: color-mix(in srgb, var(--color-fuchsia-400) 42%, #111318);
 }
 
 /* The CRM is built on the neutral utility palette, so the dark theme remaps
@@ -86,103 +146,108 @@
 @layer utilities {
     /* ------------------------------- surfaces ------------------------------- */
     .dark .bg-white {
-        background-color: #262d38;
+        background-color: #111318;
     }
     .dark .bg-white\/70 {
-        background-color: rgb(38 45 56 / 0.7);
+        background-color: rgb(17 19 24 / 0.7);
     }
     .dark .bg-white\/80 {
-        background-color: rgb(38 45 56 / 0.8);
+        background-color: rgb(17 19 24 / 0.8);
     }
     .dark .bg-white\/90 {
-        background-color: rgb(38 45 56 / 0.9);
+        background-color: rgb(17 19 24 / 0.9);
     }
     .dark .bg-white\/95 {
-        background-color: rgb(38 45 56 / 0.95);
+        background-color: rgb(17 19 24 / 0.95);
     }
     .dark .hover\:bg-white:hover,
     .dark .focus\:bg-white:focus {
-        background-color: #303845;
+        background-color: #171a21;
+    }
+    /* Elevated surfaces: modals, dialogs and sheets sit above the card layer. */
+    .dark .fixed .bg-white {
+        background-color: #171a21;
     }
 
     .dark .bg-gray-50 {
-        background-color: #1c2129;
+        background-color: #090909;
     }
     .dark .bg-gray-50\/40 {
-        background-color: rgb(28 33 41 / 0.4);
+        background-color: rgb(9 9 9 / 0.4);
     }
     .dark .bg-gray-50\/50 {
-        background-color: rgb(28 33 41 / 0.5);
+        background-color: rgb(9 9 9 / 0.5);
     }
     .dark .bg-gray-50\/60 {
-        background-color: rgb(28 33 41 / 0.6);
+        background-color: rgb(9 9 9 / 0.6);
     }
     .dark .bg-gray-50\/70 {
-        background-color: rgb(28 33 41 / 0.7);
+        background-color: rgb(9 9 9 / 0.7);
     }
     .dark .hover\:bg-gray-50:hover {
-        background-color: #272d37;
+        background-color: #171a21;
     }
     .dark .hover\:bg-gray-50\/60:hover {
-        background-color: rgb(39 45 55 / 0.6);
+        background-color: rgb(23 26 33 / 0.6);
     }
     .dark .hover\:bg-gray-50\/80:hover {
-        background-color: rgb(39 45 55 / 0.8);
+        background-color: rgb(23 26 33 / 0.8);
     }
 
     .dark .bg-gray-100 {
-        background-color: #2f3642;
+        background-color: #171a21;
     }
     .dark .bg-gray-100\/70 {
-        background-color: rgb(47 54 66 / 0.7);
+        background-color: rgb(23 26 33 / 0.7);
     }
     .dark .hover\:bg-gray-100:hover {
-        background-color: #353c49;
+        background-color: #292d36;
     }
 
     .dark .bg-gray-200,
     .dark .disabled\:bg-gray-200:disabled {
-        background-color: #3f4855;
+        background-color: #292d36;
     }
     .dark .hover\:bg-gray-200:hover {
-        background-color: #525d6d;
+        background-color: #343944;
     }
     .dark .bg-gray-300 {
-        background-color: #566172;
+        background-color: #3d434f;
     }
 
     /* slate is used by the communication/timeline widgets */
     .dark .bg-slate-50 {
-        background-color: #1a1f27;
+        background-color: #090909;
     }
     .dark .hover\:bg-slate-50:hover {
-        background-color: #2b3240;
+        background-color: #171a21;
     }
     .dark .bg-slate-100 {
-        background-color: #2f3642;
+        background-color: #171a21;
     }
 
     /* -------------------------------- text --------------------------------- */
+    /* Primary #FFFFFF · Secondary #A1A1AA · Muted #71717A (see token header). */
     .dark .text-gray-900 {
-        color: #f6f8fb;
+        color: #ffffff;
     }
     .dark .text-gray-800 {
-        color: #eaeef4;
+        color: #ffffff;
     }
     .dark .text-gray-700 {
-        color: #dbe1ea;
+        color: #ffffff;
     }
     .dark .text-gray-600 {
-        color: #c3cbd8;
+        color: #a1a1aa;
     }
     .dark .text-gray-500 {
-        color: #b2bccb;
+        color: #a1a1aa;
     }
     .dark .text-gray-400 {
-        color: #a3aebf;
+        color: #71717a;
     }
     .dark .text-gray-300 {
-        color: #bac3d0;
+        color: #71717a;
     }
     .dark .hover\:text-gray-900:hover {
         color: #ffffff;
@@ -191,135 +256,146 @@
         color: #ffffff;
     }
     .dark .hover\:text-gray-700:hover {
-        color: #f6f8fb;
+        color: #ffffff;
     }
     .dark .hover\:text-gray-600:hover {
-        color: #d6dde7;
+        color: #ffffff;
     }
     .dark .hover\:text-gray-500:hover {
-        color: #d2dae5;
+        color: #ffffff;
     }
 
     .dark .text-slate-800 {
-        color: #f6f8fb;
+        color: #ffffff;
     }
     .dark .text-slate-600 {
-        color: #c3cbd8;
+        color: #a1a1aa;
     }
     .dark .text-slate-500 {
-        color: #b2bccb;
+        color: #a1a1aa;
     }
     .dark .text-slate-400 {
-        color: #a3aebf;
+        color: #71717a;
     }
 
     .dark .text-\[\#0F172A\] {
-        color: #f6f8fb;
+        color: #ffffff;
     }
 
     /* ------------------------------- borders -------------------------------- */
+    /* Card/control borders resolve to the #292D36 border token. */
     .dark .border-gray-50 {
-        border-color: #2f3641;
+        border-color: #171a21;
     }
     .dark .border-gray-100 {
-        border-color: #363e4a;
+        border-color: #292d36;
     }
     .dark .border-gray-200 {
-        border-color: #46505f;
+        border-color: #292d36;
     }
     .dark .border-gray-300 {
-        border-color: #576374;
+        border-color: #363b45;
     }
     .dark .border-gray-400 {
-        border-color: #687689;
+        border-color: #454b57;
     }
     .dark .border-gray-500 {
-        border-color: #7a899e;
+        border-color: #575e6b;
     }
     .dark .hover\:border-gray-200:hover {
-        border-color: #576374;
+        border-color: #363b45;
     }
     .dark .hover\:border-gray-300:hover {
-        border-color: #687689;
+        border-color: #454b57;
     }
     .dark .divide-gray-50 > :not(:last-child) {
-        border-color: #2f3641;
+        border-color: #171a21;
     }
     .dark .divide-gray-100 > :not(:last-child) {
-        border-color: #363e4a;
+        border-color: #292d36;
     }
 
     .dark .border-slate-200 {
-        border-color: #46505f;
+        border-color: #292d36;
     }
     .dark .border-slate-300,
     .dark .hover\:border-slate-300:hover {
-        border-color: #576374;
+        border-color: #363b45;
+    }
+
+    /* Card border token: the brand-tinted hairline (border-purple-50/50) that
+       wraps KPI cards and panels becomes the neutral #292D36 card border in
+       dark, while hover keeps a brighter step for feedback. */
+    .dark .border-purple-50\/50 {
+        border-color: #292d36;
+    }
+    .dark .hover\:border-purple-200:hover {
+        border-color: #454b57;
     }
 
     /* --------------- light surfaces written as arbitrary hex ---------------- */
+    /* Subtle panels / section wrappers. */
     .dark .bg-\[\#f7f5f9\],
     .dark .bg-\[\#F8F9FD\],
     .dark .bg-\[\#F1F5F9\],
     .dark .bg-\[\#f5f3f6\],
     .dark .bg-\[\#f5f3f7\],
     .dark .bg-\[\#f4f0f9\] {
-        background-color: #1e232b;
+        background-color: #090909;
     }
     .dark .bg-\[\#F1F5F9\]\/80 {
-        background-color: rgb(30 35 43 / 0.8);
+        background-color: rgb(9 9 9 / 0.8);
     }
+    /* Soft cards. */
     .dark .bg-\[\#faf7ff\],
     .dark .bg-\[\#f4f1f9\],
     .dark .bg-\[\#f7f3ff\],
-    .dark .bg-\[\#f5f1ff\] {
-        background-color: #262b35;
+    .dark .bg-\[\#f5f1ff\],
+    .dark .bg-\[\#e7e2ee\] {
+        background-color: #111318;
     }
+    /* Chips / elevated fills. */
     .dark .bg-\[\#f5f0ff\],
-    .dark .bg-\[\#f3edff\] {
-        background-color: #2a303a;
-    }
+    .dark .bg-\[\#f3edff\],
     .dark .bg-\[\#efe9ff\] {
-        background-color: #2e343f;
+        background-color: #171a21;
     }
     .dark .bg-\[\#ece5ff\] {
-        background-color: #39404f;
+        background-color: #292d36;
     }
     .dark .bg-\[\#cabef7\] {
-        background-color: #55617a;
+        background-color: #3d434f;
     }
-    .dark .bg-\[\#e7e2ee\] {
-        background-color: #2c323d;
-    }
+    /* Chat panel: flush with the canvas, as in light mode. */
     .dark .bg-\[\#efe7dd\] {
-        background-color: #171b22;
+        background-color: #050505;
     }
     .dark .bg-\[\#d9fdd3\] {
         background-color: #175934;
     }
 
     .dark .border-\[\#F8F9FD\] {
-        border-color: #363e4a;
+        border-color: #090909;
     }
     .dark .border-\[\#E2E8F0\] {
-        border-color: #46505f;
+        border-color: #292d36;
     }
     .dark .border-\[\#d9d2e3\] {
-        border-color: #343b47;
+        border-color: #292d36;
     }
     .dark .border-\[\#e7e0ee\],
     .dark .border-\[\#e8e1f0\] {
-        border-color: #363d49;
+        border-color: #292d36;
     }
     .dark .border-\[\#ebe2f5\] {
-        border-color: #46505f;
+        border-color: #292d36;
     }
     .dark .border-\[\#e7e2ee\] {
-        border-color: #373e4a;
+        border-color: #292d36;
     }
     .dark .border-\[\#d2cce2\],
     .dark .border-\[\#d7d2de\] {
-        border-color: #414a59;
+        border-color: #363b45;
     }
 
     /* ACCENT_TEXT_RULES */
@@ -505,11 +581,58 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Light theme tokens (CRM routes only — the `crm` class on <html> mirrors
+   `isCrmRoute`, so the public marketing site is unaffected).
+
+   Canvas #F1F3F7 (set by .crm-canvas) · chrome/cards stay pure #FFFFFF ·
+   card borders #E0E4EC · primary #171923 · secondary #667085 · muted #98A2B3.
+   --------------------------------------------------------------------------- */
+html.crm:not(.dark) .text-gray-900,
+html.crm:not(.dark) .text-gray-800,
+html.crm:not(.dark) .text-gray-700 {
+    color: #171923;
+}
+
+html.crm:not(.dark) .text-gray-600,
+html.crm:not(.dark) .text-gray-500 {
+    color: #667085;
+}
+
+html.crm:not(.dark) .text-gray-400,
+html.crm:not(.dark) .text-gray-300 {
+    color: #98a2b3;
+}
+
+/* KPI/panel cards keep the brand hairline (`border-purple-50/50` →
+   rgba(250,245,255,0.5)) exactly as in the reference design: it renders
+   *lighter* than the canvas, so white cards read as clean floating surfaces
+   with the soft shadow defining their edge. Do not swap it for a grey border
+   — a darker-than-canvas hairline makes the cards look boxy/outlined. */
+
+html.crm:not(.dark) .border-gray-100 {
+    border-color: #e0e4ec;
+}
+
+html.crm:not(.dark) .divide-gray-100 > :not(:last-child) {
+    border-color: #e0e4ec;
+}
+
+/* Sidebar hairline follows the chrome surface. */
+html.crm:not(.dark) .crm-chrome {
+    border-color: #e0e4ec;
+}
+
+/* Notification badge cutout matches the white header. */
+html.crm:not(.dark) .border-\[\#F8F9FD\] {
+    border-color: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
    Dark chrome details: native controls and scrollbars default to light grey
    and read as bright smears against the carbon canvas.
    --------------------------------------------------------------------------- */
 .dark {
-    scrollbar-color: #46505f #171b22;
+    scrollbar-color: #292d36 #050505;
     scrollbar-width: thin;
 }
 
@@ -519,25 +642,25 @@
 }
 
 .dark ::-webkit-scrollbar-track {
-    background-color: #1c2129;
+    background-color: #090909;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-    background-color: #46505f;
-    border: 2px solid #1c2129;
+    background-color: #292d36;
+    border: 2px solid #090909;
     border-radius: 8px;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-    background-color: #576374;
+    background-color: #363b45;
 }
 
 .dark ::-webkit-scrollbar-corner {
-    background-color: #1c2129;
+    background-color: #090909;
 }
 
 .dark ::placeholder {
-    color: #a3aebf;
+    color: #71717a;
     opacity: 1;
 }
 

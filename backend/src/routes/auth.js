@@ -1,6 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { login, logout, getMe } = require('../controllers/auth');
+const { login, logout, getMe, getPermissions } = require('../controllers/auth');
 const { forgotPassword, verifyResetOtp, resetPassword } = require('../controllers/passwordReset');
 const { requireAuth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -84,6 +84,9 @@ const accountLimiter = rateLimit({
 router.post('/login', loginLimiter, validate(loginSchema), login);
 router.post('/logout', requireAuth(), logout);
 router.get('/me', requireAuth(), getMe);
+// Server-authoritative permissions for mobile navigation gating. The server
+// remains the security boundary; this response only mirrors it for UI.
+router.get('/permissions', requireAuth(), getPermissions);
 
 // Password reset. Order matters: rate limit BEFORE validation, so junk
 // payloads still consume budget; validation before the handler, so the
