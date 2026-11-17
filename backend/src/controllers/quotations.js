@@ -19,9 +19,9 @@ const getQuotations = asyncHandler(async (req, res, next) => {
 
 const getQuotationById = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
-    const { organizationId, role } = req.auth;
+    const { organizationId, role, userId } = req.auth;
 
-    const quotation = await QuotationService.getQuotationById(id, organizationId);
+    const quotation = await QuotationService.getQuotationById(id, organizationId, role, userId);
 
     res.status(200).json({
         success: true,

@@ -174,9 +174,9 @@ const getFollowups = asyncHandler(async (req, res, next) => {
 
 const toggleFollowupStatus = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
-    const { organizationId } = req.auth;
+    const { organizationId, role, userId } = req.auth;
     
-    const result = await LeadService.toggleFollowupStatus(id, organizationId);
+    const result = await LeadService.toggleFollowupStatus(id, organizationId, role, userId);
     
     res.status(200).json({
         success: true,

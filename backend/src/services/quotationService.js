@@ -48,12 +48,13 @@ class QuotationService {
         return { quotations, total, pages: Math.ceil(total / limit) };
     }
 
-    static async getQuotationById(id, organizationId) {
+    static async getQuotationById(id, organizationId, role, userId) {
         const quotation = await prisma.quotation.findFirst({
             where: { id, organizationId },
             include: BASE_INCLUDE
         });
         if (!quotation) throw new AppError('Quotation not found', 404, 'NOT_FOUND');
+        assertOwnership(quotation.lead || {}, role, userId, 'assignedToId', 'You do not have access to this quotation');
         return quotation;
     }
 

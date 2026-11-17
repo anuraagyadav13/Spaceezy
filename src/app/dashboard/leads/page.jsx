@@ -63,6 +63,14 @@ function LeadsWorkspace() {
                                 {tab.label}
                             </button>
                         ))}
+                        <button
+                            type="button"
+                            onClick={() => router.push("/dashboard/marketing/sources")}
+                            className="px-4 py-2 rounded-xl text-sm font-bold text-purple-600 hover:text-purple-700 hover:bg-purple-50 transition-all"
+                            aria-label="View lead sources"
+                        >
+                            Lead Sources
+                        </button>
                     </div>
                     {isExecutive && <ClaimStatsBar />}
                 </div>
@@ -154,7 +162,7 @@ function NewLeadsContent() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-gray-500">
                     {claim && (
-                        <span className="px-2.5 py-1.5 rounded-lg bg-purple-50 border border-purple-100 text-purple-700">
+                        <span className="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-100 text-amber-800">
                             Self-Claimed {claim.claimed} / {claim.limit}
                         </span>
                     )}

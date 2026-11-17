@@ -75,7 +75,7 @@ class BookingService {
         return { bookings, total, pages: Math.ceil(total / limit) };
     }
 
-    static async getBookingById(id, organizationId) {
+    static async getBookingById(id, organizationId, role, userId) {
         const booking = await prisma.booking.findFirst({
             where: { id, organizationId },
             include: {
@@ -84,11 +84,21 @@ class BookingService {
                 configuration: { select: { id: true, name: true } },
                 project: { select: { id: true, name: true } },
                 assignedTo: { select: { id: true, name: true } },
-                lead: { select: { id: true, name: true, status: true } },
+                lead: { select: { id: true, name: true, status: true, assignedToId: true } },
                 quotation: { select: { id: true, status: true, totalAmount: true, validUntil: true } }
             }
         });
         if (!booking) throw new AppError('Booking not found', 404, 'NOT_FOUND');
+
+        // Restricted roles may only open a booking that is theirs or belongs
+        // to a lead assigned to them.
+        if (isExecRole(role)) {
+            const ownsBooking = booking.assignedToId === userId;
+            const ownsLead = booking.lead && booking.lead.assignedToId === userId;
+            if (!ownsBooking && !ownsLead) {
+                throw new AppError('You do not have permission to view this booking', 403, 'FORBIDDEN');
+            }
+        }
         return booking;
     }
 

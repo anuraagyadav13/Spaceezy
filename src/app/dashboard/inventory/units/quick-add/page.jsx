@@ -442,7 +442,7 @@ export default function QuickAddWizard() {
                                         </span>
                                     </div>
                                 )}
-                                <div className="mt-3 grid grid-cols-4 gap-3">
+                                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
                                     {configurationsFor(formData.type === "Commercial" ? "Commercial" : "Residential").map((config) => {
                                         const selected = formData.configuration === config && !formData.configurationId;
                                         return (

@@ -204,7 +204,7 @@ function BookingWizardInner() {
                         const isDone = currentStage > index;
                         const isCurrent = currentStage === index;
                         return (
-                            <div key={stg.title} className="relative z-10 flex flex-col items-center gap-1.5 bg-white px-3">
+                            <div key={stg.title} className="relative z-10 flex flex-col items-center gap-1.5 bg-white px-1 sm:px-3 hover:shadow-lg transition-shadow">
                                 <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${
                                     isDone ? 'bg-emerald-500 text-white shadow-sm' :
                                     isCurrent ? 'bg-purple-600 text-white ring-4 ring-purple-100 shadow-md' :
@@ -212,7 +212,7 @@ function BookingWizardInner() {
                                 }`}>
                                     {isDone ? <Check size={18} /> : <Icon size={18} />}
                                 </div>
-                                <span className={`text-xs font-bold ${isCurrent ? 'text-purple-700' : isDone ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                <span className={`w-16 sm:w-auto text-center leading-tight text-[10px] sm:text-xs font-bold ${isCurrent ? 'text-purple-700' : isDone ? 'text-emerald-600' : 'text-gray-400'}`}>
                                     {stg.title}
                                 </span>
                             </div>

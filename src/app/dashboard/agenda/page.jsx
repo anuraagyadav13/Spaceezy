@@ -59,7 +59,7 @@ export default function AgendaPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4">
+                <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-4 hover:shadow-lg transition-shadow">
                     <h2 className="text-sm font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-2">
                         <Clock size={16} className="text-purple-600" /> Follow-ups Due Today
                     </h2>

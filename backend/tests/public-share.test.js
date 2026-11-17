@@ -312,6 +312,39 @@ describe('GET /api/v1/public/properties/:token', () => {
         expect(raw).not.toContain(`"${PROP}"`);
         expect(dto).not.toHaveProperty('id');
         expect(dto).not.toHaveProperty('version');
+        // The apartment number, floor and tower are CRM-only.
+        expect(dto).not.toHaveProperty('unitNumber');
+        expect(dto).not.toHaveProperty('floor');
+        expect(dto).not.toHaveProperty('tower');
+        expect(raw).not.toContain('A-1201');
+    });
+
+    it('never publishes unitNumber, floor or tower in the listing DTO', async () => {
+        prisma.property.findMany.mockResolvedValue([{
+            publicToken: TOKEN,
+            title: 'Unit 1201',
+            unitNumber: 'A-1201',
+            tower: 'A',
+            floor: 12,
+            configuration: '2 BHK',
+            bhk: 2,
+            type: 'Residential',
+            purpose: 'Sale',
+            areaSaleable: 950,
+            price: 4500000,
+            status: 'AVAILABLE',
+            images: ['https://cdn.example.com/unit.jpg'],
+            project: { ...publishedProject, images: ['https://cdn.example.com/project.jpg'] }
+        }]);
+        prisma.property.count.mockResolvedValue(1);
+
+        const res = await request(app).get('/api/v1/public/properties');
+        expect(res.status).toBe(200);
+        const item = res.body.data.items[0];
+        expect(item).not.toHaveProperty('unitNumber');
+        expect(item).not.toHaveProperty('floor');
+        expect(item).not.toHaveProperty('tower');
+        expect(JSON.stringify(item)).not.toContain('A-1201');
     });
 });
 

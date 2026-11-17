@@ -400,9 +400,8 @@ class PublicService {
                 return {
                     token: p.publicToken,
                     title: p.title,
-                    unitNumber: p.unitNumber,
-                    tower: p.tower,
-                    floor: p.floor,
+                    // unitNumber, floor and tower are internal identifiers:
+                    // shown in the CRM only, never in public listings.
                     configuration: p.configuration,
                     bhk: p.bhk,
                     type: p.type,
@@ -465,9 +464,8 @@ class PublicService {
         return {
             token: property.publicToken,
             title: property.title,
-            unitNumber: property.unitNumber,
-            tower: property.tower,
-            floor: property.floor,
+            // unitNumber, floor and tower are internal identifiers: CRM-only,
+            // never published to the public property page or its API payload.
             facing: property.facing,
             configuration: property.configuration || (property.config && property.config.name) || null,
             bhk: property.bhk || (property.config && property.config.bhk) || null,

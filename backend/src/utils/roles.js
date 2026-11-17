@@ -19,6 +19,15 @@ const assertOwnership = (entity, role, userId, field = 'assignedToId', message =
     }
 };
 
+// Single lead-visibility boundary used by every endpoint that reaches a lead
+// (directly or through a task / visit / quotation / booking / customer).
+// Restricted employee roles may only touch leads assigned to them; owner,
+// admin and manager roles keep organization-wide access.
+const LEAD_ACCESS_DENIED = 'You do not have access to this lead';
+
+const assertLeadAccess = (lead, role, userId) =>
+    assertOwnership(lead, role, userId, 'assignedToId', LEAD_ACCESS_DENIED);
+
 const scopeByRole = (where, role, userId, filters = {}) => {
     if (isExecRole(role)) {
         where.assignedToId = userId;
@@ -30,8 +39,10 @@ const scopeByRole = (where, role, userId, filters = {}) => {
 
 module.exports = {
     RESTRICTED_ROLES,
+    LEAD_ACCESS_DENIED,
     isExecRole,
     assignmentSourceForRole,
     assertOwnership,
+    assertLeadAccess,
     scopeByRole,
 };

@@ -67,7 +67,7 @@ class CustomerService {
         return { customers, total, pages: Math.ceil(total / limit) };
     }
 
-    static async getCustomerById(id, organizationId) {
+    static async getCustomerById(id, organizationId, role, userId) {
         const customer = await prisma.customer.findFirst({
             where: { id, organizationId },
             include: {
@@ -83,6 +83,7 @@ class CustomerService {
             }
         });
         if (!customer) throw new AppError('Customer not found', 404, 'NOT_FOUND');
+        assertOwnership(customer, role, userId, 'assignedToId', 'Not authorized to view this customer');
         return customer;
     }
 
