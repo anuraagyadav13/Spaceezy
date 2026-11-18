@@ -832,7 +832,7 @@ export default function AddProjectPage() {
             {/* Stepper */}
             <div className="px-4 pb-4 sm:px-8">
                 <div className="mx-auto max-w-6xl rounded-[28px] border border-[#ebe2f5] bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-1 sm:gap-2">
                         {STEPS.map((step, index) => {
                             const isActive = currentStep === index;
                             const isComplete = currentStep > index;
@@ -857,7 +857,7 @@ export default function AddProjectPage() {
                                         >
                                             {isComplete ? <Check size={16} /> : <Icon size={16} />}
                                         </button>
-                                        <div className={`text-[11px] font-medium whitespace-nowrap ${isActive ? "text-violet-700" : isComplete ? "text-violet-500" : "text-gray-400"}`}>
+                                        <div className={`hidden sm:block text-[11px] font-medium whitespace-nowrap ${isActive ? "text-violet-700" : isComplete ? "text-violet-500" : "text-gray-400"}`}>
                                             {step.label}
                                         </div>
                                     </div>
@@ -872,7 +872,7 @@ export default function AddProjectPage() {
             <div className="flex-1 overflow-y-auto px-4 pb-8 sm:px-8">
                 <div className="mx-auto max-w-6xl rounded-[28px] border border-[#ebe2f5] bg-white/90 p-6 shadow-[0_16px_40px_rgba(15,23,42,0.05)] sm:p-8">
                     {/* Step title bar */}
-                    <div className="mb-8 flex items-center justify-between">
+                    <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h2 className="text-xl font-bold text-gray-900">{STEPS[currentStep].label}</h2>
                             <p className="mt-1 text-sm text-gray-500">Step {currentStep + 1} of {STEPS.length}</p>

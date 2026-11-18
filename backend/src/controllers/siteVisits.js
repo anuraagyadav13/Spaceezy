@@ -32,10 +32,19 @@ const createSiteVisit = asyncHandler(async (req, res) => {
     const { organizationId, userId, role } = req.auth;
     const siteVisit = await SiteVisitService.createSiteVisit(req.body, organizationId, userId, role);
 
+    // Scheduling also sends the approved Site Visit Invitation template. It is
+    // best-effort: the visit above is already committed, and `whatsapp.sent`
+    // tells the CRM whether the customer actually got the message.
+    const whatsapp = await SiteVisitService.sendInvitationWhatsApp(
+        siteVisit, organizationId, userId, role
+    );
+
     res.status(201).json({
         success: true,
-        data: maskNestedContact(siteVisit, role, 'lead'),
-        message: 'Site visit created successfully'
+        data: { ...maskNestedContact(siteVisit, role, 'lead'), whatsapp },
+        message: whatsapp.sent
+            ? 'Site visit created and WhatsApp invitation sent'
+            : 'Site visit created successfully'
     });
 });
 

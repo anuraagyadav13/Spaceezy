@@ -1,13 +1,13 @@
 "use client";
 import { Suspense, useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     MessageSquare, MessageCircle, Send, AlertCircle, RefreshCw, Link2, Search,
     Check, CheckCheck, Clock, Phone, Video, MoreVertical, Paperclip, Plus, X,
     List, Settings, Signal, ExternalLink, CalendarPlus, FileText, KeyRound, Receipt,
-    Maximize2, Minimize2, Copy
+    Maximize2, Minimize2, Copy, ArrowLeft
 } from "lucide-react";
 import { fetchLeads, fetchLeadById } from "../../../../lib/api/leads";
 import { fetchUsers } from "../../../../lib/api/users";
@@ -167,6 +167,7 @@ const formatConvTime = (value) => {
 
 function WhatsAppCenterPageInner() {
     const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useWhatsAppStatus();
+    const router = useRouter();
     // Subscribe to ?leadId= so SPA navigation between leads re-seeds the
     // selection (the mounted page is reused, mount-time initializers go stale).
     const searchParams = useSearchParams();
@@ -254,6 +255,43 @@ function WhatsAppCenterPageInner() {
     const [convSearch, setConvSearch] = useState("");
     const [rightTab, setRightTab] = useState("details");
     const [mobileListOpen, setMobileListOpen] = useState(false);
+
+    // The arrow drills out one level at a time, like the rest of the CRM: with
+    // a chat open it closes the chat and drops back to the conversation list,
+    // staying on WhatsApp. Only when no chat is open does it leave the page
+    // (to wherever the user came from, dashboard as the last resort), so the
+    // list is never skipped.
+    const closeChat = () => {
+        setSelectedLeadId(null);
+        setMobileListOpen(true);
+        // Drop the chat-only query params as well, so a refresh or a second
+        // back press does not reopen the conversation we just closed.
+        const params = new URLSearchParams(searchParams.toString());
+        let changed = false;
+        ["leadId", "message", "shareProperty"].forEach((key) => {
+            if (params.has(key)) {
+                params.delete(key);
+                changed = true;
+            }
+        });
+        if (changed) {
+            const query = params.toString();
+            router.replace(`/dashboard/calling/whatsapp${query ? `?${query}` : ""}`, { scroll: false });
+        }
+    };
+
+    const handleBack = () => {
+        if (selectedLeadId) {
+            closeChat();
+            return;
+        }
+        if (typeof window !== "undefined" && window.history.length > 1) {
+            router.back();
+            return;
+        }
+        router.push("/dashboard");
+    };
+
     const { user } = useAuth();
     const { hasPermission } = usePermissions();
     // Assigning a conversation is lead assignment server-side, so the control
@@ -2322,9 +2360,21 @@ function WhatsAppCenterPageInner() {
     );
 
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-3 sm:p-6 lg:p-8 space-y-4 custom-scrollbar overflow-y-auto overflow-x-hidden">
+        <div
+            data-scroll-root="whatsapp"
+            className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-3 sm:p-6 lg:p-8 space-y-4 custom-scrollbar overflow-y-auto overflow-x-hidden"
+        >
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div className="min-w-0 flex items-start gap-3 flex-1">
+                    <button
+                        type="button"
+                        onClick={handleBack}
+                        aria-label={selectedLeadId ? "Close chat" : "Go back"}
+                        title={selectedLeadId ? "Close chat" : "Go back"}
+                        className="flex w-9 h-9 sm:w-11 sm:h-11 items-center justify-center rounded-2xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 shrink-0"
+                    >
+                        <ArrowLeft size={18} />
+                    </button>
                     <span className="hidden sm:flex w-11 h-11 rounded-2xl bg-green-500 text-white items-center justify-center shrink-0">
                         <MessageCircle size={22} />
                     </span>

@@ -5,9 +5,9 @@ export const SITE_TITLE_FALLBACK = "Spaceezy | Premium Real Estate";
 // (footer, floating button, contact page, SEO copy). The footer's
 // "Developed by Sharnex" wa.me link is the developer's own credit number
 // and intentionally differs — do not unify it.
-export const PHONE_DISPLAY = "+91 78272 67897";
-export const PHONE_TEL = "+917827267897";
-export const WHATSAPP_NUMBER = "917827267897";
+export const PHONE_DISPLAY = "+91 76830 20204";
+export const PHONE_TEL = "+917683020204";
+export const WHATSAPP_NUMBER = "917683020204";
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}`;
 export const EMAIL = "admin@spaceezy.com";
 export const OFFICE = {

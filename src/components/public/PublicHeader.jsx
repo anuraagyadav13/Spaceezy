@@ -50,6 +50,7 @@ export function PublicHeader() {
     const isSolid = scrolled || !isHomePage;
 
     return (
+        <>
         <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${isSolid ? "bg-white/90 backdrop-blur-md shadow-sm py-4" : "bg-transparent py-6"}`}>
             <div className="container mx-auto px-6 md:px-12 flex justify-between items-center">
                 <Link href="/" className="flex items-center gap-2.5">
@@ -103,7 +104,13 @@ export function PublicHeader() {
                 </button>
             </div>
 
-            {/* Mobile Menu */}
+            </header>
+
+            {/* Mobile Menu — deliberately rendered OUTSIDE <header>. The
+                header uses backdrop-blur, and a backdrop filter makes it the
+                containing block for fixed-position descendants, which clipped
+                this "inset-0" panel down to the header's own height (the X
+                appeared but the links never did). */}
             {mobileMenuOpen && (
                 <div className="fixed inset-0 z-[60] bg-white flex flex-col">
                     <div className="flex justify-between items-center p-6">
@@ -145,6 +152,6 @@ export function PublicHeader() {
                     </nav>
                 </div>
             )}
-        </header>
+        </>
     );
 }

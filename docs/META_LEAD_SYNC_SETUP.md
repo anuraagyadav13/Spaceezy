@@ -33,11 +33,31 @@ return `connected: true`. Any other result names the exact missing piece
 
 ## 3. Webhook subscription (Meta App Dashboard → Webhooks)
 
+Two subscriptions are required for leads to arrive:
+
+1. **App → leadgen field** (which callback URL Meta delivers to).
+2. **Page → app** (which Pages are allowed to deliver to this app).
+
+The CRM can do both in one click: **Meta Ads → Settings → Webhook
+configuration → Subscribe webhook in Meta** (ADMIN/SUPER_ADMIN). It writes
+`POST /{app-id}/subscriptions` (`object=page`, `fields=leadgen`) and
+`POST /{page-id}/subscribed_apps` (`subscribed_fields=leadgen`) for every
+Page selected in the settings, then reads the subscription back from Meta and
+shows Meta's own verdict. The same card also reports whether the registered
+callback URL differs from this deployment's `BACKEND_URL`.
+
+Manual equivalent:
+
 - Callback URL: `https://<BACKEND_URL>/api/v1/webhooks/meta/leadgen`
 - Verify token: the exact `META_WEBHOOK_VERIFY_TOKEN` value.
 - Click **Verify and save** (expects HTTP 200 echoing the challenge).
 - Subscribe the Page to the **`leadgen`** field (Page Settings →
   Advanced Messaging → Webhooks, or the app's Webhooks product page).
+
+> `Subscription: not subscribed` means Meta has no `leadgen` field on the
+> `page` app subscription. Leadgen lives on the **`page`** object — there is
+> no `object: "leadgen"` subscription, so checking for one always reports
+> "not subscribed" even when the setup is correct.
 
 ## 4. Controlled test with a Meta test lead
 

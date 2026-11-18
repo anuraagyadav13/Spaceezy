@@ -1,5 +1,6 @@
 // src/app/layout.jsx
 import "./globals.css";
+import Script from "next/script";
 import QueryProvider from "../components/providers/QueryProvider";
 import { ThemeProvider } from "../components/providers/ThemeProvider";
 import { AuthProvider } from "../features/auth/providers/AuthProvider";
@@ -10,17 +11,21 @@ export const metadata = {
   description: "Owner and Employee CRM for Spaceezy real estate",
 };
 
-// Runs before the page paints so a dark-mode CRM user never sees a white flash.
-// Dark mode is CRM-only, so the public site is always forced to light.
-// Must stay in sync with THEME_STORAGE_KEY / DARK_BACKGROUND / isCrmRoute in
-// components/providers/ThemeProvider.jsx.
-const THEME_BOOTSTRAP = `(function(){try{var p=window.location.pathname;var crm=p.indexOf("/dashboard")===0||p.indexOf("/login")===0||p.indexOf("/forgot-password")===0;var k="spaceezy-theme";var s=localStorage.getItem(k);var d=crm&&(s==="dark"||(s!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches));var r=document.documentElement;r.classList.toggle("dark",d);r.classList.toggle("crm",crm);r.style.colorScheme=d?"dark":"light";r.style.backgroundColor=d?"#050505":"";}catch(e){}})();`;
-
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
+        {/* Theme bootstrap: applies .dark/.crm before first paint so a dark-mode
+            CRM user never sees a white flash. It lives in public/theme-bootstrap.js
+            and loads via beforeInteractive, which injects a real <script> into
+            <head> of the server HTML. An inline <script> here earlier triggered
+            React 19's "Encountered a script tag while rendering React component"
+            warning (React never executes scripts it renders on the client). */}
+        <Script
+          id="theme-bootstrap"
+          src="/theme-bootstrap.js"
+          strategy="beforeInteractive"
+        />
         <ThemeProvider>
           <QueryProvider>
             <AuthProvider>

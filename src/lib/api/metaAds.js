@@ -81,6 +81,14 @@ export const testMetaWebhook = async () => {
     return response;
 };
 
+// Writes the leadgen webhook subscription in Meta (App Dashboard → Webhooks →
+// Page → leadgen) and subscribes the selected Pages to the app, so Meta
+// actually delivers leadgen events. Admin-only on the server.
+export const subscribeMetaWebhook = async () => {
+    const response = await apiClient.post("/meta-ads/settings/subscribe-webhook", {});
+    return response;
+};
+
 export const syncMetaAssets = async () => {
     const response = await apiClient.post("/meta-ads/settings/sync", {});
     return response;

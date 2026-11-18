@@ -94,11 +94,14 @@ const storedRow = (overrides = {}) => ({
 
 // Routes Graph requests by the last URL path segment (same convention as
 // meta-ads-phase1). A handler with __status simulates a provider failure.
+// An optional "<METHOD> <segment>" key wins over the bare segment, so a test
+// can distinguish GET /{app-id}/subscriptions from POST /{app-id}/subscriptions.
 const stubGraphRoutes = (routes) =>
-  jest.spyOn(global, 'fetch').mockImplementation(async (url) => {
+  jest.spyOn(global, 'fetch').mockImplementation(async (url, init) => {
     const pathname = new URL(String(url)).pathname;
     const id = pathname.split('/').filter(Boolean).pop() || '';
-    const handler = routes[id];
+    const method = String((init && init.method) || 'GET').toUpperCase();
+    const handler = routes[`${method} ${id}`] !== undefined ? routes[`${method} ${id}`] : routes[id];
     if (handler === undefined) {
       return { ok: false, status: 404, json: async () => ({ error: { message: `No stub for ${id}`, code: 100 } }) };
     }
@@ -597,11 +600,14 @@ describe('Meta credentials: connection testing with mocked Meta (Section D)', ()
   test('test-webhook runs the local HMAC self-test and best-effort subscription check', async () => {
     admin();
     prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    // Real Meta shape: leadgen is a FIELD of the `page` object — never an
+    // `object: 'leadgen'` row (the old check looked for that and always
+    // reported "not subscribed" on a correctly configured app).
     stubGraphRoutes({ subscriptions: { data: [{
-      object: 'leadgen',
+      object: 'page',
       callback_url: 'http://localhost:8000/api/v1/webhooks/meta/leadgen',
       active: true,
-      fields: ['leadgen'],
+      fields: [{ name: 'messages', version: 'v22.0' }, { name: 'leadgen', version: 'v22.0' }],
     }] } });
 
     const res = await post('/api/v1/meta-ads/settings/test-webhook', {});
@@ -611,6 +617,7 @@ describe('Meta credentials: connection testing with mocked Meta (Section D)', ()
     expect(res.body.data.hmac.ok).toBe(true);
     expect(res.body.data.callbackUrl).toBe('http://localhost:8000/api/v1/webhooks/meta/leadgen');
     expect(res.body.data.subscription).toMatchObject({ status: 'active' });
+    expect(res.body.data.subscription.fields).toContain('leadgen');
 
     // App token (appId|appSecret) goes in the Authorization header only.
     const [url, init] = global.fetch.mock.calls[0];
@@ -619,6 +626,95 @@ describe('Meta credentials: connection testing with mocked Meta (Section D)', ()
     expect(init.headers.Authorization).toBe('Bearer 1234567890|ROW-WEBHOOK-SECRET');
     expect(JSON.stringify(res.body)).not.toContain('ROW-WEBHOOK-SECRET');
     expect(JSON.stringify(res.body)).not.toContain('ROW-VERIFY-TOKEN');
+  });
+
+  test('test-webhook reports a page subscription without leadgen as not_subscribed', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    stubGraphRoutes({ subscriptions: { data: [{
+      object: 'page',
+      callback_url: 'http://localhost:8000/api/v1/webhooks/meta/leadgen',
+      active: true,
+      fields: [{ name: 'messages', version: 'v22.0' }],
+    }] } });
+
+    const res = await post('/api/v1/meta-ads/settings/test-webhook', {});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.subscription.status).toBe('not_subscribed');
+  });
+
+  test('test-webhook reports a different Meta callback URL as callback_mismatch', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    stubGraphRoutes({ subscriptions: { data: [{
+      object: 'page',
+      callback_url: 'https://elsewhere.example.com/api/v1/webhooks/meta/leadgen',
+      active: true,
+      fields: [{ name: 'leadgen', version: 'v22.0' }],
+    }] } });
+
+    const res = await post('/api/v1/meta-ads/settings/test-webhook', {});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.subscription.status).toBe('callback_mismatch');
+    expect(res.body.data.subscription.metaCallbackUrl).toBe('https://elsewhere.example.com/api/v1/webhooks/meta/leadgen');
+  });
+
+  test('subscribe-webhook writes the app subscription and the selected Page subscription', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow());
+    stubGraphRoutes({
+      'POST subscriptions': { success: true },
+      'GET subscriptions': { data: [{
+        object: 'page',
+        callback_url: 'http://localhost:8000/api/v1/webhooks/meta/leadgen',
+        active: true,
+        fields: [{ name: 'leadgen', version: 'v22.0' }],
+      }] },
+      'POST subscribed_apps': { success: true },
+    });
+
+    const res = await post('/api/v1/meta-ads/settings/subscribe-webhook', {});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.ok).toBe(true);
+    expect(res.body.data.subscription.status).toBe('active');
+    expect(res.body.data.pages).toEqual([{ pageId: PAGE_1, ok: true }]);
+
+    const calls = global.fetch.mock.calls.map(([url, init]) => ({
+      url: String(url),
+      pathname: new URL(String(url)).pathname,
+      method: String((init && init.method) || 'GET').toUpperCase(),
+      auth: init.headers.Authorization,
+      params: new URL(String(url)).searchParams,
+    }));
+    const appWrite = calls.find((call) => call.method === 'POST' && call.pathname.endsWith('/1234567890/subscriptions'));
+    expect(appWrite).toBeTruthy();
+    expect(appWrite.auth).toBe('Bearer 1234567890|ROW-WEBHOOK-SECRET');
+    expect(appWrite.params.get('object')).toBe('page');
+    expect(appWrite.params.get('fields')).toBe('leadgen');
+    expect(appWrite.params.get('verify_token')).toBe('ROW-VERIFY-TOKEN');
+    expect(appWrite.params.get('callback_url')).toBe('http://localhost:8000/api/v1/webhooks/meta/leadgen');
+
+    const pageWrite = calls.find((call) => call.method === 'POST' && call.pathname.endsWith(`/${PAGE_1}/subscribed_apps`));
+    expect(pageWrite).toBeTruthy();
+    expect(pageWrite.auth).toBe('Bearer DB-TOKEN-SECRET');
+    expect(pageWrite.params.get('subscribed_fields')).toBe('leadgen');
+    expect(JSON.stringify(res.body)).not.toContain('ROW-WEBHOOK-SECRET');
+    expect(JSON.stringify(res.body)).not.toContain('DB-TOKEN-SECRET');
+  });
+
+  test('subscribe-webhook without an app secret → 409 META_NOT_CONFIGURED and no Meta write', async () => {
+    admin();
+    prisma.metaAdsSettings.findUnique.mockResolvedValue(storedRow({ appSecretEnc: null }));
+    const spy = jest.spyOn(global, 'fetch');
+
+    const res = await post('/api/v1/meta-ads/settings/subscribe-webhook', {});
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('META_NOT_CONFIGURED');
+    expect(spy).not.toHaveBeenCalled();
   });
 
   test('test-webhook without a saved verify token or app secret → 409 META_NOT_CONFIGURED', async () => {

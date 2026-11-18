@@ -2,12 +2,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { formatPrice } from "../../../../utils/format";
 import {
-    MapPin, Building, CheckCircle2, FileText, Calendar, Home, LayoutGrid, ImageOff
+    MapPin, Building, FileText, Calendar, Home, LayoutGrid, ImageOff
 } from "lucide-react";
 import { JsonLd } from "../../../../components/seo/JsonLd";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/seo/Breadcrumbs";
 import { PropertyCard, ProjectCard } from "../../../../components/seo/Cards";
 import ExpandableText from "../../../../components/public/ExpandableText";
+import AmenitiesGrid from "../../../../components/public/AmenitiesGrid";
 import { LANDING_BY_PLACE } from "../../../../lib/seo/landingPages";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -251,18 +252,8 @@ export default async function ProjectDetailPage({ params }) {
                     )}
 
                     <section>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Premium Amenities</h2>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {(project.amenities || []).map((amenity, i) => (
-                                <div key={i} className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                    <CheckCircle2 className="text-purple-600 shrink-0" size={20} />
-                                    <span className="text-gray-800 font-medium text-sm">{amenity}</span>
-                                </div>
-                            ))}
-                            {(project.amenities || []).length === 0 && (
-                                <p className="text-sm text-gray-400">Amenities will be listed here once added.</p>
-                            )}
-                        </div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-4">Premium Amenities</h2>
+                        <AmenitiesGrid amenities={project.amenities || []} />
                     </section>
 
                     <section>
