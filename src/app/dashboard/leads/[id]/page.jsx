@@ -3,11 +3,12 @@ import { useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { fetchLeadById } from "../../../../lib/api/leads";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchLeadById, discardLead, addInterestedProject, removeInterestedProject } from "../../../../lib/api/leads";
+import { fetchProjects } from "../../../../lib/api/projects";
 import {
     ArrowLeft, Phone, Mail, MessageSquare, Calendar as CalendarIcon,
-    FileText, Search, User, CalendarCheck, CheckSquare, Pencil, Share2
+    FileText, Search, User, CalendarCheck, CheckSquare, Share2, XCircle
 } from "lucide-react";
 import ContactLeadModal from "../../../../features/pipeline/components/modals/ContactLeadModal";
 import ScheduleFollowUpModal from "../../../../features/pipeline/components/modals/ScheduleFollowUpModal";
@@ -32,6 +33,7 @@ export default function LeadProfile() {
     const [outcomeCall, setOutcomeCall] = useState(null);
 
     const { hasPermission } = usePermissions();
+    const queryClient = useQueryClient();
     const { data: telephony } = useTelephonyStatus();
     const { data: whatsappStatus } = useWhatsAppStatus();
     const initiateCall = useInitiateCall();
@@ -186,13 +188,24 @@ export default function LeadProfile() {
 
                         {/* Quick Action Toolbar */}
                         <div className="flex flex-wrap items-center gap-2">
-                            {hasPermission("lead:update") && (
-                                <Link
-                                    href={`/dashboard/leads/${lead.id}/edit`}
-                                    className="flex items-center gap-2 px-3 py-2 bg-white text-gray-700 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm"
+                            {hasPermission("lead:update") && lead?.status !== "LOST" && lead?.status !== "CLOSED" && lead?.status !== "BOOKED" && (
+                                <button
+                                    onClick={async () => {
+                                        if (!window.confirm("Mark this lead as Not Interested? It will move to the Junk/Discarded view.")) return;
+                                        const reason = window.prompt("Reason (optional):") || "";
+                                        try {
+                                            await discardLead(lead.id, reason.trim() || "not interested");
+                                            showToast("Lead marked as Not Interested");
+                                            queryClient.invalidateQueries({ queryKey: ["lead", lead.id] });
+                                            router.push("/dashboard/leads/junk");
+                                        } catch (e) {
+                                            showToast(e?.message || "Failed to update lead", "error");
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-3 py-2 bg-white text-red-600 rounded-xl text-sm font-medium border border-red-200 hover:bg-red-50 transition-colors shadow-sm"
                                 >
-                                    <Pencil size={16} /> <span className="hidden sm:inline">Edit</span>
-                                </Link>
+                                    <XCircle size={16} /> <span className="hidden sm:inline">Not Interested</span>
+                                </button>
                             )}
                             {hasPermission("lead:update") && (
                                 <ActionBtn icon={FileText} label="Note" onClick={() => setModal("note")} />
@@ -350,7 +363,39 @@ export default function LeadProfile() {
                 <div className="p-6">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Lead Requirements</h3>
                     <div className="space-y-4">
-                        <DetailRow label="Interested In" value={projectName || "Any"} />
+                        <DetailRow label="Interested In (primary)" value={projectName || "Any"} />
+                        {lead.originalProject && lead.originalProject.id !== lead.project?.id && (
+                            <DetailRow label="Original Enquiry Project" value={lead.originalProject.name || "—"} />
+                        )}
+                        {Array.isArray(lead.projectInterests) && lead.projectInterests.length > 0 && (
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Other interested projects</p>
+                                {lead.projectInterests.map((pi) => (
+                                    <div key={pi.project.id} className="flex items-center justify-between gap-2">
+                                        <span className="text-sm text-gray-700">{pi.project.name}</span>
+                                        {hasPermission("lead:update") && (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        await removeInterestedProject(lead.id, pi.project.id);
+                                                        showToast("Removed");
+                                                        queryClient.invalidateQueries({ queryKey: ["lead", lead.id] });
+                                                    } catch (e) {
+                                                        showToast(e?.message || "Failed", "error");
+                                                    }
+                                                }}
+                                                className="text-xs text-red-500 hover:text-red-700"
+                                            >
+                                                remove
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {hasPermission("lead:update") && (
+                            <AddInterestedProject leadId={lead.id} queryClient={queryClient} />
+                        )}
                         {lead.requestedProjectName && (
                             <DetailRow label="Requested Project" value={lead.requestedProjectName} />
                         )}
@@ -458,6 +503,52 @@ function DetailRow({ label, value, className = "text-gray-900 font-bold" }) {
         <div>
             <p className="text-xs font-medium text-gray-500 mb-0.5">{label}</p>
             <p className={`text-sm ${className}`}>{value}</p>
+        </div>
+    );
+}
+
+function AddInterestedProject({ leadId, queryClient }) {
+    const [open, setOpen] = useState(false);
+    const { data: projects } = useQuery({
+        queryKey: ["projects-for-interest"],
+        queryFn: () => fetchProjects({ limit: 100 }),
+        enabled: open,
+    });
+    const list = Array.isArray(projects) ? projects : (projects?.projects || []);
+    return (
+        <div>
+            {!open ? (
+                <button
+                    onClick={() => setOpen(true)}
+                    className="text-xs font-bold text-purple-600 hover:text-purple-700"
+                >
+                    + Add interested project
+                </button>
+            ) : (
+                <select
+                    autoFocus
+                    defaultValue=""
+                    onChange={async (e) => {
+                        const pid = e.target.value;
+                        if (!pid) { setOpen(false); return; }
+                        try {
+                            await addInterestedProject(leadId, pid);
+                            showToast("Project interest added");
+                            queryClient.invalidateQueries({ queryKey: ["lead", leadId] });
+                        } catch (err) {
+                            showToast(err?.message || "Failed", "error");
+                        } finally {
+                            setOpen(false);
+                        }
+                    }}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                >
+                    <option value="">Select project...</option>
+                    {list.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                </select>
+            )}
         </div>
     );
 }

@@ -136,6 +136,52 @@ const removeInterestedProperty = asyncHandler(async (req, res, next) => {
     });
 });
 
+const addInterestedProject = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { projectId } = req.body;
+    const { organizationId, role, userId } = req.auth;
+
+    if (!projectId) throw new AppError('projectId is required', 400, 'BAD_REQUEST');
+
+    await LeadService.addInterestedProject(id, projectId, organizationId, role, userId);
+
+    res.status(201).json({
+        success: true,
+        message: 'Project interest added successfully'
+    });
+});
+
+const removeInterestedProject = asyncHandler(async (req, res, next) => {
+    const { id, projectId } = req.params;
+    const { organizationId, role, userId } = req.auth;
+
+    await LeadService.removeInterestedProject(id, projectId, organizationId, role, userId);
+
+    res.status(200).json({
+        success: true,
+        message: 'Project interest removed successfully'
+    });
+});
+const getJunkLeads = asyncHandler(async (req, res, next) => {
+    const { organizationId, role, userId } = req.auth;
+    const result = await LeadService.getJunkLeads(organizationId, req.query, role, userId);
+    res.status(200).json({ success: true, data: result, message: 'Junk leads fetched successfully' });
+});
+
+const discardLead = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { organizationId, role, userId } = req.auth;
+    const reason = req.body && req.body.reason;
+    const lead = await LeadService.discardLead(id, reason, organizationId, role, userId);
+    res.status(200).json({ success: true, data: lead, message: 'Lead discarded successfully' });
+});
+
+const restoreLead = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const { organizationId, role, userId } = req.auth;
+    const lead = await LeadService.restoreLead(id, organizationId, role, userId);
+    res.status(200).json({ success: true, data: lead, message: 'Lead restored successfully' });
+});
 const getClaimableLeads = asyncHandler(async (req, res, next) => {
     const { organizationId, role, userId } = req.auth;
 
@@ -313,8 +359,13 @@ module.exports = {
     sharePropertyOnWhatsApp,
     addInterestedProperty,
     removeInterestedProperty,
+    addInterestedProject,
+    removeInterestedProject,
     getClaimableLeads,
     claimLead,
+    getJunkLeads,
+    discardLead,
+    restoreLead,
     getFollowups,
     toggleFollowupStatus,
     getActivities,

@@ -261,6 +261,30 @@ class CallService {
                     });
                 }
 
+                // An explicit "Not Interested" decision moves an early-stage
+                // lead to LOST (the existing discarded/dead state). Unsuccessful
+                // call outcomes (NO_ANSWER, BUSY, WRONG_NUMBER, ...) never do
+                // this — they are recorded on the Call row only. Deep-pipeline
+                // leads (SITE_VISIT/QUOTATION/NEGOTIATION/BOOKED) are left
+                // untouched so a single call cannot discard a progressed lead;
+                // those can still be marked LOST explicitly via the stage API.
+                const EARLY_LOST_ELIGIBLE = ['NEW', 'CONTACTED', 'FOLLOW_UP', 'INTERESTED', 'QUALIFIED'];
+                if (disposition === 'NOT_INTERESTED' && EARLY_LOST_ELIGIBLE.includes(lead.status)) {
+                    const now = new Date();
+                    const purgeAfter = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    await tx.lead.update({ where: { id: lead.id }, data: { status: 'LOST', junkedAt: now, junkReason: notes || 'not interested on call', junkedBy: userId, purgeAfter } });
+                    await tx.leadActivity.create({
+                        data: {
+                            organizationId,
+                            leadId: lead.id,
+                            type: 'STATUS_CHANGE',
+                            description: `Stage changed from ${lead.status} to LOST`,
+                            performedById: userId,
+                            metadata: { from: lead.status, to: 'LOST', reason: notes || 'not interested on call', callId: call.id, junked: true, junkedAt: now.toISOString(), purgeAfter: purgeAfter.toISOString() }
+                        }
+                    });
+                }
+
                 const actionType = nextAction && nextAction.type ? nextAction.type : 'NONE';
 
                 if (actionType === 'CALL_BACK' || actionType === 'FOLLOW_UP') {
