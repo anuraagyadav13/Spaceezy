@@ -859,7 +859,10 @@ class MetaAdsSettingsService {
         }
 
         result.ok = true;
-        result.message = 'Webhook verify token and HMAC-SHA256 self-tests passed.'
+        // Be precise: the verify token is only checked for presence here. Meta
+        // validates it when it performs the GET challenge against our endpoint;
+        // this test cannot exercise that without an inbound Meta request.
+        result.message = 'Webhook verify token is saved. HMAC-SHA256 signature self-test passed.'
             + (result.subscription && result.subscription.status === 'active'
                 ? ' Meta reports an active leadgen subscription for this callback.'
                 : '');

@@ -158,6 +158,7 @@ export default function LoginPage() {
                             <button
                                 type="button"
                                 onClick={() => setMode("owner")}
+                                suppressHydrationWarning
                                 className={`text-left p-3 sm:p-3.5 rounded-2xl border transition-all ${
                                     mode === "owner"
                                         ? "border-purple-600 bg-purple-50/40 ring-1 ring-purple-600/20"
@@ -181,6 +182,7 @@ export default function LoginPage() {
                             <button
                                 type="button"
                                 onClick={() => setMode("employee")}
+                                suppressHydrationWarning
                                 className={`text-left p-3 sm:p-3.5 rounded-2xl border transition-all ${
                                     mode === "employee"
                                         ? "border-purple-600 bg-purple-50/40 ring-1 ring-purple-600/20"
@@ -214,6 +216,7 @@ export default function LoginPage() {
                                         type="email"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
+                                        suppressHydrationWarning
                                         className="block w-full pl-10 pr-4 py-2.5 bg-[#F1F5F9]/80 border border-[#E2E8F0] rounded-xl text-sm placeholder:text-gray-400 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition-all"
                                         placeholder="admin@spaceezy.com"
                                         required
@@ -231,6 +234,7 @@ export default function LoginPage() {
                                         type={showPassword ? "text" : "password"}
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
+                                        suppressHydrationWarning
                                         className="block w-full pl-10 pr-10 py-2.5 bg-[#F1F5F9]/80 border border-[#E2E8F0] rounded-xl text-sm placeholder:text-gray-400 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition-all tracking-wider"
                                         placeholder="••••••••••"
                                         required
@@ -238,6 +242,7 @@ export default function LoginPage() {
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
+                                        suppressHydrationWarning
                                         className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
                                         aria-label={showPassword ? "Hide password" : "Show password"}
                                     >
@@ -258,6 +263,7 @@ export default function LoginPage() {
                             <button
                                 type="submit"
                                 disabled={isLoading}
+                                suppressHydrationWarning
                                 className="w-full flex items-center justify-center gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white py-2.5 sm:py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md shadow-purple-500/25 disabled:opacity-50 mt-4"
                             >
                                 {isLoading ? (
