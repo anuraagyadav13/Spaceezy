@@ -148,6 +148,13 @@ const testWebhook = asyncHandler(async (req, res) => {
     respondTest(res, data, 'Webhook test passed', 'Webhook test failed');
 });
 
+// Same envelope convention as the tests: 409 only when nothing is configured,
+// otherwise 200 with ok:false so the UI can show Meta's own reason.
+const subscribeWebhook = asyncHandler(async (req, res) => {
+    const data = await MetaAdsSettingsService.subscribeWebhook(req.auth.organizationId, req.auth.userId);
+    respondTest(res, data, 'Webhook subscribed', 'Webhook subscription incomplete');
+});
+
 const getPages = asyncHandler(async (req, res) => {
     const data = await MetaAdsService.listPages({ ...req.query, organizationId: req.auth.organizationId });
     res.status(200).json({ success: true, data, message: 'Pages fetched successfully' });
@@ -498,6 +505,7 @@ module.exports = {
     testToken,
     testPermissions,
     testWebhook,
+    subscribeWebhook,
     syncAssets,
     getPages,
     getInstagramAccounts,

@@ -26,6 +26,10 @@ export default function PropertyImage({ src, alt, className = "" }) {
             className={`object-cover ${className}`}
             width={500}
             height={300}
+            // CRM media lives at /media/... on the API origin; the Next image
+            // optimizer resolves that path against the Next server and fails
+            // with a 400, so serve the stored URL as-is.
+            unoptimized
         />
     );
 }

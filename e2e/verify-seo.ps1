@@ -325,7 +325,7 @@ $about = Get-Page "$WEB/about"
 Assert ((Get-Title $about.html) -like "*SpaceEzy*") "about title carries SpaceEzy brand" "got $(Get-Title $about.html)"
 $contact = Get-Page "$WEB/contact"
 Assert ($contact.html -match 'admin@spaceezy.com') "contact shows official email"
-Assert ($contact.html -match '7827267897|78272 67897') "contact shows official phone"
+Assert ($contact.html -match '7683020204|76830 20204') "contact shows official phone"
 
 # ---------- Summary ----------
 Write-Host ""

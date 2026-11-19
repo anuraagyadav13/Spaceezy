@@ -40,7 +40,7 @@ const NAVIGATION_GROUPS = [
             { label: "Callback Queue", href: "/dashboard/calling/queue" },
             { label: "Browser Softphone", href: "/dashboard/calling/softphone" },
             { label: "Agent Availability", href: "/dashboard/calling/availability" },
-            { label: "WhatsApp", href: "/dashboard/calling/whatsapp" }
+            { label: "Spaceezy Chat", href: "/dashboard/calling/whatsapp" }
         ]
     },
     {
@@ -257,7 +257,7 @@ function NavGroup({ group, pathname, setIsOpen, isCollapsed }) {
 
 const emptySubscribe = () => () => {};
 
-export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
+export default function AppSidebar({ isOpen, setIsOpen, collapsed = false, onBrandClick }) {
     const pathname = usePathname();
     const { logout } = useAuth();
     const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
@@ -278,7 +278,13 @@ export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
             <aside className={`fixed inset-y-0 left-0 z-50 ${collapsed ? "w-20" : "w-70"} crm-chrome border-r border-purple-50 flex flex-col transition-all duration-300 lg:translate-x-0 lg:static ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
                 {/* Brand Logo Header */}
                 <div className={`h-18 flex items-center ${collapsed ? "justify-center px-2" : "justify-between px-5"} shrink-0`}>
-                    <Link href="/dashboard" className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={onBrandClick}
+                        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        className="flex items-center gap-3 text-left"
+                    >
                         <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shrink-0">
                             <Image 
                                 src="/images/spaceezy-logo.png" 
@@ -293,7 +299,7 @@ export default function AppSidebar({ isOpen, setIsOpen, collapsed = false }) {
                                 Spaceezy CRM
                             </span>
                         )}
-                    </Link>
+                    </button>
                     <button onClick={() => setIsOpen(false)} className="lg:hidden p-1 text-gray-500 hover:bg-gray-100 rounded-lg">
                         <X size={20} />
                     </button>

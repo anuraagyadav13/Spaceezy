@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, ChevronDown } from "lucide-react";
 import Image from "next/image";
+import ThemeToggle from "../shared/ThemeToggle";
 
 const PROPERTY_LINKS = [
     ["/residential-properties", "Residential Properties"],
@@ -50,6 +51,7 @@ export function PublicHeader() {
     const isSolid = scrolled || !isHomePage;
 
     return (
+        <>
         <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${isSolid ? "bg-white/90 backdrop-blur-md shadow-sm py-4" : "bg-transparent py-6"}`}>
             <div className="container mx-auto px-6 md:px-12 flex justify-between items-center">
                 <Link href="/" className="flex items-center gap-2.5">
@@ -92,18 +94,29 @@ export function PublicHeader() {
                     <Link href="/contact" className={navLinkClass(isSolid)}>Contact</Link>
                 </nav>
 
-                <div className="hidden md:flex items-center gap-3">
-                    <Link href="/enquiry" className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ${isSolid ? "bg-gray-900 text-white hover:bg-gray-800" : "bg-white/10 hover:bg-white text-white hover:text-gray-900 border border-white/20 backdrop-blur-sm"}`}>
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <ThemeToggle variant={isSolid ? "surface" : "glass"} />
+                    <Link href="/enquiry" className={`hidden md:inline-flex px-6 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ${isSolid ? "bg-gray-900 text-white hover:bg-gray-800" : "bg-white/10 hover:bg-white text-white hover:text-gray-900 border border-white/20 backdrop-blur-sm"}`}>
                         Enquire Now
                     </Link>
+                    <button
+                        type="button"
+                        aria-label="Open menu"
+                        aria-expanded={mobileMenuOpen}
+                        onClick={() => setMobileMenuOpen(true)}
+                        className={`md:hidden p-2 rounded-full transition-colors ${isSolid ? "text-gray-900 hover:bg-gray-100" : "text-white hover:bg-white/10"}`}
+                    >
+                        <Menu size={24} />
+                    </button>
                 </div>
-
-                <button className={`md:hidden p-2 rounded-full transition-colors ${isSolid ? "text-gray-900" : "text-white"}`} onClick={() => setMobileMenuOpen(true)}>
-                    <Menu size={24} />
-                </button>
             </div>
+        </header>
 
-            {/* Mobile Menu */}
+            {/* Mobile Menu — deliberately rendered OUTSIDE <header>. The
+                header uses backdrop-blur, and a backdrop filter makes it the
+                containing block for fixed-position descendants, which clipped
+                this "inset-0" panel down to the header's own height (the X
+                appeared but the links never did). */}
             {mobileMenuOpen && (
                 <div className="fixed inset-0 z-[60] bg-white flex flex-col">
                     <div className="flex justify-between items-center p-6">
@@ -114,6 +127,7 @@ export function PublicHeader() {
                             <span className="font-bold text-2xl tracking-tighter text-gray-900">Spaceezy<span className="text-purple-500">.</span></span>
                         </Link>
                         <div className="flex items-center gap-2">
+                            <ThemeToggle />
                             <button onClick={() => setMobileMenuOpen(false)} className="p-2 text-gray-900 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
                                 <X size={24} />
                             </button>
@@ -145,6 +159,6 @@ export function PublicHeader() {
                     </nav>
                 </div>
             )}
-        </header>
+        </>
     );
 }

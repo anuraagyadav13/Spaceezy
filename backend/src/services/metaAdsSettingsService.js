@@ -296,6 +296,53 @@ function webhookCallbackUrl() {
     return backend ? `${backend}/api/v1/webhooks/meta/leadgen` : null;
 }
 
+// Meta registers Lead Ads webhooks as the `leadgen` FIELD of the `page`
+// object (App Dashboard → Webhooks → Page → leadgen). It never returns an
+// `object: 'leadgen'` row, which is what an earlier status check looked for —
+// so a correctly configured app was always reported as "not subscribed".
+// Both shapes are accepted below; the leadgen field is what decides
+// subscribed vs not.
+function fieldNames(fields) {
+    if (Array.isArray(fields)) {
+        return fields
+            .map((field) => (typeof field === 'string' ? field : field && (field.name || field.field)))
+            .filter(Boolean)
+            .map((name) => String(name).toLowerCase());
+    }
+    if (fields && typeof fields === 'object') {
+        return Object.keys(fields).filter((key) => fields[key]).map((key) => key.toLowerCase());
+    }
+    return [];
+}
+
+function normalizeCallbackUrl(value) {
+    return String(value || '').trim().replace(/\/+$/, '').toLowerCase();
+}
+
+// Reads GET /{app-id}/subscriptions against the callback this deployment
+// serves, and reports Meta's own verdict (active / inactive / wrong callback
+// URL / not subscribed).
+function readSubscription(body, callbackUrl) {
+    const rows = Array.isArray(body && body.data) ? body.data : [];
+    const leadgenRows = rows.filter((row) => {
+        const object = String((row && row.object) || '').toLowerCase();
+        return object === 'leadgen' || fieldNames(row && row.fields).includes('leadgen');
+    });
+    if (leadgenRows.length === 0) {
+        return { status: 'not_subscribed', fields: [], metaCallbackUrl: null };
+    }
+    const matched = leadgenRows.find(
+        (row) => normalizeCallbackUrl(row.callback_url) === normalizeCallbackUrl(callbackUrl)
+    );
+    const row = matched || leadgenRows[0];
+    const callbackMatches = normalizeCallbackUrl(row.callback_url) === normalizeCallbackUrl(callbackUrl);
+    return {
+        status: !callbackMatches ? 'callback_mismatch' : row.active === false ? 'inactive' : 'active',
+        fields: fieldNames(row.fields),
+        metaCallbackUrl: row.callback_url || null,
+    };
+}
+
 // Display-safe view. Booleans for secrets only — a decrypted credential or
 // its length never appears here (this shape is what GET /settings returns).
 // metaAppId is public OAuth metadata (it appears in authorize URLs), shown
@@ -800,13 +847,7 @@ class MetaAdsSettingsService {
                 );
                 const body = await res.json().catch(() => null);
                 if (res.ok && body && Array.isArray(body.data)) {
-                    const leadgen = body.data.find((s) => s.object === 'leadgen');
-                    result.subscription = {
-                        status: leadgen && leadgen.callback_url === callbackUrl
-                            ? (leadgen.active ? 'active' : 'inactive')
-                            : 'not_subscribed',
-                        fields: leadgen ? leadgen.fields : [],
-                    };
+                    result.subscription = readSubscription(body, callbackUrl);
                 } else {
                     result.subscription = { status: null, reason: 'Meta did not return subscription data (check app permissions).' };
                 }
@@ -818,13 +859,140 @@ class MetaAdsSettingsService {
         }
 
         result.ok = true;
-        result.message = 'Webhook verify token and HMAC-SHA256 self-tests passed.'
+        // Be precise: the verify token is only checked for presence here. Meta
+        // validates it when it performs the GET challenge against our endpoint;
+        // this test cannot exercise that without an inbound Meta request.
+        result.message = 'Webhook verify token is saved. HMAC-SHA256 signature self-test passed.'
             + (result.subscription && result.subscription.status === 'active'
                 ? ' Meta reports an active leadgen subscription for this callback.'
                 : '');
         await audit(organizationId, userId, AUDIT_ACTIONS.META_CONNECTION_TESTED, 'MetaAdsSettings',
             organizationId, { test: 'webhook', ok: true, subscription: result.subscription && result.subscription.status });
         return result;
+    }
+
+    // 5) One-click subscription. Writes the app-level `leadgen` webhook
+    //    subscription in Meta (the same registration the App Dashboard's
+    //    Webhooks → Page → leadgen field performs) and then subscribes every
+    //    selected Page to the app, which is what makes Meta deliver leadgen
+    //    events. Admin-only at the route layer; audit records no secrets.
+    static async subscribeWebhook(organizationId, userId) {
+        const eff = await MetaAdsSettingsService.getEffectiveConfig(organizationId);
+        const callbackUrl = webhookCallbackUrl();
+        if (!callbackUrl) {
+            throw new AppError(
+                'BACKEND_URL is not configured, so the webhook callback URL cannot be generated.',
+                409, 'META_NOT_CONFIGURED'
+            );
+        }
+        if (!eff.metaAppId || !eff.appSecret) {
+            throw new AppError(
+                'A saved Meta App ID and App Secret are required to subscribe the webhook.',
+                409, 'META_NOT_CONFIGURED'
+            );
+        }
+        if (!eff.webhookVerifyToken) {
+            throw new AppError(
+                'Save a Webhook Verify Token before subscribing the webhook.',
+                409, 'META_NOT_CONFIGURED'
+            );
+        }
+
+        const version = resolveDialogVersion(eff);
+        const appToken = `${eff.metaAppId}|${eff.appSecret}`;
+
+        const app = { ok: false };
+        try {
+            const res = await graphRequest({
+                path: `${encodeURIComponent(eff.metaAppId)}/subscriptions`,
+                method: 'POST',
+                params: {
+                    object: 'page',
+                    callback_url: callbackUrl,
+                    fields: 'leadgen',
+                    verify_token: eff.webhookVerifyToken,
+                },
+                token: appToken,
+                version,
+            });
+            app.ok = Boolean(res && res.success !== false);
+            app.message = app.ok
+                ? 'Meta accepted the leadgen webhook subscription.'
+                : 'Meta did not confirm the webhook subscription.';
+        } catch (err) {
+            app.code = err.code || 'META_API_ERROR';
+            app.message = err.message || 'Meta rejected the webhook subscription.';
+        }
+
+        // Page-level subscription: per Page, best effort. A Page the token
+        // cannot manage is reported individually instead of failing the call.
+        const pages = [];
+        if (app.ok) {
+            if (!eff.accessToken) {
+                pages.push({ pageId: null, ok: false, message: 'No access token saved, so the selected Pages could not be subscribed.' });
+            } else if ((eff.pageIds || []).length === 0) {
+                pages.push({ pageId: null, ok: false, message: 'No Facebook Pages selected, so no Page was subscribed.' });
+            } else {
+                for (const pageId of eff.pageIds) {
+                    const entry = { pageId: String(pageId), ok: false };
+                    try {
+                        await graphRequest({
+                            path: `${encodeURIComponent(pageId)}/subscribed_apps`,
+                            method: 'POST',
+                            params: { subscribed_fields: 'leadgen' },
+                            token: eff.accessToken,
+                            version,
+                        });
+                        entry.ok = true;
+                    } catch (err) {
+                        entry.code = err.code || 'META_API_ERROR';
+                        entry.message = err.message || 'Meta rejected the Page subscription.';
+                    }
+                    pages.push(entry);
+                }
+            }
+        }
+
+        // Read back what Meta now reports — never trust the write's own 200.
+        let subscription = null;
+        try {
+            const check = await fetch(
+                `https://graph.facebook.com/${version}/${encodeURIComponent(eff.metaAppId)}/subscriptions`,
+                {
+                    headers: { Authorization: `Bearer ${appToken}` },
+                    signal: AbortSignal.timeout(15000),
+                },
+            );
+            const body = await check.json().catch(() => null);
+            if (check.ok && body && Array.isArray(body.data)) {
+                subscription = readSubscription(body, callbackUrl);
+            }
+        } catch {
+            subscription = null;
+        }
+
+        const actionablePages = pages.filter((page) => page.pageId);
+        const pagesOk = actionablePages.every((page) => page.ok);
+        const ok = app.ok && pagesOk && Boolean(subscription && subscription.status === 'active');
+        await audit(organizationId, userId, AUDIT_ACTIONS.META_WEBHOOK_SUBSCRIBED, 'MetaAdsSettings',
+            organizationId, {
+                appOk: app.ok,
+                subscription: subscription && subscription.status,
+                pages: pages.map((page) => ({ pageId: page.pageId, ok: page.ok })),
+            });
+
+        return {
+            ok,
+            callbackUrl,
+            app,
+            pages,
+            subscription,
+            message: ok
+                ? 'Webhook subscribed — Meta now delivers leadgen events for the selected Pages.'
+                : app.ok
+                    ? 'The subscription was sent, but Meta has not reported it as active yet. Re-run "Test webhook" in a moment.'
+                    : (app.message || 'Webhook subscription failed.'),
+        };
     }
 
     // Single source of truth exported for metaAdsService (status reporting)

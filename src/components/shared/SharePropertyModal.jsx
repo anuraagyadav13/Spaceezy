@@ -18,7 +18,7 @@ const inputClass =
  *   unit detail page).
  *
  * The backend builds the message (project / location / configuration / area /
- * price / public URL) and the final send happens in the WhatsApp Center with
+ * price / public URL) and the final send happens in Spaceezy Chat with
  * the draft pre-filled and editable.
  */
 export default function SharePropertyModal({

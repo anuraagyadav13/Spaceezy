@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, PanelLeftClose, PanelLeftOpen, Bell, CheckCheck } from "lucide-react";
+import { Menu, Bell, CheckCheck } from "lucide-react";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import { useNotifications } from "../../features/notifications/hooks/useNotifications";
 import { useMarkNotificationRead, useMarkAllNotificationsRead } from "../../features/notifications/hooks/useMarkNotificationsRead";
@@ -21,7 +21,7 @@ const timeAgo = (iso) => {
     return new Date(iso).toLocaleDateString();
 };
 
-export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }) {
+export default function AppHeader({ onOpenSidebar }) {
     const { user } = useAuth();
     const router = useRouter();
     const { data } = useNotifications(15);
@@ -52,27 +52,14 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
     return (
         <header className="h-16 crm-chrome flex items-center justify-between gap-2 px-4 sm:px-8 shrink-0 sticky top-0 z-30">
             <div className="flex items-center gap-2 sm:gap-3">
-                {/* Mobile open hamburger */}
+                {/* Mobile open hamburger — the brand logo in the sidebar
+                    collapses/expands the rail on desktop. */}
                 <button
                     onClick={onOpenSidebar}
                     aria-label="Open sidebar"
                     className="lg:hidden p-2 -ml-2 text-gray-500 hover:bg-white rounded-xl shadow-xs"
                 >
                     <Menu size={20} />
-                </button>
-
-                {/* Sidebar toggle button matching mockup */}
-                <button
-                    onClick={onToggleCollapse}
-                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                    className="hidden lg:flex items-center justify-center w-8 h-8 rounded-xl border border-purple-200/60 bg-white/90 shadow-2xs text-purple-600 hover:bg-purple-50 transition-colors"
-                >
-                    {collapsed ? (
-                        <PanelLeftOpen size={17} />
-                    ) : (
-                        <PanelLeftClose size={17} />
-                    )}
                 </button>
             </div>
 
@@ -94,7 +81,7 @@ export default function AppHeader({ onOpenSidebar, onToggleCollapse, collapsed }
                     </button>
 
                     {open && (
-                        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white border border-gray-100 rounded-2xl shadow-xl z-50 overflow-hidden">
+                        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white border border-gray-100 rounded-2xl shadow-xl z-50 overflow-hidden max-sm:fixed max-sm:left-3 max-sm:right-3 max-sm:top-[4.25rem] max-sm:mt-0 max-sm:w-auto max-sm:max-w-none">
                             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                                 <p className="text-sm font-bold text-gray-900">Notifications</p>
                                 {unreadCount > 0 && (

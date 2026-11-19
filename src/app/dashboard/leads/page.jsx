@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +9,8 @@ import { usePermissions } from "../../../features/auth/hooks/usePermissions";
 import { showToast } from "../../../lib/toast";
 import { 
     Search, CheckSquare, 
-    Square, MoreHorizontal, ArrowUpDown, Download, AlertCircle, UserPlus
+    Square, MoreHorizontal, ArrowUpDown, Download, AlertCircle, UserPlus,
+    Phone, MessageCircle, ChevronRight
 } from "lucide-react";
 import LeadPipelineDashboard from "../../../features/pipeline/components/LeadPipelineDashboard";
 
@@ -287,7 +288,42 @@ function LeadsListContent({ isExecutive = false }) {
     const [assignToId, setAssignToId] = useState("");
     const [bulkStage, setBulkStage] = useState("");
     const [bulkBusy, setBulkBusy] = useState(false);
+    const [leadMenu, setLeadMenu] = useState(null); // { id, up }
+    const leadMenuRef = useRef(null);
     const pageSize = 25;
+
+    // The row's three-dot button used to have no handler at all, so tapping it
+    // did nothing — and on touch screens it never even became visible because
+    // it relied on group-hover. The menu now opens for mouse and touch, closes
+    // on outside click / Escape, and flips upwards near the bottom of the
+    // viewport so the scroll container cannot clip it.
+    useEffect(() => {
+        if (!leadMenu) return;
+        const onPointerDown = (event) => {
+            if (leadMenuRef.current && !leadMenuRef.current.contains(event.target)) {
+                setLeadMenu(null);
+            }
+        };
+        const onKeyDown = (event) => {
+            if (event.key === "Escape") setLeadMenu(null);
+        };
+        document.addEventListener("mousedown", onPointerDown);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("mousedown", onPointerDown);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+    }, [leadMenu]);
+
+    const toggleLeadMenu = (event, leadId) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = event.currentTarget.getBoundingClientRect();
+        setLeadMenu((current) => (current?.id === leadId ? null : {
+            id: leadId,
+            up: rect.bottom > window.innerHeight - 190
+        }));
+    };
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -634,10 +670,48 @@ function LeadsListContent({ isExecutive = false }) {
                                         </div>
                                     </td>
                                     <td className="px-4 py-4 text-sm text-gray-500 font-medium">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : "-"}</td>
-                                    <td className="px-4 py-4 text-center">
-                                        <button className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                                    <td className="px-4 py-4 text-center relative">
+                                        <button
+                                            onClick={(event) => toggleLeadMenu(event, lead.id)}
+                                            aria-haspopup="menu"
+                                            aria-expanded={leadMenu?.id === lead.id}
+                                            aria-label={`Actions for ${lead.name}`}
+                                            className={`p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all ${leadMenu?.id === lead.id ? "opacity-100 bg-gray-100 text-gray-900" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"}`}
+                                        >
                                             <MoreHorizontal size={18} />
                                         </button>
+                                        {leadMenu?.id === lead.id && (
+                                            <div
+                                                ref={leadMenuRef}
+                                                role="menu"
+                                                className={`absolute right-3 z-30 w-44 rounded-xl border border-gray-200 bg-white p-1 shadow-xl text-left ${leadMenu.up ? "bottom-full mb-1" : "top-full mt-1"}`}
+                                            >
+                                                <Link
+                                                    href={`/dashboard/leads/${lead.id}`}
+                                                    role="menuitem"
+                                                    onClick={() => setLeadMenu(null)}
+                                                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                                >
+                                                    <ChevronRight size={15} className="text-gray-400" /> View lead
+                                                </Link>
+                                                <a
+                                                    href={lead.phone ? `tel:${lead.phone}` : undefined}
+                                                    role="menuitem"
+                                                    onClick={() => setLeadMenu(null)}
+                                                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${lead.phone ? "text-gray-700 hover:bg-gray-50" : "text-gray-300 pointer-events-none"}`}
+                                                >
+                                                    <Phone size={15} className="text-gray-400" /> Call
+                                                </a>
+                                                <Link
+                                                    href={`/dashboard/calling/whatsapp?leadId=${lead.id}`}
+                                                    role="menuitem"
+                                                    onClick={() => setLeadMenu(null)}
+                                                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                                >
+                                                    <MessageCircle size={15} className="text-gray-400" /> WhatsApp
+                                                </Link>
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))

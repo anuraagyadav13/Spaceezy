@@ -39,6 +39,7 @@ const AUDIT_ACTIONS = {
     META_SECRET_ROTATED: 'meta.secret_rotated',
     META_SECRET_REMOVED: 'meta.secret_removed',
     META_CONNECTION_TESTED: 'meta.connection_tested',
+    META_WEBHOOK_SUBSCRIBED: 'meta.webhook_subscribed',
     META_LEAD_FORMS_UPDATED: 'meta.lead_forms_updated',
     META_LEAD_MAPPING_UPDATED: 'meta.lead_mapping_updated',
     META_LEADS_BACKFILLED: 'meta.leads_backfilled',

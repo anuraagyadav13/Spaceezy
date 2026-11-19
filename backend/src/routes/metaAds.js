@@ -13,6 +13,7 @@ const {
     testToken,
     testPermissions,
     testWebhook,
+    subscribeWebhook,
     syncAssets,
     getPages,
     getInstagramAccounts,
@@ -181,6 +182,9 @@ router.post('/settings/test-connection', adminOnly(), metaConnectLimiter, testCo
 router.post('/settings/test-token', adminOnly(), metaConnectLimiter, testToken);
 router.post('/settings/test-permissions', adminOnly(), metaConnectLimiter, testPermissions);
 router.post('/settings/test-webhook', adminOnly(), metaConnectLimiter, testWebhook);
+// Explicit write: registers the app's leadgen webhook subscription with Meta
+// and subscribes the selected Pages. Admin-only, same connect budget.
+router.post('/settings/subscribe-webhook', adminOnly(), metaConnectLimiter, subscribeWebhook);
 router.get('/pages', requirePermission('marketing:view'), validate(listPagesSchema), getPages);
 router.get('/instagram-accounts', requirePermission('marketing:view'), validate(listInstagramAccountsSchema), getInstagramAccounts);
 

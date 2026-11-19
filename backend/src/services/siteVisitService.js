@@ -7,6 +7,25 @@ const EARLIER_THAN_SITE_VISIT = ['NEW', 'CONTACTED', 'FOLLOW_UP', 'INTERESTED', 
 const FINAL_STATUSES = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
 const ALLOWED_FROM_SCHEDULED = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
 
+// Human-readable date/time for the customer-facing invitation. The visit date
+// is stored at UTC midnight, so read it in UTC to avoid a one-day shift on
+// servers west of Greenwich.
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const formatVisitDate = (value) => {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return `${String(date.getUTCDate()).padStart(2, '0')} ${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+};
+const formatVisitTime = (value) => {
+    const match = /^(\d{1,2}):(\d{2})/.exec(String(value || '').trim());
+    if (!match) return null;
+    const hours24 = Number(match[1]);
+    if (!Number.isFinite(hours24) || hours24 > 23) return null;
+    const suffix = hours24 >= 12 ? 'PM' : 'AM';
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+    return `${hours12}:${match[2]} ${suffix}`;
+};
+
 const BASE_INCLUDE = {
     lead: { select: { id: true, name: true, phone: true, email: true, status: true, projectId: true, assignedToId: true } },
     project: { select: { id: true, name: true } },
@@ -286,6 +305,77 @@ class SiteVisitService {
 
             return siteVisit;
         });
+    }
+
+    // Send the approved "Site Visit Invitation" WhatsApp template after a visit
+    // is scheduled. Best-effort by design: the site visit is already saved, so
+    // a missing WhatsApp connection, phone number, project or Meta approval
+    // must never fail the request — the caller reports the reason instead.
+    static async sendInvitationWhatsApp(siteVisit, organizationId, userId, role) {
+        try {
+            if (!siteVisit || !siteVisit.leadId) {
+                return { sent: false, reason: 'No lead is linked to this site visit.' };
+            }
+            if (siteVisit.status && siteVisit.status !== 'SCHEDULED') {
+                return { sent: false, reason: 'The site visit is not scheduled.' };
+            }
+
+            const lead = siteVisit.lead || await prisma.lead.findFirst({
+                where: { id: siteVisit.leadId, organizationId },
+                select: { id: true, name: true, phone: true }
+            });
+            const phone = siteVisit.phone || (lead && lead.phone);
+            if (!phone) {
+                return { sent: false, reason: 'The lead has no phone number.' };
+            }
+
+            const projectName = siteVisit.project && siteVisit.project.name;
+            if (!projectName) {
+                return { sent: false, reason: 'Select a project to send the site visit invitation.' };
+            }
+
+            const visitDate = formatVisitDate(siteVisit.date);
+            const visitTime = formatVisitTime(siteVisit.time);
+            if (!visitDate || !visitTime) {
+                return { sent: false, reason: 'The visit date or time is missing.' };
+            }
+
+            let salesperson = siteVisit.assignedTo && siteVisit.assignedTo.name;
+            if (!salesperson) {
+                const sender = await prisma.user.findFirst({
+                    where: { id: userId, organizationId },
+                    select: { name: true }
+                });
+                salesperson = sender && sender.name;
+            }
+            if (!salesperson) {
+                return { sent: false, reason: 'No salesperson name is available for the message.' };
+            }
+
+            // Loaded lazily so the site-visit module (and its tests) do not pull
+            // in the WhatsApp provider stack unless an invitation is sent.
+            const WhatsAppService = require('./whatsappService');
+            const conversation = await WhatsAppService.getOrCreateConversation(
+                siteVisit.leadId, organizationId, userId, role
+            );
+            await WhatsAppService.sendMessage(conversation.id, {
+                templateName: 'Site Visit Invitation',
+                variables: [
+                    (lead && lead.name) || siteVisit.leadName || 'there',
+                    projectName,
+                    visitDate,
+                    visitTime,
+                    salesperson
+                ]
+            }, organizationId, userId, role);
+
+            return { sent: true, template: 'Site Visit Invitation' };
+        } catch (error) {
+            return {
+                sent: false,
+                reason: (error && error.message) || 'WhatsApp invitation could not be sent.'
+            };
+        }
     }
 
     static async updateSiteVisitStatus(id, status, organizationId, role, userId) {

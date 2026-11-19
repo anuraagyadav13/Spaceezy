@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
-/* Class-based dark mode. The class is only ever set on CRM routes (see
-   providers/ThemeProvider.jsx), so the public website is always light. */
+/* Class-based dark mode. Applied to both the CRM and the public website by
+   providers/ThemeProvider.jsx + public/theme-bootstrap.js. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {

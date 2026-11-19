@@ -334,7 +334,7 @@ export default function LeadProfile() {
                                         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                                             <p className="text-sm font-bold text-gray-900">Conversation</p>
                                             <Link href={`/dashboard/calling/whatsapp?leadId=${lead.id}`} className="text-xs font-bold text-green-700 hover:underline">
-                                                Open in WhatsApp Center
+                                                Open in Spaceezy Chat
                                             </Link>
                                         </div>
                                         <div className="p-4 space-y-2 max-h-96 overflow-y-auto custom-scrollbar">

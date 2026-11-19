@@ -21,6 +21,7 @@ import {
     testMetaToken,
     testMetaPermissions,
     testMetaWebhook,
+    subscribeMetaWebhook,
     syncMetaAssets,
     fetchMetaPages,
     fetchMetaInstagramAccounts,
@@ -283,7 +284,11 @@ const TestResult = ({ result }) => {
                         {result.subscription.status === "active"
                             ? "active for this callback"
                             : result.subscription.status === "not_subscribed"
-                            ? "not subscribed (add the leadgen subscription in Meta)"
+                            ? "not subscribed (use \"Subscribe webhook in Meta\" above)"
+                            : result.subscription.status === "callback_mismatch"
+                            ? `saved, but Meta delivers to ${result.subscription.metaCallbackUrl}`
+                            : result.subscription.status === "inactive"
+                            ? "registered but inactive in Meta"
                             : result.subscription.reason || "unknown"}
                     </p>
                 )}
@@ -557,6 +562,27 @@ function MetaAdsSettingsContent() {
                 ...prev,
                 [key]: { ok: false, code: error.code || "REQUEST_FAILED", message: error.message },
             }));
+        }
+    };
+
+    // "Subscribe webhook in Meta": an explicit write (app-level leadgen
+    // subscription + selected Page subscriptions). The status shown afterwards
+    // is Meta's read-back, not the write's own 200.
+    const [subscribeState, setSubscribeState] = useState(null);
+    const subscribeWebhook = async () => {
+        setSubscribeState({ pending: true });
+        try {
+            const data = await subscribeMetaWebhook();
+            setSubscribeState(data);
+            if (data.ok) {
+                showToast("Webhook subscribed in Meta", "success");
+                setTestResults((prev) => ({ ...prev, webhook: data }));
+            } else {
+                showToast(data.message || "Meta did not confirm the subscription", "error");
+            }
+        } catch (error) {
+            setSubscribeState({ ok: false, code: error.code || "REQUEST_FAILED", message: error.message });
+            showToast(error.message || "Webhook subscription failed", "error");
         }
     };
 
@@ -1169,17 +1195,63 @@ function MetaAdsSettingsContent() {
                         {testResults.webhook?.pending ? (
                             <p className="text-gray-500">Checking…</p>
                         ) : testResults.webhook?.subscription ? (
-                            <p className="font-semibold text-gray-900">
-                                {testResults.webhook.subscription.status === "active"
-                                    ? "Active — Meta reports an active leadgen subscription for this callback."
-                                    : testResults.webhook.subscription.status === "not_subscribed"
-                                    ? "Not subscribed — add the leadgen subscription in the Meta app dashboard."
-                                    : testResults.webhook.subscription.reason || "Not verifiable from the CRM."}
-                            </p>
+                            <>
+                                <p className="font-semibold text-gray-900">
+                                    {testResults.webhook.subscription.status === "active"
+                                        ? "Active — Meta reports an active leadgen subscription for this callback."
+                                        : testResults.webhook.subscription.status === "not_subscribed"
+                                        ? "Not subscribed — Meta has no leadgen webhook registered for this app."
+                                        : testResults.webhook.subscription.status === "callback_mismatch"
+                                        ? "Subscribed, but Meta delivers to a different callback URL."
+                                        : testResults.webhook.subscription.status === "inactive"
+                                        ? "Registered but inactive in Meta — re-subscribe to reactivate it."
+                                        : testResults.webhook.subscription.reason || "Not verifiable from the CRM."}
+                                </p>
+                                {testResults.webhook.subscription.status === "callback_mismatch"
+                                    && testResults.webhook.subscription.metaCallbackUrl && (
+                                    <p className="text-xs text-gray-500 mt-1 font-mono break-all">
+                                        Meta callback: {testResults.webhook.subscription.metaCallbackUrl}
+                                    </p>
+                                )}
+                            </>
                         ) : (
                             <p className="text-gray-500">
                                 Run &quot;Test webhook&quot; in Connection testing to check the subscription with Meta.
                             </p>
+                        )}
+                        <button
+                            type="button"
+                            onClick={subscribeWebhook}
+                            disabled={!!subscribeState?.pending}
+                            className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 disabled:opacity-50"
+                        >
+                            {subscribeState?.pending ? (
+                                <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                                <Webhook size={14} />
+                            )}
+                            Subscribe webhook in Meta
+                        </button>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                            Registers the leadgen webhook and subscribes the selected Pages — the same change as
+                            Meta&apos;s App Dashboard → Webhooks → Page → leadgen, done from here.
+                        </p>
+                        {subscribeState && !subscribeState.pending && (
+                            <div className="mt-2">
+                                <p className={`text-xs font-semibold ${subscribeState.ok ? "text-emerald-700" : "text-red-600"}`}>
+                                    {subscribeState.message || (subscribeState.ok ? "Subscribed" : "Subscription failed")}
+                                </p>
+                                {Array.isArray(subscribeState.pages) && subscribeState.pages.some((page) => !page.ok) && (
+                                    <ul className="mt-1 space-y-0.5 text-xs text-red-600">
+                                        {subscribeState.pages.filter((page) => !page.ok).map((page, index) => (
+                                            <li key={`${page.pageId || "none"}-${index}`}>
+                                                {page.pageId ? `Page ${page.pageId}: ` : ""}
+                                                {page.message || "not subscribed"}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>

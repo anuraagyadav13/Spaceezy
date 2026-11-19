@@ -79,8 +79,18 @@ function ScheduleSiteVisitForm() {
                 ...(assignedTo ? { assignedToId: assignedTo } : {}),
                 status: "SCHEDULED"
             }),
-        onSuccess: () => {
-            showToast("Site visit scheduled successfully", "success");
+        onSuccess: (created) => {
+            const whatsapp = created?.whatsapp;
+            if (whatsapp?.sent) {
+                showToast("Site visit scheduled — WhatsApp invitation sent", "success");
+            } else {
+                showToast(
+                    whatsapp?.reason
+                        ? `Site visit scheduled. WhatsApp invitation not sent: ${whatsapp.reason}`
+                        : "Site visit scheduled successfully",
+                    whatsapp?.reason ? "info" : "success"
+                );
+            }
             ["siteVisits", "leads", "pipeline", "lead", "activities"].forEach((key) =>
                 queryClient.invalidateQueries({ queryKey: [key] })
             );
@@ -96,9 +106,9 @@ function ScheduleSiteVisitForm() {
     };
 
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-6 sm:p-8 space-y-6 custom-scrollbar overflow-y-auto">
-            <div className="flex items-center gap-3">
-                <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-400 hover:bg-gray-100 rounded-xl">
+        <div className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-4 sm:p-6 lg:p-8 space-y-6 custom-scrollbar overflow-y-auto">
+            <div className="flex items-start gap-3">
+                <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-400 hover:bg-gray-100 rounded-xl shrink-0">
                     <ArrowLeft size={20} />
                 </button>
                 <div>
@@ -118,7 +128,7 @@ function ScheduleSiteVisitForm() {
                     </button>
                 </div>
             ) : (
-                <form onSubmit={handleSubmit} className="max-w-xl bg-white p-8 rounded-3xl border border-gray-200 shadow-sm space-y-4">
+                <form onSubmit={handleSubmit} className="w-full max-w-xl bg-white p-5 sm:p-8 rounded-3xl border border-gray-200 shadow-sm space-y-4">
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Lead *</label>
                         <select
@@ -170,7 +180,7 @@ function ScheduleSiteVisitForm() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Date *</label>
                             <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
