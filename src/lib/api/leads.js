@@ -2,12 +2,16 @@ import apiClient from "./client";
 
 const unwrapList = (payload, listKey) => payload?.[listKey] ?? payload;
 
+export const fetchJunkLeads = async (params = {}) => {
+    const response = await apiClient.get('/leads/junk', { params });
+    return unwrapList(response, 'leads');
+};
+
 export const fetchLeads = async (params = {}) => {
     const response = await apiClient.get('/leads', { params });
     return unwrapList(response, 'leads');
 };
 
-// Full paginated envelope ({ leads, total, pages }) for counts/stats.
 export const fetchLeadsPage = async (params = {}) => {
     const response = await apiClient.get('/leads', { params });
     return response;
@@ -171,6 +175,26 @@ export const claimLead = async (id) => {
 
 export const transitionLeadStage = async ({ id, target, ...payload }) => {
     const response = await apiClient.post(`/leads/${id}/stage`, { target, ...payload });
+    return response;
+};
+
+export const addInterestedProject = async (leadId, projectId) => {
+    const response = await apiClient.post(`/leads/${leadId}/interested-projects`, { projectId });
+    return response;
+};
+
+export const removeInterestedProject = async (leadId, projectId) => {
+    const response = await apiClient.delete(`/leads/${leadId}/interested-projects/${projectId}`);
+    return response;
+};
+
+export const discardLead = async (id, reason) => {
+    const response = await apiClient.post(`/leads/${id}/discard`, { reason });
+    return response;
+};
+
+export const restoreLead = async (id) => {
+    const response = await apiClient.post(`/leads/${id}/restore`);
     return response;
 };
 

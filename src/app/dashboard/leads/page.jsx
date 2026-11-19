@@ -72,6 +72,12 @@ function LeadsWorkspace() {
                         >
                             Lead Sources
                         </button>
+                        <Link
+                            href="/dashboard/leads/junk"
+                            className="px-4 py-2 rounded-xl text-sm font-bold border border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors"
+                        >
+                            Junk / Discarded
+                        </Link>
                     </div>
                     {isExecutive && <ClaimStatsBar />}
                 </div>

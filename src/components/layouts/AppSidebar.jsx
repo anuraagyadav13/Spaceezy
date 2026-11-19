@@ -28,7 +28,8 @@ const NAVIGATION_GROUPS = [
         title: "LEADS",
         icon: Users,
         items: [
-            { label: "Leads", href: "/dashboard/leads" }
+            { label: "Leads", href: "/dashboard/leads" },
+            { label: "Junk / Discarded", href: "/dashboard/leads/junk", permission: "lead:view" }
         ]
     },
     {

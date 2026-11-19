@@ -207,6 +207,7 @@ class LeadService {
         if (filters.stage) {
             const statuses = groupToStatuses(filters.stage);
             if (statuses.length) where.status = { in: statuses };
+            else if (filters.stage === 'LOST' || filters.stage === 'CLOSED') where.status = filters.stage;
         }
 
         if (filters.search) {
@@ -505,7 +506,8 @@ class LeadService {
                 data: {
                     ...payload,
                     organizationId,
-                    createdById
+                    createdById,
+                    originalProjectId: payload.projectId || null
                 }
             });
 
@@ -733,7 +735,8 @@ class LeadService {
                 activities: { orderBy: { createdAt: 'desc' } },
                 assignedTo: { select: { id: true, name: true } },
                 project: { select: { id: true, name: true, city: true } },
-                property: { select: { id: true, title: true, unitNumber: true, projectId: true } },
+                originalProject: { select: { id: true, name: true, city: true } },
+                projectInterests: { include: { project: { select: { id: true, name: true, city: true } } } },
                 preferredLocations: {
                     orderBy: { createdAt: 'asc' },
                     include: {
@@ -778,17 +781,80 @@ class LeadService {
         LeadService.syncLegacyBudget(payload, existing);
 
         if (data.status && data.status !== existing.status) {
+            const refs = await LeadService.resolveInventoryRefs(prisma, payload, organizationId, existing);
+            const extra = {};
+            if (refs.projectId !== undefined) extra.projectId = refs.projectId;
+            if (refs.propertyId !== undefined) extra.propertyId = refs.propertyId;
+            if (refs.configurationId !== undefined) extra.configurationId = refs.configurationId;
+
+            // Preserve original enquiry project on first assignment (never overwrite).
+            const newProjectId = extra.projectId !== undefined ? extra.projectId : undefined;
+            if (newProjectId && !existing.projectId && !existing.originalProjectId) {
+                extra.originalProjectId = newProjectId;
+            }
+
             const transitioned = await LeadService.transitionStage(id, data.status, data, organizationId, userRole, userId);
+
+            // Apply non-status inventory refs (e.g. project change submitted
+            // together with a stage move) so they are not silently dropped.
+            if (Object.keys(extra).length) {
+                await prisma.lead.update({ where: { id }, data: extra });
+            }
+
             if (locationRows !== null) {
                 await LeadService.replacePreferredLocations(id, locationRows);
             }
-            return transitioned;
+
+            // Record project-interest change when the primary project moved.
+            if (extra.projectId !== undefined && extra.projectId !== existing.projectId) {
+                await prisma.leadActivity.create({
+                    data: {
+                        organizationId,
+                        leadId: id,
+                        type: 'PROJECT_CHANGE',
+                        performedById: userId,
+                        metadata: {
+                            kind: 'project_change',
+                            fromProjectId: existing.projectId,
+                            toProjectId: extra.projectId,
+                            reason: data.reason || null
+                        }
+                    }
+                });
+            }
+
+            if (extra.assignedToId && extra.assignedToId !== existing.assignedToId) {
+                const assignee = await prisma.user.findFirst({
+                    where: { id: extra.assignedToId, organizationId },
+                    select: { name: true }
+                });
+                await prisma.leadActivity.create({
+                    data: {
+                        organizationId,
+                        leadId: id,
+                        type: 'ASSIGNMENT',
+                        description: `Lead reassigned to ${assignee ? assignee.name : 'user'}`,
+                        performedById: userId,
+                        metadata: {
+                            source: assignmentSourceForRole(userRole),
+                            previousAssignedToId: existing.assignedToId
+                        }
+                    }
+                });
+            }
+
+            return (Object.keys(extra).length ? await prisma.lead.findFirst({ where: { id, organizationId } }) : transitioned);
         }
 
         const refs = await LeadService.resolveInventoryRefs(prisma, payload, organizationId, existing);
         if (refs.projectId !== undefined) payload.projectId = refs.projectId;
         if (refs.propertyId !== undefined) payload.propertyId = refs.propertyId;
         if (refs.configurationId !== undefined) payload.configurationId = refs.configurationId;
+
+        // Preserve original enquiry project on first assignment (never overwrite).
+        if (payload.projectId && !existing.projectId && !existing.originalProjectId) {
+            payload.originalProjectId = payload.projectId;
+        }
 
         const updated = await prisma.lead.update({
             where: { id },
@@ -966,6 +1032,7 @@ class LeadService {
                         campaign: data.campaign,
                         landingPage: data.landingPage,
                         projectId,
+                        originalProjectId: projectId || null,
                         propertyId,
                         configurationId,
                         message: data.message,
@@ -1347,16 +1414,62 @@ class LeadService {
         }
     }
 
-    static async removeInterestedProperty(leadId, propertyId, organizationId, userRole, userId) {
+    static async addInterestedProject(leadId, projectId, organizationId, userRole, userId) {
         const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
         if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
 
         assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
 
-        await prisma.leadInterest.deleteMany({
-            where: {
+        const project = await prisma.project.findFirst({ where: { id: projectId, organizationId } });
+        if (!project) throw new AppError('Project not found', 404, 'NOT_FOUND');
+
+        // Preserve the original enquiry project: set it on first project interest
+        // if it was never recorded.
+        if (!lead.originalProjectId && !lead.projectId) {
+            await prisma.lead.update({ where: { id: leadId }, data: { originalProjectId: projectId } });
+        }
+
+        try {
+            const interest = await prisma.leadProjectInterest.create({
+                data: { leadId, projectId }
+            });
+            await prisma.leadActivity.create({
+                data: {
+                    organizationId,
+                    leadId,
+                    type: 'PROJECT_CHANGE',
+                    description: `Interested project added: ${project.name}`,
+                    performedById: userId,
+                    metadata: { action: 'add', projectId, projectName: project.name }
+                }
+            });
+            return interest;
+        } catch (error) {
+            if (error.code === 'P2002') return true;
+            throw error;
+        }
+    }
+
+    static async removeInterestedProject(leadId, projectId, organizationId, userRole, userId) {
+        const lead = await prisma.lead.findFirst({ where: { id: leadId, organizationId } });
+        if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead')
+
+        const project = await prisma.project.findFirst({ where: { id: projectId, organizationId } });
+
+        await prisma.leadProjectInterest.deleteMany({
+            where: { leadId, projectId }
+        });
+
+        await prisma.leadActivity.create({
+            data: {
+                organizationId,
                 leadId,
-                propertyId
+                type: 'PROJECT_CHANGE',
+                description: `Interested project removed: ${project ? project.name : projectId}`,
+                performedById: userId,
+                metadata: { action: 'remove', projectId, projectName: project ? project.name : null }
             }
         });
 
@@ -1364,6 +1477,111 @@ class LeadService {
     }
 
     // --- Follow-ups ---
+
+    static async discardLead(id, reason, organizationId, userRole, userId) {
+        const lead = await prisma.lead.findFirst({ where: { id, organizationId } });
+        if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead');
+
+        if (lead.status === 'BOOKED' || lead.status === 'CLOSED') {
+            throw new AppError('Cannot discard a booked or closed lead', 409, 'LEAD_NOT_DISCARDABLE');
+        }
+
+        if (lead.junkedAt) {
+            // Already discarded; keep it idempotent.
+            return lead;
+        }
+
+        const now = new Date();
+        const purgeAfter = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+        const updated = await prisma.lead.update({
+            where: { id },
+            data: {
+                status: 'LOST',
+                junkedAt: now,
+                junkReason: reason || null,
+                junkedBy: userId,
+                purgeAfter
+            }
+        });
+
+        await prisma.leadActivity.create({
+            data: {
+                organizationId,
+                leadId: id,
+                type: 'STATUS_CHANGE',
+                description: `Lead discarded (Not Interested): ${reason || 'no reason given'}`,
+                performedById: userId,
+                metadata: { from: lead.status, to: 'LOST', reason: reason || null, junked: true, junkedAt: now.toISOString(), purgeAfter: purgeAfter.toISOString() }
+            }
+        });
+
+        return updated;
+    }
+
+    static async restoreLead(id, organizationId, userRole, userId) {
+        const lead = await prisma.lead.findFirst({ where: { id, organizationId } });
+        if (!lead) throw new AppError('Lead not found', 404, 'NOT_FOUND');
+        assertOwnership(lead, userRole, userId, 'assignedToId', 'You do not have access to this lead');
+
+        if (!lead.junkedAt) {
+            throw new AppError('Lead is not in the Junk/Discarded state', 400, 'BAD_REQUEST');
+        }
+        if (lead.restoredAt) {
+            throw new AppError('Lead has already been restored', 400, 'BAD_REQUEST');
+        }
+        if (lead.purgeAfter && lead.purgeAfter < new Date()) {
+            throw new AppError('Retention period has expired; lead can no longer be restored', 410, 'GONE');
+        }
+
+        const updated = await prisma.lead.update({
+            where: { id },
+            data: {
+                status: 'NEW',
+                restoredAt: new Date(),
+                restoredBy: userId,
+                purgeAfter: null
+            }
+        });
+
+        await prisma.leadActivity.create({
+            data: {
+                organizationId,
+                leadId: id,
+                type: 'STATUS_CHANGE',
+                description: 'Lead restored from Junk/Discarded',
+                performedById: userId,
+                metadata: { from: 'LOST', to: 'NEW', restored: true, junkReason: lead.junkReason }
+            }
+        });
+
+        return updated;
+    }
+
+    static async getJunkLeads(organizationId, query, userRole, userId) {
+        const { page = 1, limit = 20, blocked } = query;
+        const skip = (page - 1) * limit;
+        const where = { organizationId, junkedAt: { not: null }, restoredAt: null };
+        if (blocked === 'true' || blocked === true) where.purgeBlockedReason = { not: null };
+        LeadService.buildLeadScope(userRole, userId, where);
+
+        const [leads, total] = await Promise.all([
+            prisma.lead.findMany({
+                where,
+                skip: parseInt(skip),
+                take: parseInt(limit),
+                orderBy: { junkedAt: 'desc' },
+                include: {
+                    assignedTo: { select: { id: true, name: true } },
+                    project: { select: { id: true, name: true } }
+                }
+            }),
+            prisma.lead.count({ where })
+        ]);
+
+        return { leads: leads.map((l) => maskContact(l, userRole)), total, pages: Math.ceil(total / limit) };
+    }
 
     static async getFollowups(organizationId, query, userRole, userId) {
         const { status, limit = 50 } = query;

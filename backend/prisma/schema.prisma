@@ -84,6 +84,8 @@ model User {
   passwordReset      PasswordReset?
   assignedLeads      Lead[]         @relation("AssignedLeads")
   createdLeads       Lead[]         @relation("CreatedLeads")
+  junkedLeads        Lead[]         @relation("JunkedLeads")
+  restoredLeads      Lead[]         @relation("RestoredLeads")
   leadActivities     LeadActivity[]
   assignedCustomers  Customer[]     @relation("AssignedCustomers")
   assignedBookings   Booking[]      @relation("AssignedBookings")
@@ -238,6 +240,20 @@ model Lead {
 
   status LeadStatus @default(NEW)
 
+  // Discard / Junk metadata (only set for leads explicitly marked Not
+  // Interested). Other LOST leads (e.g. from call outcomes that are not
+  // NOT_INTERESTED, or manual stage moves) leave these NULL so the Junk
+  // view can distinguish explicit discards from other dead leads.
+  junkedAt    DateTime?
+  junkReason  String?
+  junkedBy    String?
+  junkedByUser User?   @relation("JunkedLeads", fields: [junkedBy], references: [id], onDelete: SetNull)
+  restoredAt  DateTime?
+  restoredBy  String?
+  restoredByUser User? @relation("RestoredLeads", fields: [restoredBy], references: [id], onDelete: SetNull)
+  purgeAfter  DateTime?
+  purgeBlockedReason String?
+
   budget Decimal? @db.Decimal(14, 2)
 
   // Customer requirement (distinct from the interested project/property refs below).
@@ -274,6 +290,9 @@ model Lead {
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id])
+
+  originalProjectId String?
+  originalProject   Project? @relation("OriginalProject", fields: [originalProjectId], references: [id], onDelete: SetNull)
 
   propertyId String?
   property   Property? @relation(fields: [propertyId], references: [id])
@@ -313,6 +332,7 @@ model Lead {
   calls      Call[]
   quotations Quotation[]
   interests  LeadInterest[]
+  projectInterests LeadProjectInterest[]
   bookings   Booking[]
   preferredLocations LeadPreferredLocation[]
   whatsappConversations WhatsAppConversation[]
@@ -340,6 +360,7 @@ enum ActivityType {
   CALL
   EMAIL
   STATUS_CHANGE
+  PROJECT_CHANGE
   ASSIGNMENT
   FOLLOW_UP
   SITE_VISIT
@@ -404,7 +425,9 @@ model Project {
   publicSlug String? @unique
   isPublic   Boolean @default(false)
 
-  // Location
+  // Public website (unauthenticated). publicSlug is URL-safe
+  // (name-slug + short random suffix, unique). isPublic publishes the project
+  // and its units to the public APIs/pages (default: draft / not published).
   // Canonical hierarchy FKs (authoritative for property matching). The legacy
   // free-text columns below stay for display/backward compatibility and are
   // denormalized from the canonical names when the FKs are written.
@@ -461,6 +484,8 @@ model Project {
   properties     Property[]
   configurations Configuration[]
   leads          Lead[]
+  originalLeads  Lead[] @relation("OriginalProject")
+  leadProjectInterests LeadProjectInterest[]
   bookings       Booking[]
   quotations     Quotation[]
   siteVisits     SiteVisit[]
@@ -879,6 +904,18 @@ model LeadInterest {
   createdAt DateTime @default(now())
 
   @@unique([leadId, propertyId])
+}
+
+model LeadProjectInterest {
+  id        String @id @default(uuid())
+  leadId    String
+  lead      Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([leadId, projectId])
 }
 
 

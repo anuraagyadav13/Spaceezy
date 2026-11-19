@@ -196,6 +196,31 @@ const addInterestSchema = {
     })
 };
 
+const discardLeadSchema = {
+    params: z.object({
+        id: z.string().uuid('id must be a valid UUID')
+    }),
+    body: z.object({
+        reason: z.string().max(500).optional()
+    }).optional()
+};
+
+const addProjectInterestSchema = {
+    params: z.object({
+        id: z.string().uuid('id must be a valid UUID')
+    }),
+    body: z.object({
+        projectId: z.string().uuid('projectId must be a valid UUID')
+    })
+};
+
+const interestedProjectParamsSchema = {
+    params: z.object({
+        id: z.string().uuid('id must be a valid UUID'),
+        projectId: z.string().uuid('projectId must be a valid UUID')
+    })
+};
+
 const leadBookingSchema = {
     params: z.object({
         id: z.string().uuid('id must be a valid UUID')
@@ -284,6 +309,9 @@ module.exports = {
     scheduleFollowUpSchema,
     interestedPropertyParamsSchema,
     addInterestSchema,
+    interestedProjectParamsSchema,
+    addProjectInterestSchema,
+    discardLeadSchema,
     leadBookingSchema,
     proposalSchema,
     sharePropertySchema

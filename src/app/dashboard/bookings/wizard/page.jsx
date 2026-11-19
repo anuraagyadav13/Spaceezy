@@ -25,6 +25,10 @@ const EMPTY_CUSTOMER = { name: "", phone: "", email: "" };
 
 const describeError = (err) => {
     if (!err) return "";
+    const code = err?.code || err?.response?.data?.code || err?.data?.code;
+    if (code === "CROSS_PROJECT_REFERENCE") {
+        return "The selected unit does not belong to the lead's project. Choose a unit from the lead's project (or update the lead's project first).";
+    }
     if (err.status === 403) return "You do not have permission to create this booking.";
     if (err.status === 404) return err.message || "The selected record no longer exists.";
     if (err.status === 409) return err.message || "This booking conflicts with the current inventory or lead state.";
@@ -459,6 +463,14 @@ function BookingWizardInner() {
                                                         <option key={l.id} value={l.id}>{l.name} ({l.phone})</option>
                                                     ))}
                                                 </select>
+                                            )}
+                                            {selectedLead && !quotationId && selectedLead.project?.name && (
+                                                <p className="text-xs text-gray-500 mt-2">
+                                                    Lead&apos;s current project: <span className="font-semibold text-gray-700">{selectedLead.project.name}</span>.
+                                                    {selectedProject && selectedProject.id !== selectedLead.project?.id && (
+                                                        <span className="text-amber-600 font-semibold"> Selected project differs — booking will be rejected unless the chosen inventory belongs to the lead&apos;s project.</span>
+                                                    )}
+                                                </p>
                                             )}
                                             {!quotationId && !leadsQuery.isLoading && leads.length === 0 && (
                                                 <p className="text-xs text-red-500 mt-1 font-semibold">No leads found. Create a lead first.</p>

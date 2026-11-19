@@ -19,7 +19,7 @@ import { fetchSiteVisits } from "../../../lib/api/siteVisits";
 import { useProductivity } from "../../../features/communication/hooks/useCommunication";
 import { showToast } from "../../../lib/toast";
 
-const STAGES = ["NEW", "CONTACTED", "QUALIFIED", "SITE VISIT", "NEGOTIATION", "BOOKING"];
+const STAGES = ["NEW", "CONTACTED", "QUALIFIED", "SITE_VISIT", "NEGOTIATION", "BOOKED"];
 const PAYMENT_STATES = ["COMPLETED", "PARTIAL", "PENDING"];
 const PAYMENT_COLORS = {
     COMPLETED: "bg-emerald-500",
@@ -59,7 +59,7 @@ const groupKeyForLead = (lead, dimension, usersById, projectsById) => {
         case "Lead Source":
             return lead.source || "Unknown";
         case "Lead Stage":
-            return lead.stage || "Unknown";
+            return lead.status || "Unknown";
         case "Sales Employee": {
             const id = typeof lead.assignedTo === "object" ? lead.assignedTo?.id : lead.assignedTo;
             if (id && usersById[id]) return usersById[id].name;
@@ -146,7 +146,7 @@ function ReportsPageContent() {
 
     // Derived High-Level Metrics
     const totalLeads = leads.length;
-    const bookedLeads = leads.filter(l => l.stage === "BOOKING").length;
+    const bookedLeads = leads.filter(l => l.status === "BOOKED").length;
     const conversionRate = totalLeads ? Math.round((bookedLeads / totalLeads) * 100) : 0;
 
     const totalUnits = properties.reduce((sum, p) => sum + (p.totalUnits || 0), 0);
@@ -189,7 +189,7 @@ function ReportsPageContent() {
             return [...map.entries()].sort((a, b) => b[1] - a[1]);
         };
         return {
-            stageStats: countBy(l => l.stage),
+            stageStats: countBy(l => l.status),
             sourceStats: countBy(l => l.source)
         };
     }, [leads]);
@@ -248,7 +248,7 @@ function ReportsPageContent() {
 
         return [...groups.entries()].map(([label, groupLeads]) => {
             const groupIds = new Set(groupLeads.map(l => l.id));
-            const booked = groupLeads.filter(l => l.stage === "BOOKING").length;
+            const booked = groupLeads.filter(l => l.status === "BOOKED").length;
             const agreementValue = filteredBookings
                 .filter(b => groupIds.has(b.leadId))
                 .reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
@@ -518,7 +518,7 @@ function ReportsPageContent() {
                                         </div>
                                         <div className="flex flex-col gap-4">
                                             {STAGES.map((stage) => {
-                                                const count = leads.filter(l => l.stage === stage).length;
+                                                const count = leads.filter(l => l.status === stage).length;
                                                 const pct = totalLeads ? Math.round((count / totalLeads) * 100) : 0;
                                                 return (
                                                     <div key={stage}>
