@@ -1,6 +1,7 @@
 import { PublicHeader } from "../../components/public/PublicHeader";
 import { PublicFooter } from "../../components/public/PublicFooter";
 import { WhatsAppButton } from "../../components/public/WhatsAppButton";
+import { FirstThemePrompt } from "../../components/providers/ThemeProvider";
 import { JsonLd } from "../../components/seo/JsonLd";
 import { SITE_URL, organizationJsonLd, webSiteJsonLd } from "../../lib/seo/site";
 
@@ -21,6 +22,7 @@ export default function PublicLayout({ children }) {
             <WhatsAppButton />
             <JsonLd data={organizationJsonLd} />
             <JsonLd data={webSiteJsonLd} />
+            <FirstThemePrompt />
         </div>
     );
 }

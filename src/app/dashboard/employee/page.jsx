@@ -317,7 +317,7 @@ export default function EmployeeDashboard() {
                             <QuickLink href="/dashboard/activities/tasks" icon={ListTodo} label="All tasks" />
                             <QuickLink href="/dashboard/activities/overdue" icon={AlertTriangle} label="Overdue activities" />
                             <QuickLink href="/dashboard/calling/softphone" icon={Phone} label="Softphone" />
-                            <QuickLink href="/dashboard/calling/whatsapp" icon={MessageSquare} label="WhatsApp Center" />
+                            <QuickLink href="/dashboard/calling/whatsapp" icon={MessageSquare} label="Spaceezy Chat" />
                         </div>
                     </section>
                 </div>

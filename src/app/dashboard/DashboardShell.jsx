@@ -11,9 +11,8 @@ export default function DashboardShell({ children }) {
     const pathname = usePathname();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    // WhatsApp-only "hide the app header while scrolling down" behavior.
-    // Stores the pathname the header was hidden on, so navigating to any
-    // other page shows it again without a reset effect.
+    // WhatsApp-only: on this screen the sidebar starts collapsed (desktop) and
+    // the mobile drawer starts closed, so the chat gets the full width.
     const isWhatsApp = pathname === "/dashboard/calling/whatsapp"
         || pathname.startsWith("/dashboard/calling/whatsapp/");
     const [headerHiddenFor, setHeaderHiddenFor] = useState(null);
@@ -27,6 +26,10 @@ export default function DashboardShell({ children }) {
             return false;
         }
     });
+
+    // WhatsApp-only: the sidebar starts collapsed so the chat gets the full
+    // width, but the brand logo can still expand it on demand.
+    const [whatsAppSidebarExpanded, setWhatsAppSidebarExpanded] = useState(false);
 
     // The collapsed (icon-only) rail is a desktop affordance. On phones the
     // sidebar is a drawer, so it always opens full width with labels.
@@ -104,12 +107,31 @@ export default function DashboardShell({ children }) {
         );
     }
 
+    // The brand logo in the sidebar is the single sidebar control: it collapses
+    // the rail on desktop and opens/closes the drawer on phones.
+    const handleBrandClick = () => {
+        if (isMobile) {
+            setIsSidebarOpen((prev) => !prev);
+        } else if (isWhatsApp) {
+            setWhatsAppSidebarExpanded((prev) => !prev);
+        } else {
+            setIsCollapsed((prev) => !prev);
+        }
+    };
+
     return (
         <div className="crm-shell flex h-dvh crm-canvas overflow-hidden font-sans">
             <AppSidebar 
-                isOpen={isSidebarOpen} 
+                isOpen={isWhatsApp ? false : isSidebarOpen} 
                 setIsOpen={setIsSidebarOpen} 
-                collapsed={isCollapsed && !isMobile}
+                collapsed={
+                    isMobile
+                        ? false
+                        : isWhatsApp
+                            ? !whatsAppSidebarExpanded
+                            : isCollapsed
+                }
+                onBrandClick={handleBrandClick}
             />
 
             <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative">
@@ -122,11 +144,9 @@ export default function DashboardShell({ children }) {
                 >
                     <AppHeader 
                         onOpenSidebar={() => setIsSidebarOpen(true)} 
-                        onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
-                        collapsed={isCollapsed}
                     />
                 </div>
-                <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto">
+                <div ref={contentRef} className={`flex-1 min-h-0 ${isWhatsApp ? "overflow-hidden" : "overflow-y-auto"}`}>
                     {children}
                 </div>
             </main>

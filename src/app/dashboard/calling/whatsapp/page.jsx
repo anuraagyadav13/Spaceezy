@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     MessageSquare, MessageCircle, Send, AlertCircle, RefreshCw, Link2, Search,
     Check, CheckCheck, Clock, Phone, Video, MoreVertical, Paperclip, Plus, X,
-    List, Settings, Signal, ExternalLink, CalendarPlus, FileText, KeyRound, Receipt,
+    List, ExternalLink, CalendarPlus, FileText, KeyRound, Receipt,
     Maximize2, Minimize2, Copy, ArrowLeft
 } from "lucide-react";
 import { fetchLeads, fetchLeadById } from "../../../../lib/api/leads";
@@ -28,8 +28,7 @@ import {
     useAssignConversation,
     useMarkConversationRead,
     useWhatsAppTemplates,
-    useTemplateLibrary,
-    useTestWhatsappConnection
+    useTemplateLibrary
 } from "../../../../features/communication/hooks/useWhatsApp";
 
 // Literal single-pass {{name}} substitution (mirror of the backend preview
@@ -166,7 +165,7 @@ const formatConvTime = (value) => {
 };
 
 function WhatsAppCenterPageInner() {
-    const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useWhatsAppStatus();
+    const { data: status, isLoading: statusLoading } = useWhatsAppStatus();
     const router = useRouter();
     // Subscribe to ?leadId= so SPA navigation between leads re-seeds the
     // selection (the mounted page is reused, mount-time initializers go stale).
@@ -334,7 +333,7 @@ function WhatsAppCenterPageInner() {
         retry: 1
     });
 
-    const { data: conversations, refetch: refetchConvs, isFetching: convsFetching } = useConversations({ limit: 50 }, { refetchInterval: 15_000 });
+    const { data: conversations, isFetching: convsFetching } = useConversations({ limit: 50 }, { refetchInterval: 15_000 });
     // Debounced server-side search — only active while the typed text matches
     // the debounced term, so the instant client-side filter below wins during
     // typing and the thread you have open can never vanish from the base list.
@@ -353,7 +352,6 @@ function WhatsAppCenterPageInner() {
     const employeeList = Array.isArray(employeesData) ? employeesData : [];
     const createConversation = useCreateConversation();
     const sendMessage = useSendMessage();
-    const testConnection = useTestWhatsappConnection();
     const conversationStatus = useUpdateConversationStatus();
     const assignConversation = useAssignConversation();
     const markConversationRead = useMarkConversationRead();
@@ -405,7 +403,7 @@ function WhatsAppCenterPageInner() {
         .slice()
         .sort((a, b) => new Date(b.lastMessageAt || b.createdAt || 0) - new Date(a.lastMessageAt || a.createdAt || 0));
     const conversation = conversationList.find((c) => c.leadId === selectedLeadId) || null;
-    const { data: thread, isLoading: threadLoading, refetch, isFetching } = useMessages(conversation?.id, {}, { enabled: Boolean(conversation?.id) });
+    const { data: thread, isLoading: threadLoading } = useMessages(conversation?.id, {}, { enabled: Boolean(conversation?.id) });
 
     // Shared unread counter clears when the thread is opened — and again if a
     // new inbound lands while it's open. Guarded per (id, count) so re-renders
@@ -958,12 +956,6 @@ function WhatsAppCenterPageInner() {
         }
     };
 
-    const handleRefresh = () => {
-        refetchConvs();
-        refetchStatus();
-        if (conversation?.id) refetch();
-    };
-
     // Close / reopen the open thread (server re-checks scope + permissions).
     const changeConversationStatus = async (status) => {
         if (!conversation?.id) return;
@@ -972,19 +964,6 @@ function WhatsAppCenterPageInner() {
             showToast(status === "CLOSED" ? "Conversation closed" : "Conversation reopened", "success");
         } catch (err) {
             showToast(err?.message || "Failed to update the conversation", "error");
-        }
-    };
-
-    const handleTestConnection = async () => {
-        if (status?.simulated) {
-            showToast(`Mock provider active — messages are simulated inside the CRM and never leave it (${status?.provider || "mock"})`, "success");
-            return;
-        }
-        try {
-            const result = await testConnection.mutateAsync();
-            showToast(`Connected${result?.verifiedName ? ` — ${result.verifiedName}` : ""}${result?.displayPhoneNumber ? ` (${result.displayPhoneNumber})` : ""}`, "success");
-        } catch (err) {
-            showToast(err?.message || "Connection test failed", "error");
         }
     };
 
@@ -2362,9 +2341,9 @@ function WhatsAppCenterPageInner() {
     return (
         <div
             data-scroll-root="whatsapp"
-            className="flex flex-col h-full overflow-hidden bg-gray-50/50 p-3 sm:p-6 lg:p-8 space-y-4 custom-scrollbar overflow-y-auto overflow-x-hidden"
+            className="flex h-full min-h-0 flex-col gap-3 overflow-hidden bg-gray-50/50 p-3 sm:gap-4 sm:p-4 lg:p-5"
         >
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 shrink-0">
                 <div className="min-w-0 flex items-start gap-3 flex-1">
                     <button
                         type="button"
@@ -2379,7 +2358,7 @@ function WhatsAppCenterPageInner() {
                         <MessageCircle size={22} />
                     </span>
                     <span className="min-w-0">
-                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">WhatsApp Center</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">Spaceezy Chat</h1>
                         <p className="text-sm text-gray-500 break-words">
                             Manage conversations with your leads through WhatsApp Business API
                         </p>
@@ -2391,31 +2370,11 @@ function WhatsAppCenterPageInner() {
                             Mock · Simulated
                         </span>
                     )}
-                    <button
-                        onClick={handleTestConnection}
-                        disabled={testConnection.isPending}
-                        className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl px-3 py-2 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                        <Signal size={14} /> Test Connection
-                    </button>
-                    <Link
-                        href="/dashboard/admin/integrations"
-                        className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl px-3 py-2 hover:bg-gray-50"
-                    >
-                        <Settings size={14} /> Settings
-                    </Link>
-                    <button
-                        onClick={handleRefresh}
-                        aria-label="Refresh conversations"
-                        className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl px-3 py-2 hover:bg-gray-50"
-                    >
-                        <RefreshCw size={14} className={isFetching || convsFetching ? "animate-spin" : ""} /> Refresh
-                    </button>
                 </div>
             </div>
 
             {!statusLoading && !status?.configured && (
-                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-sm flex items-start gap-3">
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-sm flex items-start gap-3 shrink-0">
                     <AlertCircle size={18} className="mt-0.5 shrink-0" />
                     <div className="min-w-0">
                         <p className="font-bold">WhatsApp integration is not configured.</p>
@@ -2428,7 +2387,7 @@ function WhatsAppCenterPageInner() {
             )}
 
             {/* Mobile: search + avatar strip */}
-            <div className="lg:hidden space-y-3 min-w-0">
+            <div className="lg:hidden space-y-3 min-w-0 shrink-0">
                 <div className="relative min-w-0">
                     <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
@@ -2472,9 +2431,9 @@ function WhatsAppCenterPageInner() {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)_300px] xl:grid-cols-[320px_minmax(0,1fr)_320px] gap-4 items-start min-w-0">
+            <div className="flex flex-col min-h-0 flex-1 gap-4 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_300px] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_320px] lg:items-stretch lg:overflow-hidden min-w-0">
                 {/* Conversations (desktop) */}
-                <div className="hidden lg:flex flex-col min-w-0 bg-white rounded-3xl border border-gray-200 shadow-sm p-3 max-h-[720px]">
+                <div className="hidden lg:flex flex-col min-w-0 min-h-0 bg-white rounded-3xl border border-gray-200 shadow-sm p-3">
                     <div className="relative min-w-0 mb-2">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
@@ -2512,14 +2471,14 @@ function WhatsAppCenterPageInner() {
                 </div>
 
                 {/* Thread */}
-                <div className="min-w-0 flex flex-col min-h-0 h-[76dvh] max-h-[760px] lg:h-[680px] bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="min-w-0 flex flex-col min-h-0 flex-1 lg:flex-none lg:h-full bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
                     {threadBody}
                 </div>
 
                 {/* Details / Templates / Notes — desktop: always-visible third
                     column with a ⛶ button that pops the same panel up BIG (the
                     popup below, shared with small screens). */}
-                <div className="hidden lg:block min-w-0 bg-white rounded-3xl border border-gray-200 shadow-sm p-4 sm:p-5 lg:max-h-[720px] lg:overflow-y-auto custom-scrollbar">
+                <div className="hidden lg:block min-w-0 min-h-0 overflow-y-auto custom-scrollbar bg-white rounded-3xl border border-gray-200 shadow-sm p-4 sm:p-5">
                     <div className="flex items-center justify-between gap-2 mb-3">
                         <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider">Lead panel</p>
                         <button
@@ -2607,7 +2566,7 @@ function WhatsAppCenterPageInner() {
 
 export default function WhatsAppCenterPage() {
     return (
-        <Suspense fallback={<div className="p-8 text-gray-400 font-medium">Loading WhatsApp center…</div>}>
+        <Suspense fallback={<div className="p-8 text-gray-400 font-medium">Loading Spaceezy Chat…</div>}>
             <WhatsAppCenterPageInner />
         </Suspense>
     );
