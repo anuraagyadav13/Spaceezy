@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
     Loader2, AlertCircle, Building2, Layers, Plus, Trash2, Pencil, Save,
-    Search, ArrowLeft, Archive, CheckCircle2, Home, Globe, GlobeLock, ExternalLink,
+    Search, ArrowLeft, CheckCircle2, Home, Globe, GlobeLock, ExternalLink,
     FileText, Upload
 } from "lucide-react";
 import { fetchProjectById, updateProject, deleteProject, uploadProjectBrochure, removeProjectBrochure } from "../../../../../lib/api/projects";
@@ -182,12 +182,16 @@ export default function ProjectDetailPage() {
 
     const archiveProject = useMutation({
         mutationFn: () => deleteProject(projectId),
-        onSuccess: () => {
-            showToast("Project archived");
+        onSuccess: (result) => {
+            showToast(
+                result?.deleted === true
+                    ? "Project deleted"
+                    : "Project archived — it has linked records, so it was hidden instead of permanently deleted"
+            );
             queryClient.invalidateQueries({ queryKey: ["projects"] });
             router.push("/dashboard/inventory");
         },
-        onError: (err) => showToast(err?.message || "Failed to archive project", "error")
+        onError: (err) => showToast(err?.message || "Failed to delete project", "error")
     });
 
     // Publish/unpublish the project on the public website (default: draft).
@@ -458,13 +462,16 @@ export default function ProjectDetailPage() {
                         <PermissionGate permission="project:delete">
                             <button
                                 onClick={() => {
-                                    if (window.confirm(`Archive "${project.name}"? It will be hidden from active projects.`)) {
-                                        archiveProject.mutate();
-                                    }
+                                    const ok = window.confirm(
+                                        `Delete "${project.name}"?\n\n`
+                                        + "Projects with units, leads, bookings or quotations are archived (status INACTIVE) "
+                                        + "instead of permanently deleted, so CRM records are preserved."
+                                    );
+                                    if (ok) archiveProject.mutate();
                                 }}
                                 className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-sm font-bold inline-flex items-center gap-1.5"
                             >
-                                <Archive size={14} /> Archive
+                                <Trash2 size={14} /> Delete Project
                             </button>
                         </PermissionGate>
                     </div>

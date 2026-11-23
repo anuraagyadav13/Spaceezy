@@ -1,13 +1,14 @@
 "use client";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
     Search, Plus, UploadCloud, Building2, MapPin,
-    Loader2, AlertCircle, ArrowRight, Home
+    Loader2, AlertCircle, ArrowRight, Home, Trash2
 } from "lucide-react";
-import { fetchProjects } from "../../../lib/api/projects";
+import { fetchProjects, deleteProject } from "../../../lib/api/projects";
 import { PermissionGate } from "../../../features/auth/components/PermissionGate";
+import { showToast } from "../../../lib/toast";
 
 const selectClass =
     "bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all";
@@ -48,6 +49,7 @@ function StatBar({ inventory }) {
 export default function DashboardInventoryPage() {
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("");
+    const queryClient = useQueryClient();
 
     const {
         data: projects,
@@ -62,6 +64,32 @@ export default function DashboardInventoryPage() {
         staleTime: 30 * 1000,
         retry: 1
     });
+
+    // Deleting a project that still has units, leads, bookings or quotations
+    // archives it on the backend (status INACTIVE) so CRM history is never
+    // destroyed; a project with no linked records is removed permanently.
+    const removeProject = useMutation({
+        mutationFn: (id) => deleteProject(id),
+        onSuccess: (result) => {
+            const archived = result?.deleted !== true;
+            showToast(
+                archived
+                    ? "Project archived — it has linked records and cannot be permanently deleted"
+                    : "Project deleted"
+            );
+            queryClient.invalidateQueries({ queryKey: ["projects"] });
+        },
+        onError: (err) => showToast(err?.message || "Failed to delete the project", "error")
+    });
+
+    const confirmDelete = (project) => {
+        const ok = window.confirm(
+            `Delete "${project.name}"?\n\n`
+            + "Projects with units, leads, bookings or quotations are archived (status INACTIVE) "
+            + "instead of permanently deleted, so CRM records are preserved."
+        );
+        if (ok) removeProject.mutate(project.id);
+    };
 
     const projectList = useMemo(() => {
         const list = Array.isArray(projects) ? projects : [];
@@ -159,34 +187,51 @@ export default function DashboardInventoryPage() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {projectList.map((project) => (
-                            <Link
-                                key={project.id}
-                                href={`/dashboard/inventory/projects/${project.id}`}
-                                className="block bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md hover:border-purple-200 transition-all group"
-                            >
-                                <div className="relative h-28 bg-gradient-to-br from-gray-900 via-gray-800 to-purple-900 p-5 flex flex-col justify-between">
-                                    <span className={`absolute top-3 right-3 text-[10px] font-black px-2.5 py-1 rounded-full ${STATUS_BADGES[project.status] || "bg-gray-100 text-gray-700"}`}>
-                                        {String(project.status || "").replace(/_/g, " ")}
-                                    </span>
-                                    <Building2 size={26} className="text-purple-300" />
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white leading-tight">{project.name}</h3>
-                                        <p className="text-[11px] text-gray-300 flex items-center gap-1 mt-0.5">
-                                            <MapPin size={11} />
-                                            {[project.locality, project.city].filter(Boolean).join(", ") || project.address || "—"}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="p-5 space-y-4">
-                                    <StatBar inventory={project.inventory} />
-                                    <div className="flex justify-between items-center text-xs text-gray-500">
-                                        <span>{project.projectType}{project.developer ? ` · ${project.developer}` : ""}</span>
-                                        <span className="font-bold text-purple-600 group-hover:underline inline-flex items-center gap-1">
-                                            Manage <ArrowRight size={12} />
+                            <div key={project.id} className="relative">
+                                <Link
+                                    href={`/dashboard/inventory/projects/${project.id}`}
+                                    className="block bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md hover:border-purple-200 transition-all group"
+                                >
+                                    <div className="relative h-28 bg-gradient-to-br from-gray-900 via-gray-800 to-purple-900 p-5 flex flex-col justify-between">
+                                        <span className={`absolute top-3 right-3 text-[10px] font-black px-2.5 py-1 rounded-full ${STATUS_BADGES[project.status] || "bg-gray-100 text-gray-700"}`}>
+                                            {String(project.status || "").replace(/_/g, " ")}
                                         </span>
+                                        <Building2 size={26} className="text-purple-300" />
+                                        <div>
+                                            <h3 className="text-lg font-bold text-white leading-tight">{project.name}</h3>
+                                            <p className="text-[11px] text-gray-300 flex items-center gap-1 mt-0.5">
+                                                <MapPin size={11} />
+                                                {[project.locality, project.city].filter(Boolean).join(", ") || project.address || "—"}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                            </Link>
+                                    <div className="p-5 space-y-4">
+                                        <StatBar inventory={project.inventory} />
+                                        <div className="flex justify-between items-center text-xs text-gray-500">
+                                            <span>{project.projectType}{project.developer ? ` · ${project.developer}` : ""}</span>
+                                            <span className="font-bold text-purple-600 group-hover:underline inline-flex items-center gap-1">
+                                                Manage <ArrowRight size={12} />
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Link>
+                                <PermissionGate permission="project:delete">
+                                    <button
+                                        type="button"
+                                        onClick={() => confirmDelete(project)}
+                                        disabled={removeProject.isPending && removeProject.variables === project.id}
+                                        aria-label={`Delete ${project.name}`}
+                                        title="Delete project"
+                                        className="absolute top-3 left-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-red-600 border border-white/60 shadow-sm transition-all hover:bg-red-600 hover:text-white disabled:opacity-60"
+                                    >
+                                        {removeProject.isPending && removeProject.variables === project.id ? (
+                                            <Loader2 size={14} className="animate-spin" />
+                                        ) : (
+                                            <Trash2 size={14} />
+                                        )}
+                                    </button>
+                                </PermissionGate>
+                            </div>
                         ))}
                     </div>
                 )}

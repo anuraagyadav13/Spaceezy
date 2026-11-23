@@ -776,8 +776,13 @@ class MetaAdsSettingsService {
                 : [];
             const missingRequired = REQUIRED_PERMISSIONS.filter((p) => !granted.includes(p));
             const missingRecommended = RECOMMENDED_PERMISSIONS.filter((p) => !granted.includes(p));
+
+            // Instagram basic is needed for Instagram account discovery
+            const instagramBasicMissing = !granted.includes('instagram_basic');
+            const adsReadMissing = !granted.includes('ads_read');
+
             await audit(organizationId, userId, AUDIT_ACTIONS.META_CONNECTION_TESTED, 'MetaAdsSettings',
-                organizationId, { test: 'permissions', ok: missingRequired.length === 0, granted: granted.length });
+                organizationId, { test: 'permissions', ok: missingRequired.length === 0, granted: granted.length, instagramBasicMissing, adsReadMissing });
             return {
                 ok: missingRequired.length === 0,
                 code: missingRequired.length === 0 ? undefined : 'META_PERMISSIONS_MISSING',
@@ -787,6 +792,8 @@ class MetaAdsSettingsService {
                 granted,
                 missingRequired,
                 missingRecommended,
+                instagramBasicMissing,
+                adsReadMissing,
             };
         } catch (err) {
             await audit(organizationId, userId, AUDIT_ACTIONS.META_CONNECTION_TESTED, 'MetaAdsSettings',
