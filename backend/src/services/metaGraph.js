@@ -5,7 +5,10 @@ const { AppError } = require('../utils/errors');
 //
 // Security rules enforced here:
 // - Token travels ONLY in the Authorization header, never in URLs, messages,
-//   or logs. No logging happens in this module at all.
+//   or logs. Failures emit ONE structured warning that contains only the
+//   endpoint path, HTTP status, Meta error code/subcode and the permission
+//   implied by that endpoint — never a token, secret, query string or raw
+//   provider payload.
 // - Every failure surfaces an operational AppError; raw provider payloads are
 //   never passed through (they can carry account metadata).
 // - No retries: a retry could double-spend or duplicate side effects.
@@ -46,11 +49,53 @@ function isRateLimit(status, code) {
     return [4, 17, 32, 80000, 80001, 80004, 80005, 80006, 80014].includes(Number(code));
 }
 
-function mapMetaError(status, data) {
+// Which permission a failing endpoint most likely needed. This is a fixed
+// mapping (no user input, no message parsing) so it is safe to log and safe
+// to show in the CRM as an actionable hint.
+function permissionForEndpoint(endpoint) {
+    const path = String(endpoint || '');
+    if (/^me\/adaccounts(?:$|[/?])/i.test(path) || /^act_/i.test(path)) return 'ads_read';
+    if (/assigned_instagram_accounts|instagram/i.test(path)) return 'instagram_basic';
+    if (/^me\/accounts(?:$|[/?])/i.test(path)) return 'pages_show_list';
+    if (/^me\/permissions(?:$|[/?])/i.test(path)) return null;
+    return null;
+}
+
+// Log-safe endpoint: path only, no query string (callers sometimes pass
+// filter/cursor params; none of them are secrets, but path-only keeps the
+// signal small and stable).
+function safeEndpoint(endpoint) {
+    return String(endpoint || '').split('?')[0].slice(0, 200);
+}
+
+function attachMetaDiagnostics(appError, status, err, endpoint) {
+    if (!appError || typeof appError !== 'object') return appError;
+    appError.metaCode = Number(err.code) || null;
+    appError.metaSubcode = err.error_subcode !== undefined ? Number(err.error_subcode) : null;
+    appError.metaEndpoint = safeEndpoint(endpoint);
+    appError.metaPermission = permissionForEndpoint(endpoint);
+    appError.metaStatus = status;
+    return appError;
+}
+
+function logMetaFailure(status, err, endpoint) {
+    // Deliberately a single structured line: grep-able, no secrets, no
+    // provider payload. The endpoint is the Graph path only.
+    console.warn('[meta-graph] request failed', {
+        endpoint: safeEndpoint(endpoint),
+        status,
+        code: Number(err.code) || null,
+        subcode: err.error_subcode !== undefined ? Number(err.error_subcode) : null,
+        permission: permissionForEndpoint(endpoint),
+    });
+}
+
+function mapMetaError(status, data, endpoint) {
     const err = (data && data.error) || {};
     const code = Number(err.code);
     const message = err.message ? String(err.message) : `HTTP ${status}`;
-    const attach = (appError) => withMetaCode(appError, code);
+    logMetaFailure(status, err, endpoint);
+    const attach = (appError) => attachMetaDiagnostics(withMetaCode(appError, code), status, err, endpoint);
     if (isRateLimit(status, code)) {
         return attach(new AppError('Meta API rate limit reached. Retry shortly.', 429, 'META_RATE_LIMITED'));
     }
@@ -79,14 +124,14 @@ function resolveToken(tokenOverride) {
 // Shared response handling for every Graph transport in this module: parse
 // the JSON body (non-JSON = provider failure) and map errors to operational
 // AppErrors. Raw provider payloads never pass through to callers.
-async function readGraphResponse(res) {
+async function readGraphResponse(res, endpoint) {
     let data = null;
     try {
         data = await res.json();
     } catch {
         throw new AppError('Meta API returned a non-JSON response', 502, 'META_API_ERROR');
     }
-    if (!res.ok) throw mapMetaError(res.status, data);
+    if (!res.ok) throw mapMetaError(res.status, data, endpoint);
     return data;
 }
 
@@ -129,7 +174,7 @@ async function graphRequest({ path, method = 'GET', params = {}, body, timeoutMs
     } catch (err) {
         rethrowNetworkError(err);
     }
-    return readGraphResponse(res);
+    return readGraphResponse(res, cleanPath);
 }
 
 // Multipart (form-data) transport for endpoints that document file uploads
@@ -154,7 +199,7 @@ async function graphFormRequest({ path, method = 'POST', form, timeoutMs = DEFAU
     } catch (err) {
         rethrowNetworkError(err);
     }
-    return readGraphResponse(res);
+    return readGraphResponse(res, cleanPath);
 }
 
 function withMetaCode(appError, code) {

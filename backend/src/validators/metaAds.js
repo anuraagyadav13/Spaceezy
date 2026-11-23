@@ -72,6 +72,7 @@ const listPagesSchema = {
 const listInstagramAccountsSchema = {
     query: z.object({
         limit: z.string().regex(/^\d+$/).optional(),
+        after: z.string().max(500).optional(),
     }),
 };
 

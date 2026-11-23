@@ -97,7 +97,7 @@ const ROLE_PERMISSIONS = {
         'site_visit:view', 'site_visit:create', 'site_visit:update', 'site_visit:delete',
         'customer:view', 'customer:create', 'customer:update',
         'task:view', 'task:create', 'task:update', 'task:delete',
-        'project:view', 'project:create', 'project:update',
+        'project:view', 'project:create', 'project:update', 'project:delete',
         'quotation:view', 'quotation:create', 'quotation:update',
         'call:view', 'call:create', 'call:update',
         'whatsapp:view', 'whatsapp:create', 'whatsapp:manage',

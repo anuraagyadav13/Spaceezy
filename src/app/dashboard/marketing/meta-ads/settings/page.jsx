@@ -383,7 +383,7 @@ function MetaAdsSettingsContent() {
 
     const instagramQuery = useQuery({
         queryKey: ["meta-ads", "instagram-accounts", igAfter ?? "first"],
-        queryFn: () => fetchMetaInstagramAccounts({ limit: PAGE_SIZE }),
+        queryFn: () => fetchMetaInstagramAccounts({ limit: PAGE_SIZE, after: igAfter }),
         enabled: discoveryEnabled,
         staleTime: 5 * 60_000,
         retry: 1,
@@ -603,8 +603,20 @@ function MetaAdsSettingsContent() {
     const pageItems = pagesQuery.data?.items || [];
     const igItems = instagramQuery.data?.items || [];
 
-    const discoveryHint = (what) =>
-        !statusData ? "Checking the connection…" : `Connect Meta to discover ${what}.`;
+    // Category-specific hints: ads_read is only needed for ad accounts;
+    // instagram_basic is only needed for Instagram accounts. One missing
+    // permission must never disable unrelated discovery.
+    const discoveryHint = (what) => {
+        if (!statusData) return "Checking the connection…";
+        const category = String(what || "").toLowerCase();
+        if (category.includes("ad account") && statusData.adsReadMissing) {
+            return "Connect Meta and grant ads_read permission to discover ad accounts.";
+        }
+        if (category.includes("instagram") && statusData.instagramBasicMissing) {
+            return "Connect Meta and grant instagram_basic permission to discover Instagram accounts.";
+        }
+        return `Connect Meta to discover ${what}.`;
+    };
 
     // "Assets discovered" summary for the Connection card — separate from
     // the Connected badge on purpose: connection health and discovery state
@@ -803,8 +815,9 @@ function MetaAdsSettingsContent() {
                                     </div>
                                     <p className="text-xs text-red-600 mt-2">
                                         Action: open the Meta App Dashboard → Permissions and Features, grant the
-                                        missing permissions (ads_read unlocks ad-account discovery), then reconnect
-                                        the account. Page and Instagram discovery keep working in the meantime.
+                                        missing permissions, then reconnect the account. <strong>ads_read</strong>
+                                        {" "}unlocks ad-account discovery; Page and Instagram discovery use their own
+                                        permissions and keep working in the meantime.
                                     </p>
                                 </div>
                             ) : (
@@ -815,6 +828,35 @@ function MetaAdsSettingsContent() {
                                     </p>
                                 </div>
                             )
+                        )}
+
+                        {statusData.adsReadMissing && isAdmin && (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                                <p className="text-[11px] font-black uppercase text-amber-700 mb-1.5">
+                                    ads_read is not granted
+                                </p>
+                                <p className="text-sm text-amber-800">
+                                    Ad-account discovery calls <code className="font-medium">me/adaccounts</code> and
+                                    returns Meta error <strong>#200 (Missing Permissions)</strong> until{" "}
+                                    <code className="font-medium">ads_read</code> is granted. If Meta shows it as
+                                    “Pending App Review”, the permission cannot be used by non-test users yet — this is
+                                    handled by Meta, not by the CRM. Reconnect after approval.
+                                </p>
+                            </div>
+                        )}
+
+                        {statusData.instagramBasicMissing && isAdmin && (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                                <p className="text-[11px] font-black uppercase text-amber-700 mb-1.5">
+                                    instagram_basic is not granted
+                                </p>
+                                <p className="text-sm text-amber-800">
+                                    Instagram account discovery needs <code className="font-medium">instagram_basic</code>.
+                                    Grant it in the Meta App Dashboard and reconnect Meta. Already-saved Instagram
+                                    selections are kept and remain visible, but new accounts cannot be discovered
+                                    until the permission is available.
+                                </p>
+                            </div>
                         )}
 
                         {Array.isArray(statusData.missingRecommendedPermissions) &&
@@ -1620,57 +1662,79 @@ function MetaAdsSettingsContent() {
                     </div>
                 ) : listStates(instagramQuery) === "error" ? (
                     <ErrorBox error={instagramQuery.error} onRetry={() => instagramQuery.refetch()} />
-                ) : igItems.length === 0 ? (
-                    <p className="text-sm text-gray-500">
-                        No Instagram accounts are visible to this connection. Check that the token holder has an
-                        Instagram professional account assigned in Meta Business Manager.
-                    </p>
                 ) : (
                     <div className="space-y-3">
-                        <div className="grid gap-2">
-                            {igItems.map((item) => {
-                                const id = item.instagramAccountId;
-                                const selectable = !!id;
-                                return (
-                                    <CheckRow
-                                        key={`${item.pageId || "assigned"}-${id || "none"}`}
-                                        checked={selectable && selection.instagram.includes(String(id))}
-                                        disabled={!canManage || !selectable}
-                                        onChange={() => toggleId("instagram", id)}
-                                        title={
-                                            selectable
-                                                ? `@${item.username || item.name || id}`
-                                                : `${item.pageName || `Page ${item.pageId}`} — no Instagram linked`
-                                        }
-                                        meta={
-                                            selectable
-                                                ? item.pageId
-                                                    ? `Page: ${item.pageName || item.pageId}`
-                                                    : "Shared directly at connection"
-                                                : `Page: ${item.pageName || item.pageId}${isAdmin ? ` · ID ${item.pageId}` : ""}`
-                                        }
-                                        hint={
-                                            !selectable
-                                                ? item.reason === "NOT_CONNECTED"
-                                                    ? "Not connected to an Instagram professional account"
-                                                    : isAdmin
-                                                    ? `Unavailable (${item.reason || "unknown reason"})`
-                                                    : "Not available for this Page"
-                                                : null
-                                        }
-                                    />
-                                );
-                            })}
-                        </div>
-                        {instagramQuery.data?.paging?.cursors?.after && (
-                            <p className="text-xs text-gray-400">
-                                Showing the first page of results — the most relevant Instagram accounts are listed
-                                first.
-                            </p>
+                        {statusData.instagramBasicMissing && (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                                <p className="text-sm font-semibold text-amber-800">
+                                    instagram_basic is not granted for this connection.
+                                </p>
+                                <p className="text-xs text-amber-700 mt-1">
+                                    {isAdmin
+                                        ? "Grant instagram_basic in the Meta App Dashboard, then reconnect Meta. Saved selections remain visible, but new Instagram accounts cannot be discovered or selected."
+                                        : "An administrator must grant instagram_basic and reconnect Meta."}
+                                </p>
+                            </div>
                         )}
-                        <p className="text-xs text-gray-500">
-                            {selection.instagram.length} selected in total
-                        </p>
+                        {igItems.length === 0 ? (
+                            <p className="text-sm text-gray-500">
+                                No Instagram accounts are visible to this connection. Check that the token holder has an
+                                Instagram professional account assigned in Meta Business Manager.
+                            </p>
+                        ) : (
+                            <>
+                                <div className="grid gap-2">
+                                    {igItems.map((item) => {
+                                        const id = item.instagramAccountId;
+                                        const selectable = !!id;
+                                        return (
+                                            <CheckRow
+                                                key={`${item.pageId || "assigned"}-${id || "none"}`}
+                                                checked={selectable && selection.instagram.includes(String(id))}
+                                                disabled={!canManage || !selectable}
+                                                onChange={() => toggleId("instagram", id)}
+                                                title={
+                                                    selectable
+                                                        ? `@${item.username || item.name || id}`
+                                                        : `${item.pageName || `Page ${item.pageId}`} — no Instagram linked`
+                                                }
+                                                meta={
+                                                    selectable
+                                                        ? item.pageId
+                                                            ? `Page: ${item.pageName || item.pageId}`
+                                                            : "Shared directly at connection"
+                                                        : `Page: ${item.pageName || item.pageId}${isAdmin ? ` · ID ${item.pageId}` : ""}`
+                                                }
+                                                hint={
+                                                    !selectable
+                                                        ? item.reason === "NOT_CONNECTED"
+                                                            ? "Not connected to an Instagram professional account"
+                                                            : isAdmin
+                                                            ? `Unavailable (${item.reason || "unknown reason"})`
+                                                            : "Not available for this Page"
+                                                        : null
+                                                }
+                                            />
+                                        );
+                                    })}
+                                </div>
+                                <Pager
+                                    hasPrev={igCursorStack.length > 0}
+                                    hasNext={!!instagramQuery.data?.paging?.cursors?.after}
+                                    onPrev={() => setIgCursorStack((stack) => stack.slice(0, -1))}
+                                    onNext={() => {
+                                        const next = instagramQuery.data?.paging?.cursors?.after;
+                                        if (next) setIgCursorStack((stack) => [...stack, next]);
+                                    }}
+                                    loading={instagramQuery.isFetching}
+                                    label={`${igItems.length} shown${
+                                        selection.instagram.length > 0
+                                            ? ` · ${selection.instagram.length} selected in total`
+                                            : ""
+                                    }`}
+                                />
+                            </>
+                        )}
                     </div>
                 )}
             </SectionCard>

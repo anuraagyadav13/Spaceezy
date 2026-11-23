@@ -139,6 +139,8 @@ class MetaAdsService {
                 grantedPermissions: [],
                 user: null,
                 adAccount: null,
+                instagramBasicMissing: false,
+                adsReadMissing: false,
             };
         }
         // A usable token with no ad account selected is NOT "unconfigured":
@@ -160,6 +162,8 @@ class MetaAdsService {
                 grantedPermissions: [],
                 user: null,
                 adAccount: null,
+                instagramBasicMissing: false,
+                adsReadMissing: false,
             };
         }
         // Live validation: token, granted permissions, and (only when an ad
@@ -185,6 +189,11 @@ class MetaAdsService {
                 : [];
             const missingPermissions = REQUIRED_PERMISSIONS.filter((p) => !granted.includes(p));
             const missingRecommendedPermissions = RECOMMENDED_PERMISSIONS.filter((p) => !granted.includes(p));
+
+            // Instagram basic is needed for Instagram account discovery
+            const instagramBasicMissing = !granted.includes('instagram_basic');
+            const adsReadMissing = !granted.includes('ads_read');
+
             const noAdAccountSelected = !adAccountId;
             // Missing required permissions outrank the missing selection
             // (both can be true — report the permission gap first).
@@ -211,6 +220,9 @@ class MetaAdsService {
                 } : null,
                 ...base,
                 reauthRequired: reason === 'META_TOKEN_INVALID',
+                // Instagram and ads_read permission state for UI reporting
+                instagramBasicMissing,
+                adsReadMissing,
             };
         } catch (err) {
             const reason = (err && err.code) || 'API_ERROR';
@@ -225,6 +237,8 @@ class MetaAdsService {
                 adAccount: null,
                 ...base,
                 reauthRequired: reason === 'META_TOKEN_INVALID',
+                instagramBasicMissing: false,
+                adsReadMissing: false,
             };
         }
     }
@@ -540,7 +554,7 @@ class MetaAdsService {
     // (assigned rows come first; a Page link merges onto the assigned row).
     // The response contract ({ items, errors, paging }) is unchanged, and
     // per-account API failures still mark only that account unavailable.
-    static async listInstagramAccounts({ organizationId, limit = 100 } = {}) {
+    static async listInstagramAccounts({ organizationId, limit = 100, after } = {}) {
         const eff = await effectiveConfig(organizationId);
         const token = requireToken(eff);
         const pageSize = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 100);
@@ -548,41 +562,51 @@ class MetaAdsService {
         const assignedItems = [];
         const byIgId = new Map();
 
-        // Primary source. A failure here is not reported as an error row:
-        // the Page walk below is a complete fallback source.
-        try {
-            const assigned = await graphRequest({
-                path: 'me/assigned_instagram_accounts',
-                params: { fields: 'id,username', limit: pageSize },
-                token,
-                version: eff.graphVersion,
-            });
-            for (const row of Array.isArray(assigned.data) ? assigned.data : []) {
-                if (!row || row.id === undefined || row.id === null) continue;
-                const igId = String(row.id);
-                if (byIgId.has(igId)) continue;
-                const item = {
-                    pageId: null,
-                    pageName: null,
-                    instagramAccountId: igId,
-                    username: row.username || null,
-                    name: null,
-                    available: true,
-                    reason: null,
-                };
-                byIgId.set(igId, item);
-                assignedItems.push(item);
+        // Assigned accounts have their own Meta cursor, so they are fetched
+        // only for the first page and merged into the Page walk below. Later
+        // pages paginate the Page list (the stable public list); selection
+        // state is kept independently by the CRM, so already-selected
+        // accounts are never lost when the user pages.
+        if (!after) {
+            try {
+                const assigned = await graphRequest({
+                    path: 'me/assigned_instagram_accounts',
+                    params: { fields: 'id,username', limit: pageSize },
+                    token,
+                    version: eff.graphVersion,
+                });
+                for (const row of Array.isArray(assigned.data) ? assigned.data : []) {
+                    if (!row || row.id === undefined || row.id === null) continue;
+                    const igId = String(row.id);
+                    if (byIgId.has(igId)) continue;
+                    const item = {
+                        pageId: null,
+                        pageName: null,
+                        instagramAccountId: igId,
+                        username: row.username || null,
+                        name: null,
+                        available: true,
+                        reason: null,
+                    };
+                    byIgId.set(igId, item);
+                    assignedItems.push(item);
+                }
+            } catch {
+                // Fallback to the Page walk below (documented behavior).
             }
-        } catch {
-            // Fallback to the Page walk below (documented behavior).
         }
 
-        // Fallback + Page linkage enrichment.
+        // Fallback + Page linkage enrichment. Assigned rows win; a Page link
+        // merges onto the assigned row instead of duplicating it.
         let pages;
         try {
             pages = await graphRequest({
                 path: 'me/accounts',
-                params: { fields: 'id,name,instagram_business_account', limit: pageSize },
+                params: {
+                    fields: 'id,name,instagram_business_account',
+                    limit: pageSize,
+                    ...(after ? { after } : {}),
+                },
                 token,
                 version: eff.graphVersion,
             });

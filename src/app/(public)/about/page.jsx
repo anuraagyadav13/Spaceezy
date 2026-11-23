@@ -16,8 +16,20 @@ export default function AboutPage() {
                 </motion.div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center mb-24">
-                    <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="relative h-[500px] rounded-[40px] overflow-hidden">
-                        <Image src="https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" alt="Our Vision" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
+                    <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        className="relative w-full aspect-[576/564] rounded-[40px] overflow-hidden bg-white border border-gray-100 shadow-sm"
+                    >
+                        <Image
+                            src="/images/gaurav-sharma-ceo-card.jpg"
+                            alt="Gaurav Sharma, CEO of Spaceezy"
+                            fill
+                            sizes="(max-width: 768px) 92vw, 50vw"
+                            className="object-cover object-center"
+                            priority
+                        />
                     </motion.div>
                     <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
                         <h2 className="text-3xl font-bold text-gray-900 mb-6">Built on trust and transparency.</h2>
@@ -35,6 +47,10 @@ export default function AboutPage() {
                                     <span className="text-gray-800 font-medium">{item}</span>
                                 </div>
                             ))}
+                        </div>
+                        <div className="mt-8 pt-6 border-t border-gray-100">
+                            <p className="text-xl font-bold text-gray-900">Gaurav Sharma</p>
+                            <p className="text-purple-600 font-semibold">Chief Executive Officer</p>
                         </div>
                     </motion.div>
                 </div>
@@ -62,7 +78,7 @@ export default function AboutPage() {
                         </p>
                         <div>
                             <p className="text-xl font-bold text-gray-900">Kamal</p>
-                            <p className="text-purple-600 font-semibold">Founder &amp; CEO, Spaceezy</p>
+                            <p className="text-purple-600 font-semibold">Founder, Spaceezy</p>
                         </div>
                     </div>
                 </motion.div>
