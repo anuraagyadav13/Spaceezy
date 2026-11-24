@@ -188,11 +188,17 @@ and measured after-state:
 | `spaceezy-logo` | 976 KB PNG | 82 KB WebP |
 | `/images/*` cache | `public, max-age=14400` | `public, max-age=31536000, immutable` (nginx reload) |
 
-Total decorative image weight dropped from ~6.6 MB to ~564 KB. Re-running the
-public PageSpeed Insights API immediately after deploy returned HTTP 429, so a
-fresh Lighthouse score could not be captured here; the user should re-run PSI
-in the open tab to confirm the final scores. Mobile LCP measurement is still
-outstanding.
+Total decorative image weight dropped from ~6.6 MB to ~564 KB. A subsequent
+mobile Lighthouse run still showed **LCP 4.2 s** (FCP 1.1 s, TBT 40 ms, CLS 0,
+Speed Index 2.6 s; image delivery 130 KiB, render-blocking 150 ms, legacy JS
+24 KiB). Root cause: the home hero `<h1>`/subtitle were server-rendered with
+`style="opacity:0"` by framer-motion and only became visible after hydration
+plus a 1 s animation, making them late LCP candidates. Deployed `a473638`
+removed the above-the-fold animations on home/about/contact/projects/
+properties/search so headings paint with the initial HTML; the live home HTML
+now has a visible `<h1>` at first byte. PageSpeed Insights API returned HTTP
+429 for a fresh automated run, so the final mobile number must be confirmed by
+re-running PSI in the browser.
 
 ## Migration / redirect plan (for merge + deploy)
 
