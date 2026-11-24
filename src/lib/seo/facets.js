@@ -27,6 +27,7 @@ import {
 } from "./text";
 import { configurationNames, parseBhk } from "./facts";
 import aliasConfig from "../../../seo-aliases.json";
+import preferenceConfig from "../../../seo-hub-preferences.json";
 
 const int = (value, fallback) => {
     const n = Number(value);
@@ -367,10 +368,33 @@ const TYPE_SPECIFICITY = Object.freeze({
 const PLACE_SPECIFICITY = Object.freeze({ region: 3, district: 2, city: 1 });
 
 /**
- * Two hubs with the same project/unit set are duplicate search intents. Keep
- * the most specific one indexable and canonicalise the rest to it.
+ * Optional, human-owned overrides. Empty by default; a row maps an exact item
+ * set to the hub path that should win, regardless of the specificity rules.
+ */
+export const HUB_PREFERENCES = Object.freeze(
+    (Array.isArray(preferenceConfig?.preferences) ? preferenceConfig.preferences : [])
+        .map((row) => {
+            const items = Array.isArray(row.items)
+                ? row.items
+                    .map((item) => {
+                        const value = String(item).trim();
+                        if (/^[pu]:/.test(value)) return value;
+                        return /^[0-9a-f]{32}$/i.test(value) ? `u:${value}` : `p:${value}`;
+                    })
+                    .sort()
+                : [];
+            return { signature: JSON.stringify(items), preferred: String(row.preferred || "") };
+        })
+        .filter((row) => row.preferred.startsWith("/") && row.signature !== "[]")
+);
+
+/**
+ * Duplicate hubs keep their pages crawlable and canonicalise to the winner.
+ * They are NOT noindex: only utility pages and quality-gate failures are.
+ * `canonicalPath` excludes them from sitemap/nav (see `indexableHubs`).
  *
- * Tie-break, in order:
+ * Winner: an explicit HUB_PREFERENCES row first, otherwise the most specific
+ * location+type. Tie-break:
  *   1. location specificity: region > district > city > global category;
  *   2. facet specificity: BHK > villa > flat/plot/commercial > type-only > all;
  *   3. more data-derived blocks;
@@ -402,10 +426,14 @@ function dedupeIdenticalItems(hubs) {
                 b.blocks.length - a.blocks.length ||
                 a.path.localeCompare(b.path)
         );
-        const [winner, ...duplicates] = ranked;
+        const preference = HUB_PREFERENCES.find((row) => row.signature === group.signature);
+        const preferred = preference && ranked.find((hub) => hub.path === preference.preferred);
+        const winner = preferred || ranked[0];
         winner.duplicateGroupSize = group.length;
-        for (const hub of duplicates) {
-            hub.indexable = false;
+        for (const hub of group) {
+            if (hub === winner) continue;
+            // Crawlable + indexable robots, but a canonical to the winner and
+            // no sitemap/nav entry. Never a noindex for a duplicate page.
             hub.duplicateOf = winner.path;
             hub.canonicalPath = winner.path;
         }
@@ -524,9 +552,9 @@ export function resolveHubSlug(registry, slug) {
     return { hub: null, redirectTo: null };
 }
 
-/** Only indexable hubs are exposed in navigation and the sitemap. */
+/** Only indexable, self-canonical hubs are exposed in navigation and the sitemap. */
 export function indexableHubs(registry) {
-    return Array.from(registry.values()).filter((hub) => hub.indexable);
+    return Array.from(registry.values()).filter((hub) => hub.indexable && !hub.canonicalPath);
 }
 
 export function navHubs(registry) {
@@ -538,7 +566,7 @@ export function navHubs(registry) {
             .slice(0, 8)
             .map((hub) => ({ href: hub.path, label: hub.h1 })),
         categories: GLOBAL_HUBS.map((spec) => registry.get(spec.slug))
-            .filter((hub) => hub && hub.indexable)
+            .filter((hub) => hub && hub.indexable && !hub.canonicalPath)
             .map((hub) => ({ href: hub.path, label: hub.h1 })),
     };
 }

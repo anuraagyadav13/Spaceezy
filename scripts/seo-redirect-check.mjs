@@ -100,35 +100,35 @@ async function main() {
             || /<link[^>]+href="([^"]+)"[^>]+rel="canonical"/i.exec(html)?.[1]
             || null;
         const robots = /<meta[^>]+name="robots"[^>]+content="([^"]*)"/i.exec(html)?.[1] || "";
-        const inSitemap = sitemapPaths.has(pair.destination);
+        const canonicalPath = canonical ? pathOf(canonical) : null;
 
-        if (robots.includes("noindex")) {
-            // Duplicate-intent hubs are intentionally noindex. They are only a
-            // valid destination when they canonicalise to an indexable winner.
-            if (!canonical || !sitemapPaths.has(pathOf(canonical))) {
-                fail(`${pair.label}: destination is noindex without a canonical to an indexable URL`);
+        if (canonicalPath && canonicalPath !== pair.destination) {
+            // Canonical-only duplicate: crawlable/indexable page that points at
+            // the surviving hub. Follow the canonical and validate the winner.
+            if (!sitemapPaths.has(canonicalPath)) {
+                fail(`${pair.label}: canonical target ${canonicalPath} is absent from the sitemap`);
                 continue;
             }
-            const winnerResponse = await get(`${BASE}${pathOf(canonical)}`);
+            const winnerResponse = await get(`${BASE}${canonicalPath}`);
             if (winnerResponse.status !== 200) {
-                fail(`${pair.label}: canonical winner ${pathOf(canonical)} answered ${winnerResponse.status}`);
+                fail(`${pair.label}: canonical winner ${canonicalPath} answered ${winnerResponse.status}`);
                 continue;
             }
             const winnerHtml = await winnerResponse.text();
             const winnerRobots = /<meta[^>]+name="robots"[^>]+content="([^"]*)"/i.exec(winnerHtml)?.[1] || "";
-            if (winnerRobots.includes("noindex")) fail(`${pair.label}: canonical winner is also noindex`);
-            console.log(`OK  ${pair.source} -> ${pair.destination} (noindex, canonical -> ${pathOf(canonical)})`);
+            if (winnerRobots.includes("noindex")) fail(`${pair.label}: canonical winner is noindex`);
+            console.log(`OK  ${pair.source} -> ${pair.destination} (canonical -> ${canonicalPath})`);
             continue;
         }
 
-        if (!inSitemap) {
+        if (robots.includes("noindex")) fail(`${pair.label}: destination is noindex`);
+        if (!sitemapPaths.has(pair.destination)) {
             fail(`${pair.label}: destination ${pair.destination} is absent from the sitemap`);
-            continue;
         }
-        if (!canonical || pathOf(canonical) !== pair.destination) {
+        if (!canonical || canonicalPath !== pair.destination) {
             fail(`${pair.label}: destination canonical ${canonical || "(missing)"} != ${pair.destination}`);
         }
-        console.log(`OK  ${pair.source} -> ${pair.destination} (200, canonical, indexable)`);
+        console.log(`OK  ${pair.source} -> ${pair.destination} (200, self-canonical, indexable)`);
     }
 
     if (errors.length) {

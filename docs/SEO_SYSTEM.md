@@ -47,9 +47,9 @@ more specific level (region > district > city) wins.
 ### Duplicate hub intents
 
 If two or more hubs resolve to an identical project/unit set, only the most
-specific one stays indexable; the others are `noindex`, removed from nav and
-sitemap, and **canonicalise to the winner** (so no ranking URL is lost without
-a signal). Tie-break, in order:
+specific one is self-canonical and exposed in nav/sitemap. The others stay
+crawlable and indexable, but **canonicalise to the winner** instead of using
+`noindex` (so no ranking URL loses its signal through a noindex tag).
 
 1. place specificity: region > district > city > global category;
 2. facet specificity: BHK > villa > flat/plot/commercial > type-only > all;
@@ -59,6 +59,27 @@ a signal). Tie-break, in order:
 Empty hubs (0 items) are excluded by the inventory gate and are never grouped
 into this rule. The production-data report prints every suppressed hub and its
 canonical target.
+
+`seo-hub-preferences.json` is an optional, human-owned override. It is empty by
+default. To keep a particular hub when the automatic tie-break would choose
+another one, add one row for the exact item set:
+
+```json
+{
+  "preferences": [
+    {
+      "items": ["project-slug", "unit-token"],
+      "preferred": "/flats-in-some-place"
+    }
+  ]
+}
+```
+
+`p:`/`u:` prefixes on items are optional (32-hex tokens are treated as units,
+everything else as projects). A row only applies when that exact set of items
+exists and the preferred path is one of the duplicate hubs; otherwise the
+specificity tie-break decides. Do not add rows until a human owner has
+confirmed the target URL — no preference is applied in the current rollout.
 
 ### Retired URLs
 
@@ -83,11 +104,10 @@ of becoming a soft 404. The list is empty today.
 - `NEXT_PUBLIC_SITE_URL` is the only origin; http values are upgraded to https.
 - Trailing slash is disabled (`trailingSlash: false`); Next permanently
   redirects slash variants to the canonical form.
-- `/search`, `/enquiry`, private routes and all filter permutations
-  (`?sort=`, `?page=`, `?minPrice=`, `?bhk=`, …) are `noindex,follow` with a
-  canonical to the clean path. Search/enquiry are deliberately **not**
-  disallowed in robots.txt — a crawler must be able to fetch them to see the
-  noindex directive; only private routes and filter params are disallowed.
+- `/search` and `/enquiry` are `noindex,follow` (utility pages). Filter/sort
+  permutations are **not** noindex: they canonicalise to the clean URL and are
+  simply disallowed in `robots.txt`. Only utility pages and records failing the
+  quality gate use `noindex`.
 - `http://` requests forwarded with `x-forwarded-proto: http` get one permanent
   redirect to the HTTPS origin (single hop).
 
@@ -169,7 +189,7 @@ needed.
 ## 7. Commands
 
 ```bash
-npx vitest run                 # all unit tests (incl. 24 SEO system tests)
+npx vitest run                 # all unit tests (incl. 28 SEO system tests)
 npm run lint                   # 0 errors
 npm run build                  # production build
 npm start                      # serve the built site on :3000
@@ -194,8 +214,8 @@ redirect chains > 1 hop), ≥3 inbound links per project, JSON-LD validity and
 noindex exclusions. `npm run seo:redirects` is the build/release gate: it
 expands every alias pattern against the places that actually exist and fails
 if a source is not a single permanent hop, or if its destination is not a 200,
-canonical, indexable sitemap URL (a noindex duplicate hub is accepted only when
-it canonicalises to an indexable winner). `E2E_SITE_ORIGIN` overrides the expected
+canonical, indexable sitemap URL (a canonical-only duplicate hub is accepted
+only when its winner is an indexable 200 page). `E2E_SITE_ORIGIN` overrides the expected
 canonical domain in the PowerShell E2E script; `E2E_WEB_BASE` / `E2E_API_BASE`
 override the server addresses.
 

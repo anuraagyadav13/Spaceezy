@@ -116,11 +116,13 @@ async function main() {
             const resolved = resolveHubSlug(registry, slug);
             if (resolved.redirectTo) { verdict = "REDIRECT"; reason = `alias -> ${resolved.redirectTo}`; }
             else if (!resolved.hub) { verdict = "REMOVE"; reason = "hub no longer generated (404)"; }
+            else if (resolved.hub.canonicalPath) {
+                verdict = "CANONICAL";
+                reason = `duplicate item set -> canonical ${resolved.hub.canonicalPath}`;
+            }
             else if (!resolved.hub.indexable) {
                 verdict = "NOINDEX";
-                reason = resolved.hub.canonicalPath
-                    ? `duplicate item set -> canonical ${resolved.hub.canonicalPath}`
-                    : `items=${resolved.hub.counts.total} blocks=${resolved.hub.blocks.length} (need ${process.env.SEO_HUB_MIN_ITEMS || 1}/${process.env.SEO_HUB_MIN_BLOCKS || 2})`;
+                reason = `items=${resolved.hub.counts.total} blocks=${resolved.hub.blocks.length} (need ${process.env.SEO_HUB_MIN_ITEMS || 1}/${process.env.SEO_HUB_MIN_BLOCKS || 2})`;
             }
         }
         changes.push({ path, verdict, reason });
@@ -131,7 +133,7 @@ async function main() {
     const counts = changes.reduce((acc, row) => ({ ...acc, [row.verdict]: (acc[row.verdict] || 0) + 1 }), {});
     console.log(`\nSummary: ${JSON.stringify(counts)}`);
 
-    console.log("\n=== DUPLICATE-ITEM HUBS (noindex, canonicalised to winner) ===");
+    console.log("\n=== DUPLICATE-ITEM HUBS (canonical-only, no noindex) ===");
     for (const hub of registry.values()) {
         if (!hub.canonicalPath) continue;
         console.log(`${hub.path.padEnd(42)} items=${hub.counts.total} -> ${hub.canonicalPath}`);
@@ -142,8 +144,9 @@ async function main() {
         console.log(`INDEXABLE ${hub.path.padEnd(42)} items=${hub.counts.total} blocks=${hub.blocks.length}`);
     }
     for (const hub of registry.values()) {
-        if (hub.indexable) continue;
-        console.log(`NOINDEX   ${hub.path.padEnd(42)} items=${hub.counts.total} blocks=${hub.blocks.length}`);
+        if (hub.indexable && !hub.canonicalPath) continue;
+        const label = hub.canonicalPath ? "CANONICAL" : "NOINDEX  ";
+        console.log(`${label} ${hub.path.padEnd(42)} items=${hub.counts.total} blocks=${hub.blocks.length}${hub.canonicalPath ? ` -> ${hub.canonicalPath}` : ""}`);
     }
 
     console.log("\n=== PROJECT FIELD NUMBERS ===");

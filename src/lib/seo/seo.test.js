@@ -29,6 +29,7 @@ import {
     resolveHubSlug,
     LEGACY_ALIAS_PATTERNS,
     HUB_THRESHOLDS,
+    HUB_PREFERENCES,
 } from "./facets";
 import { buildSitemapEntries, NEVER_INDEXABLE_PREFIXES } from "./sitemap";
 import {
@@ -494,6 +495,10 @@ describe("structured data", () => {
 // ---------------------------------------------------------------------------
 
 describe("duplicate hub intents", () => {
+    it("uses no manual preferences in the default rollout", () => {
+        expect(HUB_PREFERENCES).toEqual([]);
+    });
+
     it("keeps the most specific hub and canonicalises/removes the rest", () => {
         const registry = buildHubRegistry(DEDUPE_INVENTORY);
         const entries = buildSitemapEntries({ inventory: DEDUPE_INVENTORY, registry });
@@ -512,10 +517,11 @@ describe("duplicate hub intents", () => {
 
         for (const slug of group.filter((value) => value !== winner.slug)) {
             const loser = registry.get(slug);
-            expect(loser.indexable).toBe(false);
+            // Canonical-only: crawlable/indexable robots, no noindex.
+            expect(loser.indexable).toBe(true);
             expect(loser.canonicalPath).toBe(winner.path);
             expect(loser.duplicateOf).toBe(winner.path);
-            expect(hubMetadata(loser).robots.index).toBe(false);
+            expect(hubMetadata(loser).robots.index).not.toBe(false);
             expect(hubMetadata(loser).alternates.canonical).toBe(canonicalUrl(winner.path));
             expect(sitemapPaths).not.toContain(loser.path);
             expect(navHrefs).not.toContain(loser.path);
@@ -524,7 +530,7 @@ describe("duplicate hub intents", () => {
         // Global category hubs with the same item set lose to the location+BHK hub too.
         for (const slug of ["flats-for-sale", "residential-properties"]) {
             const global = registry.get(slug);
-            expect(global.indexable).toBe(false);
+            expect(global.indexable).toBe(true);
             expect(global.canonicalPath).toBeTruthy();
             expect(sitemapPaths).not.toContain(global.path);
             expect(navHrefs).not.toContain(global.path);

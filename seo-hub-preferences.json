@@ -1,0 +1,4 @@
+{
+  "$comment": "OPTIONAL. Name a preferred hub for an exact item set so it wins over the specificity tie-break. Empty by default: do NOT add rows until a human owner confirms the target URL. items = the project slugs and unit tokens that define the set (p:/u: prefixes optional); preferred = the hub path to keep indexable. Only hubs that actually share that item set are considered.",
+  "preferences": []
+}

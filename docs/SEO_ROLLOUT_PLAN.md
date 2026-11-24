@@ -21,8 +21,9 @@ migrations changed.** A PR should be opened for review before merge/deploy.
   filtered URLs. Noindex utility pages stay crawlable in robots.txt so Google
   can see their noindex; only private routes and filter params are disallowed.
 - Duplicate-intent hubs (identical item sets) collapse to the most specific
-  location+type hub; the rest are noindex, out of nav/sitemap and canonicalise
-  to the winner, so no ranking URL is lost without a signal.
+  location+type hub (optionally overridden by an empty-by-default
+  `seo-hub-preferences.json`); the rest are out of nav/sitemap and canonicalise
+  to the winner **without noindex**.
 - One JSON-LD generator per schema type (Organization/RealEstateAgent,
   WebPage, BreadcrumbList, ItemList, project/unit types, FAQPage). Only
   visible/data-backed facts are marked up.
@@ -41,8 +42,10 @@ migrations changed.** A PR should be opened for review before merge/deploy.
   extra fields in public DTOs, and a `/media` allow-list that only streams
   images attached to published listings (no Prisma migration needed).
 - Utility pages (`/search`, `/enquiry`) are noindex, out of the sitemap and
-  sitewide nav, with `rel="nofollow"` on remaining conversion links.
-- Tooling/tests: 27 SEO unit tests plus crawl, audit, redirect-gate and
+  sitewide nav, with `rel="nofollow"` on remaining conversion links. Filter/sort
+  URLs are not noindex — they canonicalise to the clean path and stay disallowed
+  in robots.txt.
+- Tooling/tests: 28 SEO unit tests plus crawl, audit, redirect-gate and
   IndexNow scripts; CRM publish-check and media allow-list tests; CI-friendly
   E2E script updates.
 
@@ -50,14 +53,14 @@ migrations changed.** A PR should be opened for review before merge/deploy.
 
 | Check | Result |
 | --- | --- |
-| `npx vitest run` | 5 files, 82 tests passed (27 SEO system tests) |
+| `npx vitest run` | 5 files, 83 tests passed (28 SEO system tests) |
 | backend `npm test -- --runInBand` | 50 suites, 983 tests passed |
 | `npm run lint` | 0 errors (49 pre-existing warnings) |
 | `npm run build` | succeeded, `/[hubSlug]` present |
-| `npm run seo:crawl` against built site | 14 sitemap URLs, 14 pages crawled, 15 link targets, 0 errors/warnings |
-| `npm run seo:redirects` | alias expansions pass, including a noindex duplicate hub that canonicalises to the winner; injected bad destination fails the gate (exit 1) |
+| `npm run seo:crawl` against built site | 14 sitemap URLs, 14 pages crawled, 17 link targets, 0 errors/warnings |
+| `npm run seo:redirects` | alias expansions pass, including a canonical-only duplicate hub; injected bad destination fails the gate (exit 1) |
 | `npm run seo:audit` | local fixture project noindex; production report below is the deploy baseline |
-| `e2e\verify-seo.ps1` against built site | 196 passed, 0 failed (static-route precedence, unknown-slug 404, utility noindex/no-follow, crawlable noindex utility pages) |
+| `e2e\verify-seo.ps1` against built site | 203 passed, 0 failed (static-route precedence, unknown-slug 404, utility noindex/no-follow, filter canonical-only, crawlable noindex utility pages) |
 | `npm run seo:indexnow` with no key | safe no-op |
 
 Crawl was run against `http://localhost:3000` after a fresh build; the crawler
@@ -79,10 +82,11 @@ possession signal):
 | --- | --- | --- |
 | KEEP | 10 | static pages + 2 hubs + 1 unit + Eligo project |
 | REDIRECT (intended) | 2 | `/flats-for-sale-in-wave-city`, `/property-for-sale-in-wave-city` |
-| NOINDEX | 7 | 5 duplicate-intent hubs (canonicalised, see below), `dream-homes-e84e51` (possession, 1 image), `grand-carnesia-e215b6` (0 configurations, 1 image, 0-char description) |
+| CANONICAL (no noindex) | 5 | duplicate-intent hubs, canonicalised to the winner (listed below) |
+| NOINDEX | 2 | `dream-homes-e84e51` (possession, 1 image), `grand-carnesia-e215b6` (0 configurations, 1 image, 0-char description) |
 
-With the duplicate-intent rule, 5 currently ranking hubs become noindex but are
-**canonicalised to the winning hub** (tested and listed by the audit script):
+With the duplicate-intent rule, 5 currently ranking hubs canonicalise to the
+winning hub (crawlable and indexable, out of sitemap/nav, **no noindex**):
 
 | Suppressed hub | Canonical winner |
 | --- | --- |
@@ -108,10 +112,10 @@ hubs have 0/0 and are excluded.
 | `SEO_REQUIRE_POSSESSION` | true | **false** | only Eligo has a date; Dream Homes has none but strong content; Grand Carnesia still fails on description/configurations |
 | code change (already in branch) | `possessionDate` only | accept `expectedCompletionDate` too | Eligo has `expectedCompletionDate` populated and `possessionDate: null` |
 
-Result with the proposal: **11 KEEP, 2 intended REDIRECT, 6 NOINDEX**
-(5 canonicalised duplicate hubs + Grand Carnesia only). Thin/empty pages remain
-excluded because the description, configuration, RERA and amenity gates are
-unchanged.
+Result with the proposal: **11 KEEP, 5 CANONICAL, 2 intended REDIRECT,
+1 NOINDEX** (Grand Carnesia only). Thin/empty pages remain excluded because the
+description, configuration, RERA and amenity gates are unchanged.
+`seo-hub-preferences.json` is empty — no manual preference was applied.
 
 ### Structured-data validator (before → after)
 
@@ -130,7 +134,8 @@ unchanged.
 ### Rich Results Test (branch build, CODE input)
 
 Google Rich Results Test cannot fetch `localhost`, so the JSON-LD blocks from
-the built branch pages were pasted into the tool's CODE tab:
+the built branch pages were pasted into the tool's CODE tab (re-run after the
+canonical-only change):
 
 | Page | Result | Errors | Warnings | Detected |
 | --- | --- | --- | --- | --- |

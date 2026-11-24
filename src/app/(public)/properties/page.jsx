@@ -25,8 +25,10 @@ export async function generateMetadata({ searchParams }) {
     const sp = (await searchParams) || {};
     const filtered = FILTER_KEYS.some((key) => first(sp[key]));
     if (!filtered) return base;
-    // Filter permutations are the same content as /properties: noindex, one canonical.
-    return { ...base, robots: { index: false, follow: true }, alternates: { canonical: canonicalUrl("/properties") } };
+    // Filter permutations are the same content as /properties. They keep the
+    // same robots directives (no noindex) and only canonicalise to the clean
+    // URL; the parameter variants stay disallowed in robots.txt.
+    return { ...base, alternates: { canonical: canonicalUrl("/properties") } };
 }
 
 async function getJson(path, params = {}) {

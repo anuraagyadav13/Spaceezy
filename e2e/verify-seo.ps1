@@ -227,13 +227,16 @@ foreach ($p in $corePages) {
     $robotsMeta = Get-Meta $pg.html "robots"
     $isNoindex = ($robotsMeta -and $robotsMeta -match 'noindex')
     $landingIndex[$p] = -not $isNoindex
-    if ($isNoindex) {
-        # Duplicate-intent hubs are noindex and point at the surviving hub.
-        Assert ($c -and ((Norm-Url $c) -ne (Norm-Url "$ORIGIN$p"))) "$p noindex hub canonicalises to winner" "got: $c"
+    if ((Norm-Url $c) -ne (Norm-Url "$ORIGIN$p")) {
+        # Duplicate-intent hubs canonicalise to the winner but stay crawlable
+        # and indexable; only utility/gate failures use noindex.
+        Assert (-not $isNoindex) "$p canonical-only hub is not noindex" "got $robotsMeta"
     } else {
-        Assert ($c -and ((Norm-Url $c) -eq (Norm-Url "$ORIGIN$p"))) "$p canonical self-references" "got: $c"
-        if ($c) {
-            $cn = Norm-Url $c
+        Assert (-not $isNoindex) "$p is indexable" "got $robotsMeta"
+    }
+    if ($c) {
+        $cn = Norm-Url $c
+        if ($cn -eq (Norm-Url "$ORIGIN$p")) {
             if ($canonicals.ContainsKey($cn)) { Assert $false "$p no duplicate canonical" "dup with $($canonicals[$cn])" }
             else { $canonicals[$cn] = $p; Assert $true "$p no duplicate canonical" }
         }
@@ -257,11 +260,15 @@ foreach ($slug in $landingSlugs) {
         Assert (-not $isNoindex) "$path is indexable and in sitemap" "has noindex despite sitemap"
         Assert ($pg.html -match 'href="/properties/|href="/projects/') "$path in sitemap renders real inventory"
     } else {
-        # Not in sitemap: either noindex (empty) - verify honest empty state.
-        Assert ($isNoindex) "$path empty pages are noindex" "not in sitemap but indexable"
-        if ($slug -match '^(?:properties|flats|plots|villas|commercial-property|[0-9]+-bhk-flats)-in-') {
-            # Only assert visible empty-state text when the CRM truly has no matching inventory.
-            Assert ($pg.html -match 'No live listings here yet' -or $pg.html -match 'href="/properties/') "$path shows honest empty state or inventory"
+        # Not in sitemap: either a canonical-only duplicate (not noindex) or a
+        # noindex empty category. Verify the declared signal is honest.
+        $c = Get-Canonical $pg.html
+        $isCanonicalised = $c -and ((Norm-Url $c) -ne (Norm-Url "$ORIGIN$path"))
+        Assert ($isNoindex -or $isCanonicalised) "$path is noindex or canonicalised" "not in sitemap with self-canonical and no noindex"
+        if ($isCanonicalised) {
+            Assert ($pg.html -match 'href="/properties/|href="/projects/') "$path canonicalised hub renders real inventory"
+        } elseif ($slug -match '^(?:properties|flats|plots|villas|commercial-property|[0-9]+-bhk-flats)-in-') {
+            Assert ($pg.html -match 'No live listings here yet') "$path shows honest empty state"
         }
     }
 }
@@ -285,8 +292,10 @@ $fh = Get-Page "$WEB/flats-for-sale"
 $fhRobots = Get-Meta $fh.html "robots"
 $fhNoindex = [bool]($fhRobots -and $fhRobots -match 'noindex')
 $fhInSitemap = $locSet.ContainsKey("$ORIGIN/flats-for-sale")
-Assert ($fhInSitemap -ne $fhNoindex) "/flats-for-sale sitemap and robots agree" "inSitemap=$fhInSitemap noindex=$fhNoindex"
-if ($fhInSitemap) {
+$fhCanon = Get-Canonical $fh.html
+$fhCanonicalised = $fhCanon -and ((Norm-Url $fhCanon) -ne (Norm-Url "$ORIGIN/flats-for-sale"))
+Assert ($fhInSitemap -or $fhCanonicalised -or $fhNoindex) "/flats-for-sale has a valid out-of-sitemap signal" "inSitemap=$fhInSitemap noindex=$fhNoindex canonicalised=$fhCanonicalised"
+if ($fhInSitemap -or $fhCanonicalised) {
     Assert (([regex]::Matches($fh.html, 'href="/properties/')).Count -gt 0) "/flats-for-sale renders property cards"
 } else {
     Assert ($fh.html -match 'No live listings here yet') "/flats-for-sale shows honest empty state"
@@ -400,6 +409,16 @@ foreach ($p in $staticExpectations.Keys) {
 }
 $unknown = Get-Page "$WEB/this-route-does-not-exist-12345"
 Assert ($unknown.status -eq 404) "unknown hub slug returns 404" "got $($unknown.status)"
+
+foreach ($fp in @("/projects?q=test&page=2", "/properties?bhk=2&sort=price")) {
+    $pg = Get-Page "$WEB$fp"
+    $clean = ($fp -split '\?')[0]
+    $c = Get-Canonical $pg.html
+    $rm = Get-Meta $pg.html "robots"
+    Assert (-not ($rm -and $rm -match 'noindex')) "filter URL $fp is not noindex" "got $rm"
+    Assert ($c -and ((Norm-Url $c) -eq (Norm-Url "$ORIGIN$clean"))) "filter URL $fp canonicalises to $clean" "got $c"
+}
+Assert ($rb.html -match '(?i)Disallow:.*(sort=|page=|minPrice=)') "filter params remain disallowed in robots"
 
 foreach ($u in @("/search", "/enquiry", "/login", "/dashboard")) {
     $pg = Get-Page "$WEB$u"
