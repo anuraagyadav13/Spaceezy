@@ -1,7 +1,18 @@
-// Reads live public inventory from the CRM API (single source of truth) and
-// filters it in Next.js for the SEO landing pages. No CRM backend changes.
+/**
+ * Live public inventory (projects + units + location master) from the CRM API.
+ *
+ * This is the only data source for generated pages. Nothing is mocked and no
+ * record is invented: if the API is unreachable the callers degrade to an
+ * empty inventory and every generated page is simply not indexable.
+ *
+ * The module cache has a 60s TTL so an ISR revalidation actually picks up new
+ * projects/units (the previous version cached for the lifetime of the process).
+ */
 
-const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE =
+    process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+export const INVENTORY_TTL_MS = 60_000;
 
 async function getJson(path, params = {}) {
     const query = new URLSearchParams();
@@ -35,92 +46,33 @@ async function getPaged(path, params = {}) {
     return { items, total };
 }
 
-let inventoryCache = null;
+let cache = { at: 0, data: null };
 
-// All published projects + units (paged, ≤20 pages of 50). Fetches carry
-// revalidate:60, so builds degrade gracefully when the API is unreachable.
-export async function getInventory() {
-    if (inventoryCache) return inventoryCache;
+/** Test/ISR helper — force the next reader to refetch. */
+export function resetInventoryCache() {
+    cache = { at: 0, data: null };
+}
+
+export async function getInventory({ fresh = false } = {}) {
+    if (!fresh && cache.data && Date.now() - cache.at < INVENTORY_TTL_MS) return cache.data;
+
     const [locations, projects, properties] = await Promise.all([
         getJson("/public/locations"),
         getPaged("/public/projects"),
         getPaged("/public/properties"),
     ]);
-    inventoryCache = {
-        locations: Array.isArray(locations) ? locations : [],
-        projects: projects.items,
-        projectsTotal: projects.total,
-        properties: properties.items,
-        propertiesTotal: properties.total,
+
+    cache = {
+        at: Date.now(),
+        data: {
+            locations: Array.isArray(locations) ? locations : [],
+            projects: projects.items,
+            projectsTotal: projects.total,
+            properties: properties.items,
+            propertiesTotal: properties.total,
+        },
     };
-    return inventoryCache;
+    return cache.data;
 }
 
-export function inScope(location, scope = {}) {
-    const hasScope = Boolean(scope.state || scope.district || scope.region);
-    // Global (unscoped) pages do not claim a location, so inventory without
-    // one must still match. Location-scoped pages (Wave City, Ghaziabad…)
-    // require a location to verify the claim.
-    if (!hasScope) return true;
-    if (!location) return false;
-    if (scope.state && location.state !== scope.state) return false;
-    if (scope.district && location.district !== scope.district) return false;
-    if (scope.region && location.region !== scope.region) return false;
-    return true;
-}
-
-// Units often have no explicit `type` in the CRM. Infer it from real data
-// (configuration/title/bhk) so type-filtered pages show what genuinely fits.
-export function classifyUnitType(item) {
-    if (item.type) return item.type;
-    const hay = `${item.configuration || ""} ${item.title || ""}`;
-    if ((item.bhk && item.bhk > 0) || /\bbhk\b/i.test(hay)) return "Residential";
-    if (/\bplot\b/i.test(hay)) return "Plot";
-    if (/\b(shop|office|commercial|retail|showroom|godown|warehouse)\b/i.test(hay)) return "Commercial";
-    return null;
-}
-
-function matchesTextMatch(hay, needle) {
-    return hay.toLowerCase().includes(String(needle).toLowerCase());
-}
-
-// Apply a landing page's scope + filters to the inventory.
-export function filterLanding(page, inv) {
-    const scope = page.scope || {};
-    const filters = page.filters || {};
-
-    const projects = inv.projects.filter((p) => {
-        if (!inScope(p.location, scope)) return false;
-        if (filters.projectTypes && filters.projectTypes.length && !filters.projectTypes.includes(p.projectType)) return false;
-        if (filters.bhk) {
-            const re = new RegExp(`\\b${filters.bhk}\\s?bhk\\b`, "i");
-            const hit = (p.configurations || []).some((c) => re.test(c && c.name ? c.name : ""));
-            if (!hit) return false;
-        }
-        if (filters.propertyType && p.projectType !== filters.propertyType) return false;
-        if (filters.textMatch) {
-            const hay = `${p.name || ""} ${p.description || ""} ${(p.configurations || []).map((c) => c && c.name).join(" ")}`;
-            if (!matchesTextMatch(hay, filters.textMatch)) return false;
-        }
-        return true;
-    });
-
-    const properties = inv.properties.filter((pr) => {
-        if (!inScope(pr.location, scope)) return false;
-        if (filters.propertyType && classifyUnitType(pr) !== filters.propertyType) return false;
-        if (filters.bhk && pr.bhk !== filters.bhk) return false;
-        if (filters.forSale && pr.purpose && String(pr.purpose).toLowerCase() === "rent") return false;
-        if (filters.textMatch) {
-            const hay = `${pr.title || ""} ${pr.configuration || ""} ${pr.type || ""} ${(pr.project && pr.project.name) || ""}`;
-            if (!matchesTextMatch(hay, filters.textMatch)) return false;
-        }
-        return true;
-    });
-
-    return { projects, properties };
-}
-
-export function landingCounts(page, inv) {
-    const { projects, properties } = filterLanding(page, inv);
-    return { projects, properties, count: projects.length + properties.length, indexable: projects.length + properties.length > 0 };
-}
+export { classifyUnitType } from "./facets";

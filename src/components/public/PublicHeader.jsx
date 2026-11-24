@@ -6,16 +6,11 @@ import { Menu, X, ChevronDown } from "lucide-react";
 import Image from "next/image";
 import ThemeToggle from "../shared/ThemeToggle";
 
-const PROPERTY_LINKS = [
+const PROPERTY_FALLBACK_LINKS = [
     ["/residential-properties", "Residential Properties"],
     ["/commercial-properties", "Commercial Properties"],
     ["/flats-for-sale", "Flats for Sale"],
     ["/plots-for-sale", "Plots for Sale"],
-];
-
-const LOCATION_LINKS = [
-    ["/properties-in-ghaziabad", "Properties in Ghaziabad"],
-    ["/properties-in-wave-city", "Properties in Wave City"],
 ];
 
 const navLinkClass = (isSolid) =>
@@ -24,9 +19,11 @@ const navLinkClass = (isSolid) =>
 const dropdownItemClass =
     "rounded-xl px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors";
 
-export function PublicHeader() {
+export function PublicHeader({ nav }) {
     const pathname = usePathname();
     const isHomePage = pathname === "/";
+    const propertyLinks = (nav?.categories?.length ? nav.categories : PROPERTY_FALLBACK_LINKS.map(([href, label]) => ({ href, label })));
+    const locationLinks = nav?.locations || [];
     
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -70,7 +67,7 @@ export function PublicHeader() {
                         </Link>
                         <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 absolute left-0 top-full pt-3 transition-all duration-150 z-50">
                             <div className="w-60 rounded-2xl bg-white border border-gray-100 shadow-xl p-2 flex flex-col">
-                                {PROPERTY_LINKS.map(([href, label]) => (
+                                {propertyLinks.map(({ href, label }) => (
                                     <Link key={href} href={href} className={dropdownItemClass}>{label}</Link>
                                 ))}
                             </div>
@@ -83,7 +80,7 @@ export function PublicHeader() {
                         </span>
                         <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 absolute left-0 top-full pt-3 transition-all duration-150 z-50">
                             <div className="w-64 rounded-2xl bg-white border border-gray-100 shadow-xl p-2 flex flex-col">
-                                {LOCATION_LINKS.map(([href, label]) => (
+                                {locationLinks.map(({ href, label }) => (
                                     <Link key={href} href={href} className={dropdownItemClass}>{label}</Link>
                                 ))}
                             </div>
@@ -136,14 +133,14 @@ export function PublicHeader() {
                     <nav className="flex flex-col gap-6 p-8 mt-10 h-full overflow-y-auto">
                         <Link href="/properties" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">Properties</Link>
                         <div className="flex flex-col gap-3 -mt-3 pl-4 border-l-2 border-purple-100 ml-1">
-                            {PROPERTY_LINKS.map(([href, label]) => (
+                            {propertyLinks.map(({ href, label }) => (
                                 <Link key={href} href={href} onClick={() => setMobileMenuOpen(false)} className="text-base text-gray-500 hover:text-purple-600 transition-colors">{label}</Link>
                             ))}
                         </div>
                         <Link href="/projects" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">Projects</Link>
                         <span className="text-3xl font-light text-gray-800">Locations</span>
                         <div className="flex flex-col gap-3 -mt-3 pl-4 border-l-2 border-purple-100 ml-1">
-                            {LOCATION_LINKS.map(([href, label]) => (
+                            {locationLinks.map(({ href, label }) => (
                                 <Link key={href} href={href} onClick={() => setMobileMenuOpen(false)} className="text-base text-gray-500 hover:text-purple-600 transition-colors">{label}</Link>
                             ))}
                         </div>

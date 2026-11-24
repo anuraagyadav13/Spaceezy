@@ -1,9 +1,6 @@
-export const metadata = {
-    title: "Terms of Service | Spaceezy",
-    description: "Terms of service for using the Spaceezy real estate platform and enquiry services.",
-    alternates: { canonical: "/terms" },
-    robots: { index: true, follow: true },
-};
+import { staticPageMetadata } from "../../../lib/seo/staticPages";
+
+export const metadata = staticPageMetadata("/terms");
 
 export default function Terms() {
     return (

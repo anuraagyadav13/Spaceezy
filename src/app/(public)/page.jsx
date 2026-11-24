@@ -1,33 +1,16 @@
 import HomeContent from "./HomeClient";
 import { JsonLd } from "../../components/seo/JsonLd";
-import { realEstateAgentJsonLd } from "../../lib/seo/site";
+import { realEstateAgentSchema } from "../../lib/seo/schema";
+import { homeMetadata } from "../../lib/seo/metadata";
+import { getNavHubs } from "../../lib/seo/hubs";
+import { BUSINESS } from "../../config/business";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-
-const HOME_TITLE = "Spaceezy – Real Estate Properties in Ghaziabad | Buy & Sell Property";
-const HOME_DESCRIPTION =
-    "Spaceezy lists real estate properties in Ghaziabad — flats, plots, homes and commercial spaces across Wave City and top localities. Browse live inventory with zero brokerage.";
 
 // Regenerate with live CRM data at most every 60s.
 export const revalidate = 60;
 
-export const metadata = {
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
-    alternates: { canonical: "/" },
-    openGraph: {
-        title: HOME_TITLE,
-        description: HOME_DESCRIPTION,
-        url: "/",
-        type: "website",
-        images: [{ url: "/images/og-default.jpg" }],
-    },
-    twitter: {
-        card: "summary_large_image",
-        title: HOME_TITLE,
-        description: HOME_DESCRIPTION,
-    },
-};
+export const metadata = homeMetadata();
 
 async function getJson(path, params = {}) {
     const query = new URLSearchParams();
@@ -48,10 +31,11 @@ async function getJson(path, params = {}) {
 }
 
 export default async function PublicHomePage() {
-    const [projects, properties, locations] = await Promise.all([
+    const [projects, properties, locations, nav] = await Promise.all([
         getJson("/public/projects", { limit: 6 }),
         getJson("/public/properties", { limit: 6, availability: "Available" }),
         getJson("/public/locations"),
+        getNavHubs(),
     ]);
 
     return (
@@ -60,8 +44,10 @@ export default async function PublicHomePage() {
                 projects={(projects && projects.items) || []}
                 properties={(properties && properties.items) || []}
                 locations={Array.isArray(locations) ? locations : []}
+                hubs={nav}
+                areaLabel={BUSINESS.areaServed.city}
             />
-            <JsonLd data={realEstateAgentJsonLd} />
+            <JsonLd data={realEstateAgentSchema()} />
         </>
     );
 }

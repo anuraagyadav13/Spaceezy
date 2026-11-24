@@ -1,9 +1,6 @@
-export const metadata = {
-    title: "Privacy Policy | Spaceezy",
-    description: "How Spaceezy collects, uses and protects your personal information across our website and services.",
-    alternates: { canonical: "/privacy-policy" },
-    robots: { index: true, follow: true },
-};
+import { staticPageMetadata } from "../../../lib/seo/staticPages";
+
+export const metadata = staticPageMetadata("/privacy-policy");
 
 export default function PrivacyPolicy() {
     return (

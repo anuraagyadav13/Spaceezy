@@ -8,7 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "seo:test": "vitest run src/lib/seo",
+    "seo:crawl": "node scripts/seo-ci.mjs",
+    "seo:audit": "node scripts/seo-audit.mjs",
+    "seo:indexnow": "node scripts/indexnow.mjs",
+    "seo:check": "npm run seo:test && npm run seo:crawl"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

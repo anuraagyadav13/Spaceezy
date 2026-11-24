@@ -494,7 +494,7 @@ export default function CreativeStudioPage() {
                                             maxLength={CREATIVE_LIMITS.message}
                                             value={form.message}
                                             onChange={(e) => set("message")(e.target.value)}
-                                            placeholder="e.g. Book a site visit this weekend at Wave City — 2 & 3 BHK homes from ₹75 Lakh."
+                                            placeholder="e.g. Book a site visit this weekend and view available configurations."
                                             className={inputClass}
                                         />
                                         <p className={`text-[11px] mt-1 ${form.message.length > CREATIVE_LIMITS.message ? "text-red-600" : "text-gray-400"}`}>
@@ -568,7 +568,7 @@ export default function CreativeStudioPage() {
                                             maxLength={CREATIVE_LIMITS.name}
                                             value={form.name}
                                             onChange={(e) => set("name")(e.target.value)}
-                                            placeholder="e.g. Wave City — Weekend visit push"
+                                            placeholder="e.g. Weekend visit push"
                                             className={inputClass}
                                         />
                                         <p className="text-[11px] text-gray-400 mt-1">Only you see this name — it helps you find the creative later.</p>

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
-import { PHONE_DISPLAY, PHONE_TEL } from "../../lib/seo/site";
+import { PHONE_DISPLAY, PHONE_TEL, EMAIL, OFFICE } from "../../lib/seo/site";
 
-export function PublicFooter() {
+export function PublicFooter({ nav }) {
+    const locationLinks = nav?.locations || [];
+    const categoryLinks = nav?.categories || [];
     return (
         <footer className="bg-[#0f172a] text-gray-300 py-16 border-t border-gray-800">
             <div className="container mx-auto px-6 md:px-12">
@@ -25,11 +27,12 @@ export function PublicFooter() {
                         <h4 className="text-white font-bold mb-6">Properties</h4>
                         <ul className="flex flex-col gap-3 text-sm">
                             <li><Link href="/properties" className="hover:text-purple-400 transition-colors">All Properties</Link></li>
-                            <li><Link href="/properties-in-ghaziabad" className="hover:text-purple-400 transition-colors">Properties in Ghaziabad</Link></li>
-                            <li><Link href="/properties-in-wave-city" className="hover:text-purple-400 transition-colors">Properties in Wave City</Link></li>
-                            <li><Link href="/flats-for-sale" className="hover:text-purple-400 transition-colors">Flats for Sale</Link></li>
-                            <li><Link href="/plots-for-sale" className="hover:text-purple-400 transition-colors">Plots for Sale</Link></li>
-                            <li><Link href="/commercial-properties" className="hover:text-purple-400 transition-colors">Commercial Properties</Link></li>
+                            {categoryLinks.map(({ href, label }) => (
+                                <li key={href}><Link href={href} className="hover:text-purple-400 transition-colors">{label}</Link></li>
+                            ))}
+                            {locationLinks.map(({ href, label }) => (
+                                <li key={href}><Link href={href} className="hover:text-purple-400 transition-colors">{label}</Link></li>
+                            ))}
                             <li><Link href="/projects" className="hover:text-purple-400 transition-colors">Projects</Link></li>
                             <li><Link href="/search" className="hover:text-purple-400 transition-colors">Property Search</Link></li>
                         </ul>
@@ -48,9 +51,12 @@ export function PublicFooter() {
                     <div>
                         <h4 className="text-white font-bold mb-6">Contact</h4>
                         <ul className="flex flex-col gap-3 text-sm text-gray-400">
-                            <li><a href="mailto:admin@spaceezy.com" className="hover:text-purple-400 transition-colors">admin@spaceezy.com</a></li>
+                            <li><a href={`mailto:${EMAIL}`} className="hover:text-purple-400 transition-colors">{EMAIL}</a></li>
                             <li><a href={`tel:${PHONE_TEL}`} className="hover:text-purple-400 transition-colors">{PHONE_DISPLAY}</a></li>
-                            <li className="mt-2">Office No. 04, 1st Floor, Wave Galleria<br />Sector-3, Wave City, Ghaziabad 201002</li>
+                            <li className="mt-2">
+                                {OFFICE.streetAddress}<br />
+                                {[OFFICE.addressLocality, OFFICE.addressRegion, OFFICE.postalCode].filter(Boolean).join(" ")}
+                            </li>
                         </ul>
                     </div>
                 </div>

@@ -1,24 +1,7 @@
 import EnquiryClient from "./EnquiryClient";
+import { staticPageMetadata } from "../../../lib/seo/staticPages";
 
-export const metadata = {
-    title: "Enquire | Talk to Spaceezy",
-    description:
-        "Send an enquiry or schedule a site visit for any Spaceezy project or property. Our property experts will get back to you shortly.",
-    alternates: { canonical: "/enquiry" },
-    openGraph: {
-        title: "Enquire | Talk to Spaceezy",
-        description:
-            "Send an enquiry or schedule a site visit for any Spaceezy project or property.",
-        url: "/enquiry",
-        type: "website",
-        images: [{ url: "/images/og-default.jpg" }],
-    },
-    twitter: {
-        card: "summary_large_image",
-        title: "Enquire | Talk to Spaceezy",
-        description: "Send an enquiry or schedule a site visit for any Spaceezy project or property.",
-    },
-};
+export const metadata = staticPageMetadata("/enquiry");
 
 const first = (value) => (Array.isArray(value) ? value[0] : value) || "";
 

@@ -1,61 +1,56 @@
-export const SITE_NAME = "Spaceezy";
-export const SITE_URL = "https://spaceezy.com";
-export const SITE_TITLE_FALLBACK = "Spaceezy | Premium Real Estate";
-// Business contact number — single source of truth for the whole site
-// (footer, floating button, contact page, SEO copy). The footer's
-// "Developed by Sharnex" wa.me link is the developer's own credit number
-// and intentionally differs — do not unify it.
-export const PHONE_DISPLAY = "+91 76830 20204";
-export const PHONE_TEL = "+917683020204";
-export const WHATSAPP_NUMBER = "917683020204";
+/**
+ * Site-wide SEO configuration.
+ *
+ * The canonical origin comes from the environment (`NEXT_PUBLIC_SITE_URL`) so
+ * staging builds can never emit production canonicals by accident. Every
+ * absolute URL on the site is derived from this single value, and it is
+ * forced to HTTPS — see `normaliseSiteUrl`.
+ *
+ * Brand/NAP identity lives in `src/config/business.js` (env overridable).
+ */
+
+import { BUSINESS } from "../../config/business";
+
+const DEFAULT_SITE_URL = "https://spaceezy.com";
+
+function normaliseSiteUrl(raw) {
+    const candidate = String(raw || "").trim() || DEFAULT_SITE_URL;
+    try {
+        const url = new URL(candidate);
+        // Canonicals are always HTTPS, even if the env var says http://.
+        return `${url.origin.replace(/^http:\/\//i, "https://")}`;
+    } catch {
+        return DEFAULT_SITE_URL;
+    }
+}
+
+export const SITE_URL = normaliseSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
+export const SITE_NAME = BUSINESS.name;
+export const SITE_TITLE_FALLBACK = `${BUSINESS.name} | ${BUSINESS.tagline}`;
+export const SITE_DESCRIPTION = BUSINESS.description;
+
+// Business contact details (single source of truth for the whole site).
+export const PHONE_DISPLAY = BUSINESS.phoneDisplay;
+export const PHONE_TEL = BUSINESS.phoneTel.startsWith("+") ? BUSINESS.phoneTel : `+${BUSINESS.phoneTel}`;
+export const WHATSAPP_NUMBER = BUSINESS.whatsapp;
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}`;
-export const EMAIL = "admin@spaceezy.com";
-export const OFFICE = {
-    streetAddress: "Office No. 04, 1st Floor, Wave Galleria, Sector-3, Wave City",
-    addressLocality: "Ghaziabad",
-    addressRegion: "Uttar Pradesh",
-    postalCode: "201002",
-    addressCountry: "IN",
-};
+export const EMAIL = BUSINESS.email;
+export const OFFICE = { ...BUSINESS.address };
 
-export const absoluteUrl = (path = "/") => new URL(path, SITE_URL).toString();
+/** Absolute URL for any site path. */
+export const absoluteUrl = (path = "/") => new URL(path, `${SITE_URL}/`).toString();
 
-export const organizationJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "@id": `${SITE_URL}/#organization`,
-    name: SITE_NAME,
-    url: `${SITE_URL}/`,
-    logo: `${SITE_URL}/images/logo.jpg`,
-    email: EMAIL,
-    telephone: `+${PHONE_TEL}`,
-    address: { "@type": "PostalAddress", ...OFFICE },
-};
+/**
+ * Canonical form of a path: leading slash, no trailing slash (except "/"),
+ * no query string or fragment. Search engines see exactly one variant.
+ */
+export function canonicalPath(path = "/") {
+    let value = String(path || "/").split("#")[0].split("?")[0];
+    if (!value.startsWith("/")) value = `/${value}`;
+    value = value.replace(/\/{2,}/g, "/");
+    if (value.length > 1) value = value.replace(/\/+$/, "");
+    return value || "/";
+}
 
-export const webSiteJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "@id": `${SITE_URL}/#website`,
-    url: `${SITE_URL}/`,
-    name: SITE_NAME,
-    publisher: { "@id": `${SITE_URL}/#organization` },
-    potentialAction: {
-        "@type": "SearchAction",
-        target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/search?q={search_term_string}` },
-        "query-input": "required name=search_term_string",
-    },
-};
-
-export const realEstateAgentJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "RealEstateAgent",
-    "@id": `${SITE_URL}/#realestateagent`,
-    name: SITE_NAME,
-    url: `${SITE_URL}/`,
-    image: `${SITE_URL}/images/logo.jpg`,
-    email: EMAIL,
-    telephone: `+${PHONE_TEL}`,
-    address: { "@type": "PostalAddress", ...OFFICE },
-    areaServed: [{ "@type": "City", name: "Ghaziabad" }],
-    parentOrganization: { "@id": `${SITE_URL}/#organization` },
-};
+/** Absolute canonical URL for a path. */
+export const canonicalUrl = (path = "/") => absoluteUrl(canonicalPath(path));

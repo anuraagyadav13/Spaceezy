@@ -1,6 +1,8 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
 const { generatePublicToken } = require('../utils/publicLink');
+const { unitPriceError, unitPublishIssues } = require('../utils/seoPublishCheck');
+const { canonicalConfigurationLabel } = require('../utils/propertyRequirement');
 const ConfigurationService = require('./configurationService');
 
 const AREA_FIELDS = ['area', 'areaCarpet', 'areaSaleable', 'areaBuiltUp', 'areaProject', 'areaCovered', 'areaTerrace'];
@@ -75,6 +77,12 @@ class PropertyService {
 
         if (payload.price !== undefined && payload.price !== null && payload.price !== '') {
             payload.price = PropertyService.parseCurrencyValue(payload.price);
+        }
+
+        // Free-text configuration labels collapse onto the controlled list so
+        // "2bhk" and "2 BHK" never become two public filter options.
+        if (typeof payload.configuration === 'string' && payload.configuration.trim()) {
+            payload.configuration = canonicalConfigurationLabel(payload.configuration);
         }
 
         if (payload.bhk !== undefined && payload.bhk !== null && typeof payload.bhk === 'string') {
@@ -208,7 +216,7 @@ class PropertyService {
     static async assertProject(projectId, organizationId) {
         const project = await prisma.project.findFirst({
             where: { id: projectId, organizationId },
-            select: { id: true, name: true }
+            select: { id: true, name: true, startingPrice: true }
         });
         if (!project) throw new AppError('Project not found or unauthorized', 404, 'NOT_FOUND');
         return project;
@@ -233,6 +241,16 @@ class PropertyService {
         if (existing) {
             throw new AppError(`Unit number "${unitNumber}" already exists in this project`, 409, 'CONFLICT');
         }
+    }
+
+    /**
+     * Non-blocking SEO publish warnings, attached to the API response so the
+     * admin UI can surface them. Never affects the stored record.
+     */
+    static withPublishWarnings(property) {
+        if (!property || property.isPublic !== true) return property;
+        const publishWarnings = unitPublishIssues(property);
+        return publishWarnings.length ? { ...property, publishWarnings } : property;
     }
 
     static async createProperty(data, organizationId) {
@@ -277,6 +295,12 @@ class PropertyService {
 
         await PropertyService.assertUnitNumberFree(normalized.projectId, payload.unitNumber, organizationId);
 
+        // A published unit may never undercut its project's starting price.
+        const priceError = unitPriceError(payload.price, project);
+        if (payload.isPublic === true && priceError) {
+            throw new AppError(priceError, 400, 'PRICE_BELOW_PROJECT_MIN');
+        }
+
         const baseData = {
             ...payload,
             projectId: normalized.projectId,
@@ -289,9 +313,10 @@ class PropertyService {
         // (astronomically unlikely) collision rather than failing the create.
         for (let attempt = 0; attempt < 4; attempt++) {
             try {
-                return await prisma.property.create({
+                const created = await prisma.property.create({
                     data: { ...baseData, publicToken: generatePublicToken() }
                 });
+                return PropertyService.withPublishWarnings(created);
             } catch (err) {
                 const target = err.code === 'P2002' ? String((err.meta && err.meta.target) || '') : '';
                 if (err.code === 'P2002' && target.includes('publicToken')) continue;
@@ -375,14 +400,28 @@ class PropertyService {
             }
         }
 
+        // A published unit may never undercut its project's starting price
+        // (checked before the write so invalid data never persists).
+        const priceFloor = await prisma.project.findFirst({
+            where: { id: existing.projectId, organizationId },
+            select: { startingPrice: true }
+        });
+        const nextPublic = safeData.isPublic !== undefined ? safeData.isPublic : existing.isPublic;
+        const nextPrice = safeData.price !== undefined ? safeData.price : existing.price;
+        if (nextPublic === true) {
+            const priceError = unitPriceError(nextPrice, priceFloor);
+            if (priceError) throw new AppError(priceError, 400, 'PRICE_BELOW_PROJECT_MIN');
+        }
+
         try {
-            return await prisma.property.update({
+            const updated = await prisma.property.update({
                 where: { id },
                 data: {
                     ...safeData,
                     version: { increment: 1 } // Optimistic locking increment
                 }
             });
+            return PropertyService.withPublishWarnings(updated);
         } catch (err) {
             if (err.code === 'P2002') {
                 throw new AppError(`Unit number "${safeData.unitNumber}" already exists in this project`, 409, 'CONFLICT');

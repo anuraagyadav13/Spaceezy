@@ -2,7 +2,7 @@
 import { Mail, Phone, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { PHONE_DISPLAY, PHONE_TEL, WHATSAPP_NUMBER } from "../../../lib/seo/site";
+import { PHONE_DISPLAY, PHONE_TEL, WHATSAPP_NUMBER, EMAIL, OFFICE } from "../../../lib/seo/site";
 
 export default function ContactPage() {
     return (
@@ -39,7 +39,7 @@ export default function ContactPage() {
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">Email</h3>
                         <p className="text-gray-500 mb-4">We usually respond within 24 hours.</p>
-                        <a href="mailto:admin@spaceezy.com" className="text-purple-600 font-bold text-lg hover:underline">admin@spaceezy.com</a>
+                        <a href={`mailto:${EMAIL}`} className="text-purple-600 font-bold text-lg hover:underline">{EMAIL}</a>
                     </div>
                     
                     <div className="bg-gray-50 rounded-[32px] p-8 text-center flex flex-col items-center border border-gray-100">
@@ -48,12 +48,15 @@ export default function ContactPage() {
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">Office</h3>
                         <p className="text-gray-500 mb-4">Come say hello at our HQ.</p>
-                        <p className="text-gray-900 font-bold">Office No. 04, 1st Floor, Wave Galleria<br/>Sector-3, Wave City, Ghaziabad 201002</p>
+                        <p className="text-gray-900 font-bold">
+                            {OFFICE.streetAddress}<br />
+                            {[OFFICE.addressLocality, OFFICE.addressRegion, OFFICE.postalCode].filter(Boolean).join(" ")}
+                        </p>
                     </div>
                 </div>
                 
                 <div className="bg-gray-900 rounded-[40px] p-12 text-center max-w-4xl mx-auto relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-10 bg-[url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2800&q=80')] bg-cover bg-center"></div>
+                    <div className="absolute inset-0 opacity-10 bg-[url('/images/modern-villa-infinity-pool-sunset.png')] bg-cover bg-center"></div>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-bold text-white mb-6 tracking-tight">Looking for a specific property?</h2>
                         <p className="text-gray-300 mb-10 max-w-xl mx-auto text-lg">

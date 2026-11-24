@@ -1,33 +1,59 @@
 import Link from "next/link";
+import Image from "next/image";
 import { MapPin, ImageOff, Building2 } from "lucide-react";
 import { formatPrice } from "../../utils/format";
+import { configurationNames, projectFacts } from "../../lib/seo/facts";
+import { isOptimizableImage as isOptimizable } from "../../lib/seo/images";
+
 
 const placeLabel = (location) =>
     [location?.region || location?.locality || location?.district, location?.state].filter(Boolean).join(", ");
 
+/** Data-derived alt text: what the image shows, where it is, and what it is. */
+const projectImageAlt = (project, facts) =>
+    `${project.name}${facts.locationLabel || placeLabel(project.location)
+        ? ` in ${facts.locationLabel || placeLabel(project.location)}`
+        : ""} — project photo`;
+
+const unitImageAlt = (property) => {
+    const place = placeLabel(property.location);
+    const unit = property.configuration || (property.bhk ? `${property.bhk} BHK` : property.title);
+    return `${unit}${property.project?.name ? ` in ${property.project.name}` : ""}${place ? `, ${place}` : ""} — listing photo`;
+};
+
 export function ProjectCard({ project }) {
+    // Price and configurations come from the one shared facts function, so a
+    // card, the hub, the project page and its metadata can never disagree.
+    const facts = projectFacts(project);
+    const configurations = configurationNames(project.configurations);
+
     return (
         <Link
             href={`/projects/${project.slug}`}
+            aria-label={`View details: ${project.name}`}
             className="group flex flex-col bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-shadow"
         >
             <div className="relative h-48 bg-gray-100 overflow-hidden">
                 {project.image ? (
-                    // Plain <img>, not next/image: CRM media is served from
-                    // /media/... by the API origin, and the Next image
-                    // optimizer cannot fetch that path (it resolves against
-                    // the Next server, which has no /media route) and answers
-                    // 400 "not a valid image" — which rendered as a broken
-                    // grey card for every project photo.
-                    <img src={project.image} alt={project.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                    // Optimized for LCP/bandwidth when the source is local
+                    // (`/media/...` is proxied to the API by next.config.ts);
+                    // external CDN URLs fall back to the original file.
+                    <Image
+                        src={project.image}
+                        alt={projectImageAlt(project, facts)}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        unoptimized={!isOptimizable(project.image)}
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">
                         <ImageOff size={32} />
                     </div>
                 )}
-                {project.availableUnits != null && project.availableUnits > 0 && (
+                {facts.availableUnits != null && facts.availableUnits > 0 && (
                     <span className="absolute top-3 left-3 bg-emerald-500/90 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                        {project.availableUnits} available
+                        {facts.availableUnits} available
                     </span>
                 )}
             </div>
@@ -35,17 +61,17 @@ export function ProjectCard({ project }) {
                 <h3 className="font-bold text-gray-900 group-hover:text-purple-700 transition-colors line-clamp-2">{project.name}</h3>
                 <p className="text-xs text-gray-500 flex items-center gap-1">
                     <MapPin size={13} className="shrink-0" />
-                    {placeLabel(project.location) || project.address || "Location to be announced"}
+                    {facts.locationLabel || placeLabel(project.location) || project.address || "Location to be announced"}
                 </p>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                    {(project.configurations || []).slice(0, 3).map((name) => (
+                    {configurations.slice(0, 3).map((name) => (
                         <span key={name} className="text-[11px] bg-gray-50 border border-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                             {name}
                         </span>
                     ))}
                 </div>
                 <p className="mt-auto pt-2 text-sm font-bold text-gray-900">
-                    {project.startingPrice != null ? `From ${formatPrice(project.startingPrice)}` : "Price on request"}
+                    {facts.priceMin != null ? `From ${formatPrice(facts.priceMin)}` : "Price on request"}
                 </p>
             </div>
         </Link>
@@ -63,19 +89,29 @@ export function PropertyCard({ property }) {
     return (
         <Link
             href={`/properties/${property.token}`}
+            aria-label={`View details: ${property.title}`}
             className="group flex flex-col bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-shadow"
         >
             <div className="relative h-48 bg-gray-100 overflow-hidden">
                 {property.image ? (
-                    <img src={property.image} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                    <Image
+                        src={property.image}
+                        alt={unitImageAlt(property)}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        unoptimized={!isOptimizable(property.image)}
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">
                         <Building2 size={32} />
                     </div>
                 )}
-                <span className={`absolute top-3 left-3 text-[11px] font-bold px-2.5 py-1 rounded-full border ${availabilityClasses(property.availability)}`}>
-                    {property.availability}
-                </span>
+                {property.availability && (
+                    <span className={`absolute top-3 left-3 text-[11px] font-bold px-2.5 py-1 rounded-full border ${availabilityClasses(property.availability)}`}>
+                        {property.availability}
+                    </span>
+                )}
             </div>
             <div className="p-5 flex flex-col gap-2 flex-1">
                 <h3 className="font-bold text-gray-900 group-hover:text-purple-700 transition-colors line-clamp-2">{property.title}</h3>

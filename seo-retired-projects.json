@@ -1,0 +1,4 @@
+{
+  "$comment": "Removed projects -> canonical location hub. Add a row here when a published project is deleted from the CRM. next.config.ts reads this file for edge redirects and the project route reads it as a runtime fallback. Keep it empty until a project is actually removed.",
+  "redirects": []
+}

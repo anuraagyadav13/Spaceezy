@@ -1,20 +1,10 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { absoluteUrl } from "../../lib/seo/site";
 
-export function breadcrumbJsonLd(items) {
-    return {
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        itemListElement: items.map((item, i) => ({
-            "@type": "ListItem",
-            position: i + 1,
-            name: item.name,
-            ...(item.href ? { item: absoluteUrl(item.href) } : {}),
-        })),
-    };
-}
-
+/**
+ * Breadcrumb JSON-LD lives in `lib/seo/schema.js` (one generator for the whole
+ * site). This file only renders the visible trail that it must match.
+ */
 export function Breadcrumbs({ items, dark = false }) {
     return (
         <nav aria-label="Breadcrumb" className="mb-6">
