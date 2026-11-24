@@ -13,7 +13,8 @@
     "seo:crawl": "node scripts/seo-ci.mjs",
     "seo:audit": "node scripts/seo-audit.mjs",
     "seo:indexnow": "node scripts/indexnow.mjs",
-    "seo:check": "npm run seo:test && npm run seo:crawl"
+    "seo:redirects": "node scripts/seo-redirect-check.mjs",
+    "seo:check": "npm run seo:test && npm run seo:crawl && npm run seo:redirects"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

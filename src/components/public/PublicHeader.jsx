@@ -86,14 +86,13 @@ export function PublicHeader({ nav }) {
                             </div>
                         </div>
                     </div>
-                    <Link href="/search" className={navLinkClass(isSolid)}>Search</Link>
                     <Link href="/about" className={navLinkClass(isSolid)}>About</Link>
                     <Link href="/contact" className={navLinkClass(isSolid)}>Contact</Link>
                 </nav>
 
                 <div className="flex items-center gap-2 sm:gap-3">
                     <ThemeToggle variant={isSolid ? "surface" : "glass"} />
-                    <Link href="/enquiry" className={`hidden md:inline-flex px-6 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ${isSolid ? "bg-gray-900 text-white hover:bg-gray-800" : "bg-white/10 hover:bg-white text-white hover:text-gray-900 border border-white/20 backdrop-blur-sm"}`}>
+                    <Link href="/enquiry" rel="nofollow" className={`hidden md:inline-flex px-6 py-2.5 rounded-full text-sm font-medium transition-all shadow-sm ${isSolid ? "bg-gray-900 text-white hover:bg-gray-800" : "bg-white/10 hover:bg-white text-white hover:text-gray-900 border border-white/20 backdrop-blur-sm"}`}>
                         Enquire Now
                     </Link>
                     <button
@@ -144,12 +143,11 @@ export function PublicHeader({ nav }) {
                                 <Link key={href} href={href} onClick={() => setMobileMenuOpen(false)} className="text-base text-gray-500 hover:text-purple-600 transition-colors">{label}</Link>
                             ))}
                         </div>
-                        <Link href="/search" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">Search</Link>
                         <Link href="/about" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">About</Link>
                         <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">Contact</Link>
                         
                         <div className="mt-auto pb-8 pt-8 border-t border-gray-100">
-                            <Link href="/enquiry" onClick={() => setMobileMenuOpen(false)} className="block bg-gray-900 text-white text-center py-4 rounded-xl text-lg font-medium hover:bg-gray-800 transition-colors">
+                            <Link href="/enquiry" rel="nofollow" onClick={() => setMobileMenuOpen(false)} className="block bg-gray-900 text-white text-center py-4 rounded-xl text-lg font-medium hover:bg-gray-800 transition-colors">
                                 Enquire Now
                             </Link>
                         </div>

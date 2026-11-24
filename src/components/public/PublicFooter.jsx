@@ -34,7 +34,6 @@ export function PublicFooter({ nav }) {
                                 <li key={href}><Link href={href} className="hover:text-purple-400 transition-colors">{label}</Link></li>
                             ))}
                             <li><Link href="/projects" className="hover:text-purple-400 transition-colors">Projects</Link></li>
-                            <li><Link href="/search" className="hover:text-purple-400 transition-colors">Property Search</Link></li>
                         </ul>
                     </div>
                     
@@ -77,7 +76,7 @@ export function PublicFooter({ nav }) {
                         </a>
                     </div>
                     <div className="flex gap-4 mt-4 md:mt-0">
-                        <Link href="/login" className="hover:text-white transition-colors">Partner/Employee Portal</Link>
+                        <Link href="/login" rel="nofollow" className="hover:text-white transition-colors">Partner/Employee Portal</Link>
                     </div>
                 </div>
             </div>

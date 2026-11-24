@@ -160,16 +160,36 @@ npm run seo:test               # SEO unit tests only
 npm run seo:crawl              # crawl a running site (SEO_BASE_URL=…)
 npm run seo:audit              # published-but-noindex inventory report
 npm run seo:audit -- --strict  # fail CI if any published record is noindex
+npm run seo:redirects          # FAIL if a redirect target is noindex/non-200
 npm run seo:indexnow           # notify IndexNow (no-op without a key)
+
+# Read-only impact report against the production public API (no deploy/DB writes):
+npx vite-node scripts/seo-production-audit.mjs
+# JSON-LD @type inventory for before/after comparisons:
+SEO_BASE_URL=https://spaceezy.com node scripts/seo-schema-report.mjs
 powershell -ExecutionPolicy Bypass -File e2e\verify-seo.ps1
 ```
 
 `npm run seo:crawl` checks sitemap↔canonical agreement, unique
 titles/descriptions, one H1, crawlable internal links (no `http://`, no
 redirect chains > 1 hop), ≥3 inbound links per project, JSON-LD validity and
-noindex exclusions. `E2E_SITE_ORIGIN` overrides the expected canonical domain
-in the PowerShell E2E script; `E2E_WEB_BASE` / `E2E_API_BASE` override the
-server addresses.
+noindex exclusions. `npm run seo:redirects` is the build/release gate: it
+expands every alias pattern against the places that actually exist and fails
+if a source is not a single permanent hop or its destination is not a 200,
+canonical, indexable sitemap URL. `E2E_SITE_ORIGIN` overrides the expected
+canonical domain in the PowerShell E2E script; `E2E_WEB_BASE` / `E2E_API_BASE`
+override the server addresses.
+
+`/media/*` is allow-listed against images referenced by published projects
+and units (`backend/src/utils/publicMedia.js`, 60 s cache). CRM-only drafts,
+archived-listing photos and orphan uploads answer 404 even if the object
+exists in the private bucket. `backend/tests/media-published-only.test.js`
+covers that guarantee.
+
+Utility pages (`/search`, `/enquiry`) are noindex, absent from the sitemap,
+removed from sitewide nav/footer, and all remaining links to them carry
+`rel="nofollow"`; conversion paths stay usable without passing link equity.
+
 
 ## 8. Adding content
 

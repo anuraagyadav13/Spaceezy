@@ -62,7 +62,7 @@ export default function ContactPage() {
                         <p className="text-gray-300 mb-10 max-w-xl mx-auto text-lg">
                             Fill out our detailed enquiry form and our experts will match you with the perfect home.
                         </p>
-                        <Link href="/enquiry" className="inline-block bg-white text-gray-900 px-10 py-4 rounded-full font-bold text-lg hover:bg-purple-50 transition-colors shadow-xl">
+                        <Link href="/enquiry" rel="nofollow" className="inline-block bg-white text-gray-900 px-10 py-4 rounded-full font-bold text-lg hover:bg-purple-50 transition-colors shadow-xl">
                             Go to Enquiry Form
                         </Link>
                     </div>

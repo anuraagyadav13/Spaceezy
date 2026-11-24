@@ -40,7 +40,9 @@ function projectPublishIssues(project, { configurationCount = 0 } = {}) {
         issues.push('A starting price (or maximum price) is required.');
     }
 
-    if (!text(project.possessionDate)) issues.push('Possession date is required.');
+    if (!text(project.possessionDate) && !text(project.expectedCompletionDate) && !text(project.expectedPossessionDate)) {
+        issues.push('Possession date (or expected completion date) is required.');
+    }
 
     if (project.reraRegistered && !text(project.reraNumber)) {
         issues.push('RERA is marked as registered but the RERA number is missing.');

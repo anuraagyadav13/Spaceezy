@@ -34,27 +34,83 @@ migrations changed.** A PR should be opened for review before merge/deploy.
   one permanent redirect.
 - Backend: shared publish warnings, a hard block for unit prices below the
   project minimum, controlled configuration labels with a dry-run normaliser,
-  and extra fields in public DTOs (no Prisma migration needed).
-- Tooling/tests: 25 SEO unit tests plus crawl, audit and IndexNow scripts;
-  CRM publish-check tests; CI-friendly E2E script updates.
+  extra fields in public DTOs, and a `/media` allow-list that only streams
+  images attached to published listings (no Prisma migration needed).
+- Utility pages (`/search`, `/enquiry`) are noindex, out of the sitemap and
+  sitewide nav, with `rel="nofollow"` on remaining conversion links.
+- Tooling/tests: 26 SEO unit tests plus crawl, audit, redirect-gate and
+  IndexNow scripts; CRM publish-check and media allow-list tests; CI-friendly
+  E2E script updates.
 
 ## Verification (local)
 
 | Check | Result |
 | --- | --- |
-| `npx vitest run` | 5 files, 80 tests passed (25 SEO system tests) |
-| backend `npm test -- --runInBand` | 49 suites, 978 tests passed |
+| `npx vitest run` | 5 files, 81 tests passed (26 SEO system tests) |
+| backend `npm test -- --runInBand` | 50 suites, 983 tests passed |
 | `npm run lint` | 0 errors (49 pre-existing warnings) |
 | `npm run build` | succeeded, `/[hubSlug]` present |
-| `npm run seo:crawl` against built site | 21 sitemap URLs, 21 pages crawled, 12 link targets, 0 errors/warnings |
+| `npm run seo:crawl` against built site | 21 sitemap URLs, 21 pages crawled, 11 link targets, 0 errors/warnings |
+| `npm run seo:redirects` | 4 alias expansions pass; injected bad destination fails the gate (exit 1) |
 | `npm run seo:audit` | 1 published project currently noindex (see below) |
-| `e2e\verify-seo.ps1` against built site | 195 passed, 0 failed |
-| Redirect spot-check | retired aliases and trailing slash → 308 to canonical hub |
+| `e2e\verify-seo.ps1` against built site | 213 passed, 0 failed (incl. static-route precedence, unknown-slug 404, utility noindex/no-follow) |
 | `npm run seo:indexnow` with no key | safe no-op |
 
 Crawl was run against `http://localhost:3000` after a fresh build; the crawler
 maps canonical sitemap origins to the test server so it never silently crawls
 production.
+
+## Production-data impact (read-only)
+
+The SSH path to the server is still blocked, so instead of a DB dump the audit
+used the **production public API and sitemap over GET only**
+(`npx vite-node scripts/seo-production-audit.mjs`, `SEO_AUDIT_API=https://spaceezy.com/api/v1`).
+No data was changed.
+
+Source: 3 published projects, 1 published unit, 19 currently indexed URLs.
+With the current default gate (after adding `expectedCompletionDate` as a valid
+possession signal):
+
+| Verdict | Count | URLs / reason |
+| --- | --- | --- |
+| KEEP | 15 | static pages + 9 hubs + 1 unit + Eligo project |
+| REDIRECT (intended) | 2 | `/flats-for-sale-in-wave-city`, `/property-for-sale-in-wave-city` |
+| NOINDEX | 2 | `dream-homes-e84e51` (possession, 1 image), `grand-carnesia-e215b6` (0 configurations, 1 image, 0-char description) |
+
+Every currently indexed **hub** stays indexable: item counts are 1–4 and data
+blocks 2–4, above the defaults of 1 item / 2 blocks. All empty hubs have
+0 items / 0 blocks and are excluded.
+
+### Threshold proposal
+
+| Setting | Default | Proposed | Numbers behind it |
+| --- | --- | --- | --- |
+| `SEO_HUB_MIN_ITEMS` | 1 | **1 (keep)** | smallest live hub has 1 item; empty hubs have 0 |
+| `SEO_HUB_MIN_BLOCKS` | 2 | **2 (keep)** | smallest live hub has 2 blocks; empty hubs have 0 |
+| `SEO_MIN_DESCRIPTION_CHARS` | 300 | **300 (keep)** | Dream Homes 1623, Eligo 1138 pass; Grand Carnesia 0 fails |
+| `SEO_MIN_GALLERY_IMAGES` | 3 | **1** | Eligo 3, Dream Homes 1, Grand Carnesia 1 — 3 would hide a ranking page with a 1623-char description and 47 amenities |
+| `SEO_MIN_AMENITIES` | 1 | **1 (keep)** | all three projects have 25–55 amenities |
+| `SEO_REQUIRE_RERA` | true | **true (keep)** | all three projects have a RERA number |
+| `SEO_REQUIRE_POSSESSION` | true | **false** | only Eligo has a date; Dream Homes has none but strong content; Grand Carnesia still fails on description/configurations |
+| code change (already in branch) | `possessionDate` only | accept `expectedCompletionDate` too | Eligo has `expectedCompletionDate` populated and `possessionDate: null` |
+
+Result with the proposal: **16 KEEP, 2 intended REDIRECT, 1 NOINDEX**
+(Grand Carnesia only). Thin/empty pages remain excluded because the
+description, configuration, RERA and amenity gates are unchanged.
+
+### Structured-data validator (before → after)
+
+`node scripts/seo-schema-report.mjs` against each origin; `@type` inventory:
+
+| Page type | Before (production) | After (branch) |
+| --- | --- | --- |
+| Home | RealEstateAgent, Organization, WebSite | unchanged |
+| Projects list | BreadcrumbList, Organization, WebSite | + ItemList |
+| Properties list | Organization, WebSite | + BreadcrumbList, ItemList |
+| Hub | BreadcrumbList, WebPage, ItemList, FAQPage, Organization, WebSite | FAQPage removed (no visible FAQ on hubs) |
+| Project detail | BreadcrumbList, FAQPage, Organization, WebSite | + ApartmentComplex (project facts in schema) |
+| Property detail | BreadcrumbList, Residence, Organization, WebSite | Residence → RealEstateListing |
+| Search / Enquiry | Organization, WebSite | unchanged (no fabricated schema) |
 
 ## Migration / redirect plan (for merge + deploy)
 
@@ -62,9 +118,10 @@ production.
    backend image first (new DTO fields and publish validation), then the Next
    image. Both containers should use the same `SEO_*` env values.
 2. Set `NEXT_PUBLIC_SITE_URL=https://spaceezy.com` in `.env.production` (plus
-   business NAP overrides if needed). Keep the default gate initially; if the
-   back-catalogue is incomplete, stage it with `SEO_REQUIRE_RERA=false` and
-   `SEO_REQUIRE_POSSESSION=false`, then tighten after `npm run seo:audit`.
+   business NAP overrides if needed). Use the proposed rollout values from the
+   production-data section (`SEO_MIN_GALLERY_IMAGES=1`,
+   `SEO_REQUIRE_POSSESSION=false`; all other gates at their defaults), then
+   tighten once content is completed. `npm run seo:audit` lists what is left.
 3. Existing URLs stay live. Retired shapes already redirect in one hop:
    - `/flats-for-sale-in-{place}` → `/flats-in-{place}`
    - `/property-for-sale-in-{place}` → `/properties-in-{place}`

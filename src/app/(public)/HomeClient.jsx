@@ -93,7 +93,7 @@ export default function HomeClient({ projects, properties, locations, hubs, area
                         <Link href="/projects" className="w-full sm:w-auto bg-white text-gray-900 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-100 hover:scale-105 transition-all flex items-center justify-center gap-2">
                             Explore Projects <ArrowRight size={20} />
                         </Link>
-                        <Link href="/search" className="w-full sm:w-auto bg-black/30 backdrop-blur-md text-white border border-white/30 px-8 py-4 rounded-full font-medium text-lg hover:bg-black/50 transition-all flex items-center justify-center gap-2">
+                        <Link href="/properties" className="w-full sm:w-auto bg-black/30 backdrop-blur-md text-white border border-white/30 px-8 py-4 rounded-full font-medium text-lg hover:bg-black/50 transition-all flex items-center justify-center gap-2">
                             Search Properties <Search size={20} />
                         </Link>
                     </motion.div>
@@ -366,7 +366,7 @@ export default function HomeClient({ projects, properties, locations, hubs, area
                     <p className="text-xl text-gray-300 mb-10 max-w-2xl mx-auto font-light">
                         Leave your details and our property experts will get in touch with you shortly to understand your requirements.
                     </p>
-                    <Link href="/enquiry" className="inline-block bg-white text-gray-900 px-10 py-4 rounded-full font-bold text-lg hover:bg-purple-50 hover:scale-105 transition-all shadow-xl">
+                    <Link href="/enquiry" rel="nofollow" className="inline-block bg-white text-gray-900 px-10 py-4 rounded-full font-bold text-lg hover:bg-purple-50 hover:scale-105 transition-all shadow-xl">
                         Enquire Now
                     </Link>
                 </motion.div>

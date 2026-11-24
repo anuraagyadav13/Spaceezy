@@ -457,6 +457,76 @@ describe("structured data", () => {
 // Content-quality gate
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Full fixture: a never-before-seen location/project/configuration, plus an
+// empty category. No code, template or config change is involved.
+// ---------------------------------------------------------------------------
+
+describe("full synthetic fixture", () => {
+    it("propagates a new project everywhere and suppresses an empty category", () => {
+        const registry = buildHubRegistry(INVENTORY);
+        const entries = buildSitemapEntries({ inventory: INVENTORY, registry });
+        const urls = entries.map((entry) => entry.url);
+
+        // 1. New location + new BHK produce indexable hubs.
+        const hub = registry.get("properties-in-testville-enclave");
+        expect(hub).toBeTruthy();
+        expect(hub.indexable).toBe(true);
+        expect(hub.path).toBe("/properties-in-testville-enclave");
+        expect(registry.has("5-bhk-flats-in-testville-enclave")).toBe(true);
+
+        // 2. Project page metadata: canonical + HTTPS + title/description.
+        const meta = projectMetadata(NEW_PROJECT);
+        expect(meta.alternates.canonical).toBe(canonicalUrl(`/projects/${NEW_PROJECT.slug}`));
+        expect(meta.alternates.canonical.startsWith("https://")).toBe(true);
+        expect(meta.robots.index).toBe(true);
+        expect(hubMetadata(hub).alternates.canonical).toBe(canonicalUrl(hub.path));
+
+        // 3. Schema uses exactly the same facts as the page.
+        const facts = projectFacts(NEW_PROJECT);
+        const schema = projectSchema({
+            facts,
+            images: NEW_PROJECT.images,
+            url: `/projects/${NEW_PROJECT.slug}`,
+            description: NEW_PROJECT.description,
+            amenities: NEW_PROJECT.amenities,
+        });
+        expect(schema.offers.lowPrice).toBe(facts.priceMin);
+        expect(schema.offers.highPrice).toBe(facts.priceMax);
+        expect(meta.description).toContain(compactPrice(facts.priceMin));
+        expect(hub.blocks.join(" ")).toContain(compactPrice(facts.priceMin));
+
+        // 4. Sitemap row with the record's own timestamp.
+        expect(urls).toContain(canonicalUrl(`/projects/${NEW_PROJECT.slug}`));
+        expect(urls).toContain(canonicalUrl(`/properties/${NEW_UNIT.token}`));
+        expect(urls).toContain(canonicalUrl(hub.path));
+        expect(entries.find((e) => e.url === canonicalUrl(`/projects/${NEW_PROJECT.slug}`)).lastModified)
+            .toBe(new Date(NEW_PROJECT.updatedAt).toISOString());
+
+        // 5. At least three distinct crawlable links point at the project.
+        const containing = indexableHubs(registry).filter((h) =>
+            [...h.projects, ...h.properties].some((item) => item.slug === NEW_PROJECT.slug || item.token === NEW_UNIT.token)
+        );
+        const inbound = new Set([
+            "/projects",
+            "/properties",
+            ...containing.map((h) => h.path),
+            ...(registry.get("properties-in-testville-enclave")?.related || []).map((l) => l.href),
+        ]);
+        expect(inbound.size).toBeGreaterThanOrEqual(3);
+
+        // 6. Empty category: noindex, hidden from nav, absent from sitemap.
+        const emptyHub = registry.get("plots-in-testville-enclave");
+        expect(emptyHub).toBeTruthy();
+        expect(emptyHub.counts.total).toBe(0);
+        expect(emptyHub.indexable).toBe(false);
+        expect(hubMetadata(emptyHub).robots.index).toBe(false);
+        const nav = navHubs(registry);
+        expect([...nav.locations, ...nav.categories].map((i) => i.href)).not.toContain(emptyHub.path);
+        expect(urls).not.toContain(canonicalUrl(emptyHub.path));
+    });
+});
+
 describe("quality gate", () => {
     it("requires location, configuration, price, possession, RERA, images, amenities and description", () => {
         expect(projectQuality(NEW_PROJECT).ok).toBe(true);

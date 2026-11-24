@@ -348,10 +348,10 @@ export default async function ProjectDetailPage({ params }) {
                             </div>
                         </div>
 
-                        <Link href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}`} className="w-full flex justify-center items-center py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors mb-3">
+                        <Link rel="nofollow" href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}`} className="w-full flex justify-center items-center py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors mb-3">
                             Enquire Now
                         </Link>
-                        <Link href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}&type=visit`} className="w-full flex justify-center items-center py-4 bg-purple-50 text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-colors border border-purple-100">
+                        <Link rel="nofollow" href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}&type=visit`} className="w-full flex justify-center items-center py-4 bg-purple-50 text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-colors border border-purple-100">
                             Schedule a Site Visit
                         </Link>
                         <p className="text-xs text-gray-400 text-center mt-4 flex items-center justify-center gap-1">

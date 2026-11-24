@@ -139,7 +139,6 @@ Assert ((Get-Meta $homePg.html "twitter:card")) "home twitter card present"
 $clusterLinks = @{
     "/projects"   = "Projects"
     "/properties" = "Properties"
-    "/search"     = "Search"
 }
 foreach ($k in $clusterLinks.Keys) {
     Assert ($homePg.html -match ('href="' + [regex]::Escape($k) + '"')) "home links to $k"
@@ -306,7 +305,7 @@ foreach ($m in [regex]::Matches($homePg.html, '<a[^>]+href="(/[^"#?]*)"')) { $na
 $navHrefs = $navHrefs | Sort-Object -Unique
 # Static navigation is always present; hub links come from the data-driven
 # registry and are only rendered when the hub is indexable.
-$requiredNav = @("/properties", "/projects", "/search", "/about", "/contact")
+$requiredNav = @("/properties", "/projects", "/about", "/contact")
 foreach ($n in $requiredNav) { Assert ($navHrefs -contains $n) "nav/footer exposes $n" }
 $footerBits = @("About Spaceezy", "Contact Spaceezy")
 foreach ($b in $footerBits) { Assert ($homePg.html -match [regex]::Escape($b)) "footer shows '$b'" }
@@ -379,6 +378,38 @@ Assert ((Get-Title $about.html) -like "*Spaceezy*") "about title carries Spaceez
 $contact = Get-Page "$WEB/contact"
 Assert ($contact.html -match 'mailto:[^"]+@') "contact shows an email link"
 Assert ($contact.html -match 'tel:\+?[0-9]+') "contact shows a phone link"
+
+# ---------- 10. Routing precedence, 404s and utility pages ----------
+Write-Host "[10] Routing + utility pages" -ForegroundColor Cyan
+$staticExpectations = @{
+    "/projects" = "Real Estate Projects | Spaceezy"
+    "/properties" = "Properties for Sale & Rent | Spaceezy"
+    "/about" = "About Spaceezy"
+}
+foreach ($p in $staticExpectations.Keys) {
+    $pg = Get-Page "$WEB$p"
+    Assert ($pg.status -eq 200) "static $p returns 200" "got $($pg.status)"
+    Assert ((Get-Title $pg.html) -eq $staticExpectations[$p]) "static $p wins over /[hubSlug]" "got $(Get-Title $pg.html)"
+}
+$unknown = Get-Page "$WEB/this-route-does-not-exist-12345"
+Assert ($unknown.status -eq 404) "unknown hub slug returns 404" "got $($unknown.status)"
+
+foreach ($u in @("/search", "/enquiry", "/login", "/dashboard")) {
+    $pg = Get-Page "$WEB$u"
+    $rm = Get-Meta $pg.html "robots"
+    Assert ($rm -and $rm -match 'noindex') "$u is noindex" "got $rm"
+    Assert (-not $locSet.ContainsKey((Norm-Url "$ORIGIN$u"))) "$u absent from sitemap"
+}
+$utilityPages = @($homePg.html)
+if ($landingSlugs.Count) { $utilityPages += (Get-Page "$WEB/$($landingSlugs[0])").html }
+if ($sitemapProjectSlugs.Count) { $utilityPages += (Get-Page "$WEB/projects/$($sitemapProjectSlugs[0])").html }
+foreach ($html in $utilityPages) {
+    foreach ($u in @("/search", "/enquiry", "/login")) {
+        $anchors = [regex]::Matches($html, '<a[^>]+href="' + [regex]::Escape($u) + '[^"]*"[^>]*>')
+        $followed = @($anchors | Where-Object { $_.Value -notmatch 'rel="[^"]*nofollow' })
+        Assert ($followed.Count -eq 0) "utility $u has no crawlable follow link" "found $($followed.Count)"
+    }
+}
 
 # ---------- Summary ----------
 Write-Host ""

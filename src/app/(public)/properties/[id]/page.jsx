@@ -260,12 +260,14 @@ export default async function PropertyDetailPage({ params }) {
 
                                 <div className="flex flex-col gap-3">
                                     <Link
+                                        rel="nofollow"
                                         href={`/enquiry?propertyToken=${encodeURIComponent(property.token)}${property.enquiry?.projectSlug ? `&projectSlug=${encodeURIComponent(property.enquiry.projectSlug)}` : ""}`}
                                         className="w-full text-center bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-gray-800 transition-colors"
                                     >
                                         Enquire Now
                                     </Link>
                                     <Link
+                                        rel="nofollow"
                                         href={`/enquiry?propertyToken=${encodeURIComponent(property.token)}${property.enquiry?.projectSlug ? `&projectSlug=${encodeURIComponent(property.enquiry.projectSlug)}` : ""}&type=visit`}
                                         className="w-full text-center bg-purple-50 text-purple-700 py-4 rounded-xl font-bold hover:bg-purple-100 transition-colors border border-purple-100"
                                     >

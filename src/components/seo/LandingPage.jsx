@@ -144,6 +144,7 @@ export function LandingPage({ hub }) {
                             </a>
                             <Link
                                 href="/enquiry"
+                                rel="nofollow"
                                 className="inline-flex items-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-purple-700 transition-colors"
                             >
                                 <CalendarCheck size={17} /> Tell us your requirement
@@ -156,8 +157,8 @@ export function LandingPage({ hub }) {
                             <Link href="/properties" className="text-purple-700 font-medium hover:underline">
                                 Browse all properties
                             </Link>
-                            <Link href="/search" className="text-purple-700 font-medium hover:underline">
-                                Search everything
+                            <Link href="/properties" className="text-purple-700 font-medium hover:underline">
+                                Browse everything
                             </Link>
                         </div>
                     </section>

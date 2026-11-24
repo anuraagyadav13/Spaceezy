@@ -42,6 +42,8 @@ const present = (value) => value !== undefined && value !== null && String(value
 /** `undefined` = the payload does not carry the field; `null` = known missing. */
 const known = (record, key) => Object.prototype.hasOwnProperty.call(record, key);
 
+const hasAnyKey = (record, keys) => keys.some((key) => known(record, key));
+
 function placeName(location) {
     if (!location) return "";
     return toText(location.region || location.locality || location.district || location.city);
@@ -64,7 +66,14 @@ export function projectQuality(project) {
 
     if (!toNumber(record.startingPrice) && !toNumber(record.maximumPrice)) missing.push("price range");
 
-    if (QUALITY_RULES.requirePossession && known(record, "possessionDate") && !present(record.possessionDate)) {
+    // `expectedCompletionDate` is the field production actually populates for
+    // several live projects; treating it as the possession signal keeps those
+    // genuinely complete pages indexable without relaxing the gate.
+    const hasPossession =
+        present(record.possessionDate) ||
+        present(record.expectedCompletionDate) ||
+        present(record.expectedPossessionDate);
+    if (QUALITY_RULES.requirePossession && hasAnyKey(record, ["possessionDate", "expectedCompletionDate", "expectedPossessionDate"]) && !hasPossession) {
         missing.push("possession date");
     }
 
