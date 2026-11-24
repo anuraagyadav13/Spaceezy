@@ -12,6 +12,15 @@
 
 The website describes the following services: zero brokerage on partner and new developer projects, dedicated relationship managers for site visits, legal and documentation assistance, and post-sales support. It also states that listings are verified and that project pages include RERA registration details where available.
 
+## Real Estate CRM
+
+Spaceezy CRM is the customer relationship management system behind Spaceezy's real estate operations. Verified capabilities include website enquiry capture, lead stages and assignments, follow-up tasks, duplicate detection by phone number, property matching, project/configuration/unit inventory, site-visit scheduling, bookings and quotations, customer and call records, a WhatsApp shared inbox with document attachments, Meta Ads campaign and lead sync, role-based permissions, audit logs and reporting from live data. It is used by sales executives, managers, administrators and channel partners in the Spaceezy workflow. No CRM pricing or conversion results are published.
+
+- [Real Estate CRM overview](https://spaceezy.com/real-estate-crm): What a real estate CRM is and how Spaceezy CRM supports lead, visit and inventory workflows.
+- [Lead management](https://spaceezy.com/real-estate-crm/lead-management): Enquiry capture, pipeline stages, assignments, follow-ups, duplicates and property matching.
+- [Site visit management](https://spaceezy.com/real-estate-crm/site-visits): Scheduling, ownership and visit status tracking, including missed visits.
+- [Inventory management](https://spaceezy.com/real-estate-crm/inventory): Projects, configurations, units, pricing and availability records.
+
 ## Projects & Properties
 
 - [All projects](https://spaceezy.com/projects): Published real estate projects with pricing, configurations and unit availability.

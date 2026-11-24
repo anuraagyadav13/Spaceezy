@@ -253,6 +253,21 @@ export function unitSchema({ facts, images = [], url, description }) {
     };
 }
 
+/** A public-facing service description. No rich-result claims are made. */
+export function serviceSchema({ name, description, url, serviceType }) {
+    if (!name || !url) return null;
+    return {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "@id": `${canonicalUrl(url)}#service`,
+        name: toText(name),
+        ...(description ? { description: toText(description) } : {}),
+        ...(serviceType ? { serviceType: toText(serviceType) } : {}),
+        url: canonicalUrl(url),
+        provider: { "@id": `${SITE_URL}/#organization` },
+    };
+}
+
 /** @param {{q: string, a: string}[]} faq */
 export function faqSchema(faq) {
     const items = (faq || []).filter((entry) => entry && entry.q && entry.a);

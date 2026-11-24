@@ -23,6 +23,10 @@ export const STATIC_SITEMAP_PATHS = Object.freeze([
     "/properties",
     "/about",
     "/contact",
+    "/real-estate-crm",
+    "/real-estate-crm/lead-management",
+    "/real-estate-crm/site-visits",
+    "/real-estate-crm/inventory",
     "/privacy-policy",
     "/terms",
 ]);

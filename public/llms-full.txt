@@ -25,6 +25,28 @@ Leadership listed publicly:
 
 The site publishes two types of inventory pages: projects (developments) and properties (individual units). Location collections group the published inventory by place and property type. All pages use canonical `https://spaceezy.com` URLs.
 
+## Real Estate CRM
+
+Spaceezy CRM is the customer relationship management system used in Spaceezy's real estate operations. The following capabilities are implemented in the application:
+
+- Website enquiry form creates or updates a lead with project, unit, configuration, location and preferred visit context.
+- Lead pipeline stages, bulk assignment, claimable leads for executives, follow-up tasks, activity timelines and duplicate detection by phone number.
+- Matching enquiries to properties using budget, configuration and preferred locations, with interest records kept on the lead.
+- Project and configuration records, individually tracked units with area, price, status and versioning, plus bulk availability counters.
+- Site visits scheduled against leads, projects or units, with scheduled, completed, cancelled and no-show states, a calendar and a missed-visits view.
+- Bookings that update reservation status and track payment status; quotations with validity dates and an itemised PDF. No payment gateway is integrated.
+- Customer records, call logging with outcomes, and a shared WhatsApp inbox tied to leads. Brochure and quotation PDFs can be attached to WhatsApp messages when the integration is configured.
+- Meta Ads connection for campaigns, ad sets, creatives, audiences, Instant Form field mapping and lead sync; live behaviour depends on configured credentials.
+- Five roles with server-enforced permissions and an audit trail.
+- Reports derived from live lists and a productivity endpoint, with in-browser CSV export and browser-local custom templates.
+
+The CRM is organised around sales executives, sales managers, administrators and channel partners. The application does not publish CRM prices, guarantee conversion rates, provide a customer self-service portal, calculate commissions, import lead spreadsheets, or integrate a payment gateway.
+
+- [Real Estate CRM overview](https://spaceezy.com/real-estate-crm): Answers what a real estate CRM is, which capabilities matter and how Spaceezy teams use them.
+- [Lead management](https://spaceezy.com/real-estate-crm/lead-management): Enquiry capture, stages, assignments, follow-ups, duplicates and matching.
+- [Site visit management](https://spaceezy.com/real-estate-crm/site-visits): Scheduling, statuses and missed-visit follow-up.
+- [Inventory management](https://spaceezy.com/real-estate-crm/inventory): Projects, configurations, units and availability records used in sales workflows.
+
 ## Homepage
 
 - [Spaceezy](https://spaceezy.com/): The main entry point. It highlights featured projects and properties, location collections, the Spaceezy advantage and contact routes. The served area stated on the homepage is Ghaziabad.

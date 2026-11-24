@@ -37,6 +37,34 @@ export const STATIC_PAGE_SEO = Object.freeze({
         indexable: false,
         breadcrumb: "Enquire",
     },
+    "/real-estate-crm": {
+        title: "Real Estate CRM | Spaceezy",
+        description:
+            "Learn how the Spaceezy CRM captures enquiries, manages leads and site visits, tracks property inventory and supports real estate sales teams.",
+        indexable: true,
+        breadcrumb: "Real Estate CRM",
+    },
+    "/real-estate-crm/lead-management": {
+        title: "Real Estate Lead Management | Spaceezy",
+        description:
+            "How Spaceezy CRM records property enquiries, assigns leads, tracks pipeline stages, schedules follow-ups and merges duplicate leads by phone.",
+        indexable: true,
+        breadcrumb: "Lead Management",
+    },
+    "/real-estate-crm/site-visits": {
+        title: "Real Estate Site Visit Management | Spaceezy",
+        description:
+            "How Spaceezy CRM schedules visits against leads and properties, assigns team members and tracks scheduled, completed and no-show statuses.",
+        indexable: true,
+        breadcrumb: "Site Visits",
+    },
+    "/real-estate-crm/inventory": {
+        title: "Property Inventory Management | Spaceezy",
+        description:
+            "How Spaceezy CRM maintains projects, configurations and units with prices, availability and bulk counters, and links them to sales activity.",
+        indexable: true,
+        breadcrumb: "Inventory",
+    },
     "/about": {
         title: "About Spaceezy",
         description:
