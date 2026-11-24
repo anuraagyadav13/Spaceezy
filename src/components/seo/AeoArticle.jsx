@@ -4,7 +4,7 @@ import { faqSchema, serviceSchema } from "../../lib/seo/schema";
 
 /**
  * Shared layout for original, evidence-based AEO articles. All copy is passed
- * in from `src/lib/aeo/crmContent.js`; the FAQ schema is generated from the
+ * in from `src/lib/aeo/realEstateContent.js`; the FAQ schema is generated from the
  * exact questions and answers rendered on the page.
  */
 export function AeoArticle({
@@ -13,6 +13,7 @@ export function AeoArticle({
     intro,
     serviceName,
     serviceDescription,
+    serviceType = "Real estate services",
     path,
     blocks = [],
     faqs = [],
@@ -134,7 +135,7 @@ export function AeoArticle({
                     name: serviceName,
                     description: serviceDescription,
                     url: path,
-                    serviceType: "Real estate CRM",
+                    serviceType: serviceType,
                 })}
             />
             <JsonLd data={faqSchema(faqs)} />

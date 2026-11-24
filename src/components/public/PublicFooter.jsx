@@ -41,7 +41,7 @@ export function PublicFooter({ nav }) {
                         <h4 className="text-white font-bold mb-6">Company</h4>
                         <ul className="flex flex-col gap-3 text-sm">
                             <li><Link href="/about" className="hover:text-purple-400 transition-colors">About Spaceezy</Link></li>
-                            <li><Link href="/real-estate-crm" className="hover:text-purple-400 transition-colors">Real Estate CRM</Link></li>
+                            <li><Link href="/property-buying-assistance" className="hover:text-purple-400 transition-colors">Property Buying Assistance</Link></li>
                             <li><Link href="/contact" className="hover:text-purple-400 transition-colors">Contact Spaceezy</Link></li>
                             <li><Link href="/privacy-policy" className="hover:text-purple-400 transition-colors">Privacy Policy</Link></li>
                             <li><Link href="/terms" className="hover:text-purple-400 transition-colors">Terms of Service</Link></li>

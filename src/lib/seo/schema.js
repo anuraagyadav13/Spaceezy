@@ -26,14 +26,19 @@ export function organizationSchema() {
         "@context": "https://schema.org",
         "@type": "Organization",
         "@id": `${SITE_URL}/#organization`,
-        name: BUSINESS.legalName,
-        alternateName: BUSINESS.name,
+        name: BUSINESS.name,
+        legalName: BUSINESS.legalName,
+        alternateName: BUSINESS.legalName,
         url: `${SITE_URL}/`,
         logo: absoluteUrl(BUSINESS.logo),
         image: absoluteUrl(BUSINESS.logo),
         email: EMAIL,
         telephone: PHONE_TEL,
         address: POSTAL_ADDRESS,
+        areaServed: [
+            { "@type": "City", name: BUSINESS.areaServed.city },
+            { "@type": "State", name: BUSINESS.areaServed.region },
+        ],
         contactPoint: {
             "@type": "ContactPoint",
             telephone: PHONE_TEL,
@@ -265,6 +270,10 @@ export function serviceSchema({ name, description, url, serviceType }) {
         ...(serviceType ? { serviceType: toText(serviceType) } : {}),
         url: canonicalUrl(url),
         provider: { "@id": `${SITE_URL}/#organization` },
+        areaServed: [
+            { "@type": "City", name: BUSINESS.areaServed.city },
+            { "@type": "State", name: BUSINESS.areaServed.region },
+        ],
     };
 }
 

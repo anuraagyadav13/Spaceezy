@@ -47,7 +47,11 @@ import { canonicalPath, canonicalUrl, SITE_URL } from "./site";
 import { truncateAtWord, compactPrice } from "./text";
 import { projectQuality } from "./quality";
 import { retiredProjectPath } from "./retired";
-import { CRM_OVERVIEW, CRM_EXPLAINERS } from "../aeo/crmContent";
+import {
+    BUYING_ASSISTANCE,
+    PROPERTY_ENQUIRIES,
+    SITE_VISITS,
+} from "../aeo/realEstateContent";
 import { visibleInventory } from "./inventory";
 import { parsePreferences, unmatchedPreferences } from "../../../scripts/seo-preferences.mjs";
 
@@ -488,27 +492,28 @@ describe("structured data", () => {
         expect(compactPrice(facts.priceMin)).toBeTruthy();
     });
 
-    it("emits Service and FAQ schema for verified AEO content", () => {
+    it("emits Service and FAQ schema for verified real-estate AEO content", () => {
         const service = serviceSchema({
-            name: "Spaceezy Real Estate CRM",
-            description: "CRM for real estate sales teams",
-            url: "/real-estate-crm",
-            serviceType: "Real estate CRM",
+            name: "Spaceezy Property Buying Assistance",
+            description: BUYING_ASSISTANCE.intro,
+            url: "/property-buying-assistance",
+            serviceType: "Real estate buyer services",
         });
         expect(service["@type"]).toBe("Service");
-        expect(service.url).toBe(canonicalUrl("/real-estate-crm"));
+        expect(service.url).toBe(canonicalUrl("/property-buying-assistance"));
         expect(service.provider["@id"]).toBe(`${SITE_URL}/#organization`);
+        expect(service.areaServed[0].name).toBeTruthy();
 
-        const faq = faqSchema(CRM_OVERVIEW.faqs);
-        expect(faq["@type"]).toBe("FAQPage");
-        expect(faq.mainEntity).toHaveLength(CRM_OVERVIEW.faqs.length);
-        for (const entry of faq.mainEntity) {
-            expect(entry.name.length).toBeGreaterThan(5);
-            expect(entry.acceptedAnswer.text.length).toBeGreaterThan(20);
-        }
-        for (const explainer of Object.values(CRM_EXPLAINERS)) {
-            expect(explainer.sections.length).toBeGreaterThan(0);
-            expect(explainer.faqs.length).toBeGreaterThan(0);
+        for (const page of [BUYING_ASSISTANCE, PROPERTY_ENQUIRIES, SITE_VISITS]) {
+            expect(page.blocks.length).toBeGreaterThan(0);
+            expect(page.faqs.length).toBeGreaterThan(0);
+            const faq = faqSchema(page.faqs);
+            expect(faq["@type"]).toBe("FAQPage");
+            expect(faq.mainEntity).toHaveLength(page.faqs.length);
+            for (const entry of faq.mainEntity) {
+                expect(entry.name.length).toBeGreaterThan(5);
+                expect(entry.acceptedAnswer.text.length).toBeGreaterThan(20);
+            }
         }
     });
 });

@@ -41,6 +41,24 @@ function retiredProjectRedirects() {
   }
 }
 
+/** Retired content explainers -> their real-estate replacements. */
+function contentRedirects() {
+  try {
+    const raw = readFileSync(join(process.cwd(), "seo-content-redirects.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    const rows: Array<{ source: string; destination: string }> = Array.isArray(parsed.redirects)
+      ? parsed.redirects
+      : [];
+    return rows.map((row) => ({
+      source: row.source,
+      destination: row.destination,
+      permanent: true,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /** Canonical origin for absolute redirect targets (HTTPS enforced). */
 function siteOrigin() {
   const raw = (process.env.NEXT_PUBLIC_SITE_URL || "https://spaceezy.com").trim();
@@ -118,6 +136,7 @@ const nextConfig: NextConfig = {
       },
       ...legacyRedirects(),
       ...retiredProjectRedirects(),
+      ...contentRedirects(),
     ];
   },
 

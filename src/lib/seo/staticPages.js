@@ -37,33 +37,26 @@ export const STATIC_PAGE_SEO = Object.freeze({
         indexable: false,
         breadcrumb: "Enquire",
     },
-    "/real-estate-crm": {
-        title: "Real Estate CRM | Spaceezy",
+    "/property-buying-assistance": {
+        title: "Property Buying Assistance | Spaceezy",
         description:
-            "Learn how the Spaceezy CRM captures enquiries, manages leads and site visits, tracks property inventory and supports real estate sales teams.",
+            "How Spaceezy helps buyers discover, shortlist and enquire about residential properties and builder projects in Wave City, Ghaziabad.",
         indexable: true,
-        breadcrumb: "Real Estate CRM",
+        breadcrumb: "Buying Assistance",
     },
-    "/real-estate-crm/lead-management": {
-        title: "Real Estate Lead Management | Spaceezy",
+    "/property-enquiries": {
+        title: "Property Enquiries | Spaceezy",
         description:
-            "How Spaceezy CRM records property enquiries, assigns leads, tracks pipeline stages, schedules follow-ups and merges duplicate leads by phone.",
+            "How to send a property enquiry to Spaceezy, what details help the team respond and how enquiries lead to site visits for published projects.",
         indexable: true,
-        breadcrumb: "Lead Management",
+        breadcrumb: "Property Enquiries",
     },
-    "/real-estate-crm/site-visits": {
-        title: "Real Estate Site Visit Management | Spaceezy",
+    "/site-visits": {
+        title: "Property Site Visits | Spaceezy",
         description:
-            "How Spaceezy CRM schedules visits against leads and properties, assigns team members and tracks scheduled, completed and no-show statuses.",
+            "How to request a site visit for a Spaceezy project or property, where visits take place and what buyers should prepare before visiting.",
         indexable: true,
         breadcrumb: "Site Visits",
-    },
-    "/real-estate-crm/inventory": {
-        title: "Property Inventory Management | Spaceezy",
-        description:
-            "How Spaceezy CRM maintains projects, configurations and units with prices, availability and bulk counters, and links them to sales activity.",
-        indexable: true,
-        breadcrumb: "Inventory",
     },
     "/about": {
         title: "About Spaceezy",

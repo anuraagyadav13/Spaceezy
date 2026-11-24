@@ -1,0 +1,9 @@
+{
+  "$comment": "Permanent redirects from the retired CRM explainer URLs to their real-estate replacements. These pages were removed from public navigation and the sitemap because the CRM is an internal operational tool, not a publicly marketed product.",
+  "redirects": [
+    { "source": "/real-estate-crm", "destination": "/property-buying-assistance" },
+    { "source": "/real-estate-crm/lead-management", "destination": "/property-enquiries" },
+    { "source": "/real-estate-crm/site-visits", "destination": "/site-visits" },
+    { "source": "/real-estate-crm/inventory", "destination": "/properties" }
+  ]
+}

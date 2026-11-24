@@ -1,42 +1,37 @@
 # Spaceezy
 
-> Spaceezy is a real estate discovery platform that publishes projects and properties with live prices, configurations, availability and direct enquiries. It helps buyers compare homes by location and connect with the Spaceezy team for guidance, site visits and documentation support.
-
-## Overview
-
-- [Spaceezy homepage](https://spaceezy.com/): Published real estate projects and properties in Ghaziabad and surrounding locations, with current prices and availability.
+> Spaceezy is a real-estate firm that helps buyers discover, shortlist and enquire about residential properties and builder projects in Wave City, Ghaziabad, Uttar Pradesh. The website publishes current prices, configurations and availability so visitors can compare options before contacting the team.
 
 ## About Spaceezy
 
-- [About Spaceezy](https://spaceezy.com/about): The company's story, leadership and values. Spaceezy was founded to make finding a home more transparent, with curated options, honest advice and end-to-end support.
+- [About Spaceezy](https://spaceezy.com/about): Company story, leadership and values. Spaceezy was founded to make finding a home more transparent, with curated options, honest advice and end-to-end support.
+- The website states zero brokerage on partner and new developer projects, dedicated relationship managers for site visits, legal and documentation assistance, and post-sales support. Listings are described as verified and project pages show RERA details where available.
+- Gaurav Sharma is listed as Chief Executive Officer and Kamal as Founder.
+- Spaceezy uses an internal CRM to manage enquiries, inventory, follow-ups and site visits; the CRM is an operational tool, not a publicly marketed software product.
 
-The website describes the following services: zero brokerage on partner and new developer projects, dedicated relationship managers for site visits, legal and documentation assistance, and post-sales support. It also states that listings are verified and that project pages include RERA registration details where available.
+## Real Estate Services
 
-## Real Estate CRM
-
-Spaceezy CRM is the customer relationship management system behind Spaceezy's real estate operations. Verified capabilities include website enquiry capture, lead stages and assignments, follow-up tasks, duplicate detection by phone number, property matching, project/configuration/unit inventory, site-visit scheduling, bookings and quotations, customer and call records, a WhatsApp shared inbox with document attachments, Meta Ads campaign and lead sync, role-based permissions, audit logs and reporting from live data. It is used by sales executives, managers, administrators and channel partners in the Spaceezy workflow. No CRM pricing or conversion results are published.
-
-- [Real Estate CRM overview](https://spaceezy.com/real-estate-crm): What a real estate CRM is and how Spaceezy CRM supports lead, visit and inventory workflows.
-- [Lead management](https://spaceezy.com/real-estate-crm/lead-management): Enquiry capture, pipeline stages, assignments, follow-ups, duplicates and property matching.
-- [Site visit management](https://spaceezy.com/real-estate-crm/site-visits): Scheduling, ownership and visit status tracking, including missed visits.
-- [Inventory management](https://spaceezy.com/real-estate-crm/inventory): Projects, configurations, units, pricing and availability records.
+- [Property buying assistance](https://spaceezy.com/property-buying-assistance): How Spaceezy helps buyers discover, shortlist and enquire about published homes and projects.
+- [Property enquiries](https://spaceezy.com/property-enquiries): How to enquire about a project or unit, what details help the team respond and how enquiries lead to next steps.
+- [Site visits](https://spaceezy.com/site-visits): How to request a visit, where properties are located and what buyers should prepare.
+- [Browse published projects](https://spaceezy.com/projects): Builder projects with pricing, configurations, amenities, RERA details and availability.
+- [Browse published properties](https://spaceezy.com/properties): Individual residential units with price, area, configuration and availability status.
 
 ## Projects & Properties
 
-- [All projects](https://spaceezy.com/projects): Published real estate projects with pricing, configurations and unit availability.
-- [Eligo Wave City](https://spaceezy.com/projects/eligo-wave-city-c28c62): A residential project by Wave Group / Wave Infratech in Wave City, Ghaziabad, Uttar Pradesh, with 3 BHK configurations and RERA information.
-- [Dream Homes](https://spaceezy.com/projects/dream-homes-e84e51): A residential project by Wave Group in Wave City, Ghaziabad, Uttar Pradesh, with 1 BHK, 2 BHK and 3 BHK configurations and RERA information.
-- [All properties](https://spaceezy.com/properties): Published flats, plots and commercial units with price, area and availability status.
-- [Eligo Wave City Tower 1 a302](https://spaceezy.com/properties/1c8bb75583bf3d60ee4ef27d02cd13ab): A 3 BHK listing in Eligo Wave City with area, price and availability details.
+- [Eligo Wave City](https://spaceezy.com/projects/eligo-wave-city-c28c62): Residential project by Wave Group / Wave Infratech in Wave City, Ghaziabad, Uttar Pradesh, with 3 BHK configurations and RERA information.
+- [Dream Homes](https://spaceezy.com/projects/dream-homes-e84e51): Residential project by Wave Group in Wave City, Ghaziabad, Uttar Pradesh, with 1 BHK, 2 BHK and 3 BHK configurations and RERA information.
+- [Eligo Wave City Tower 1 a302](https://spaceezy.com/properties/1c8bb75583bf3d60ee4ef27d02cd13ab): Published 3 BHK unit with area, price, amenities and availability details.
+- [Flats in Wave City](https://spaceezy.com/flats-in-wave-city): Residential listings published in Wave City.
+- [1 BHK Flats in Wave City](https://spaceezy.com/1-bhk-flats-in-wave-city): 1 BHK residential listings published in Wave City.
 
-## Location Collections
+## Areas Served
 
-- [Flats in Wave City](https://spaceezy.com/flats-in-wave-city): Flats and residential units published in Wave City.
-- [1 BHK Flats in Wave City](https://spaceezy.com/1-bhk-flats-in-wave-city): 1 BHK residential inventory published in Wave City.
+The website and company details list Wave City, Ghaziabad, Uttar Pradesh as the served area. The published projects and office are located there. Spaceezy does not publish separate location doorway pages.
 
 ## Company Information
 
-Gaurav Sharma is listed as Chief Executive Officer and Kamal as Founder on the About page. The contact address published on the website is Office No. 04, 1st Floor, Wave Galleria, Sector-3, Wave City, Ghaziabad, Uttar Pradesh 201002.
+Contact address published on the website: Office No. 04, 1st Floor, Wave Galleria, Sector-3, Wave City, Ghaziabad, Uttar Pradesh 201002.
 
 ## Contact
 

@@ -74,7 +74,7 @@ export function PublicHeader({ nav }) {
                         </div>
                     </div>
                     <Link href="/projects" className={navLinkClass(isSolid)}>Projects</Link>
-                    <Link href="/real-estate-crm" className={navLinkClass(isSolid)}>CRM</Link>
+                    <Link href="/property-buying-assistance" className={navLinkClass(isSolid)}>Buying Assistance</Link>
                     <div className="group relative">
                         <span className={`${navLinkClass(isSolid)} flex items-center gap-1 cursor-default`}>
                             Locations <ChevronDown size={14} className="transition-transform group-hover:rotate-180" />
@@ -138,7 +138,7 @@ export function PublicHeader({ nav }) {
                             ))}
                         </div>
                         <Link href="/projects" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">Projects</Link>
-                        <Link href="/real-estate-crm" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">CRM</Link>
+                        <Link href="/property-buying-assistance" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-light text-gray-800 hover:text-purple-600 transition-colors">Buying Assistance</Link>
                         <span className="text-3xl font-light text-gray-800">Locations</span>
                         <div className="flex flex-col gap-3 -mt-3 pl-4 border-l-2 border-purple-100 ml-1">
                             {locationLinks.map(({ href, label }) => (

@@ -3,7 +3,7 @@ import { PublicFooter } from "../../components/public/PublicFooter";
 import { WhatsAppButton } from "../../components/public/WhatsAppButton";
 import { FirstThemePrompt } from "../../components/providers/ThemeProvider";
 import { JsonLd } from "../../components/seo/JsonLd";
-import { organizationSchema, webSiteSchema } from "../../lib/seo/schema";
+import { organizationSchema, realEstateAgentSchema, webSiteSchema } from "../../lib/seo/schema";
 import { SITE_DESCRIPTION, SITE_TITLE_FALLBACK, SITE_URL } from "../../lib/seo/site";
 import { getNavHubs } from "../../lib/seo/hubs";
 
@@ -29,6 +29,7 @@ export default async function PublicLayout({ children }) {
             <PublicFooter nav={nav} />
             <WhatsAppButton />
             <JsonLd data={organizationSchema()} />
+            <JsonLd data={realEstateAgentSchema()} />
             <JsonLd data={webSiteSchema()} />
             <FirstThemePrompt />
         </div>

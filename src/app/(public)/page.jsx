@@ -1,6 +1,4 @@
 import HomeContent from "./HomeClient";
-import { JsonLd } from "../../components/seo/JsonLd";
-import { realEstateAgentSchema } from "../../lib/seo/schema";
 import { homeMetadata } from "../../lib/seo/metadata";
 import { getNavHubs } from "../../lib/seo/hubs";
 import { BUSINESS } from "../../config/business";
@@ -47,7 +45,6 @@ export default async function PublicHomePage() {
                 hubs={nav}
                 areaLabel={BUSINESS.areaServed.city}
             />
-            <JsonLd data={realEstateAgentSchema()} />
         </>
     );
 }

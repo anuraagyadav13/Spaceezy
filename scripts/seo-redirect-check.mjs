@@ -46,6 +46,7 @@ async function main() {
 
     const aliases = readJson("seo-aliases.json").legacyAliases || [];
     const retired = readJson("seo-retired-projects.json").redirects || [];
+    const content = readJson("seo-content-redirects.json").redirects || [];
     const places = Array.from(new Set(
         Array.from(sitemapPaths)
             .map((path) => /-in-([a-z0-9-]+)$/.exec(path)?.[1])
@@ -69,6 +70,11 @@ async function main() {
     for (const row of retired) {
         if (row.slug && row.destination) {
             pairs.push({ source: `/projects/${row.slug}`, destination: row.destination, label: row.slug });
+        }
+    }
+    for (const row of content) {
+        if (row.source && row.destination) {
+            pairs.push({ source: row.source, destination: row.destination, label: row.source });
         }
     }
 
