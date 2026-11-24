@@ -47,6 +47,7 @@ import { canonicalPath, canonicalUrl, SITE_URL } from "./site";
 import { truncateAtWord, compactPrice } from "./text";
 import { projectQuality } from "./quality";
 import { retiredProjectPath } from "./retired";
+import { parsePreferences, unmatchedPreferences } from "../../../scripts/seo-preferences.mjs";
 
 // ---------------------------------------------------------------------------
 // Fixtures: a location, a project and a configuration that do not exist today.
@@ -486,6 +487,21 @@ describe("structured data", () => {
     });
 });
 
+describe("hub preferences", () => {
+    it("warns about a row whose items are no longer published", () => {
+        const preferences = parsePreferences({
+            preferences: [
+                { items: [NEW_PROJECT.slug, `u:${NEW_UNIT.token}`], preferred: "/flats-in-testville-enclave" },
+                { items: ["gone-project-slug", "gone-unit-token"], preferred: "/flats-in-old-place" },
+            ],
+        });
+        const stale = unmatchedPreferences(preferences, INVENTORY);
+
+        expect(stale.map((row) => row.preferred)).toEqual(["/flats-in-old-place"]);
+        expect(unmatchedPreferences(preferences.slice(0, 1), INVENTORY)).toEqual([]);
+    });
+});
+
 // ---------------------------------------------------------------------------
 // Content-quality gate
 // ---------------------------------------------------------------------------
@@ -641,5 +657,42 @@ describe("quality gate", () => {
                 "page description",
             ])
         );
+    });
+});
+
+describe("noindex records keep a self-canonical", () => {
+    it("gate failures, sold units and utility pages never canonicalise elsewhere", () => {
+        const badProject = {
+            ...NEW_PROJECT,
+            description: "Too short.",
+            descriptionLength: 10,
+            images: [],
+            imageCount: 0,
+        };
+        const failing = [
+            projectMetadata(badProject),
+            unitMetadata({ ...NEW_UNIT, availability: "Sold" }),
+            staticPageMetadata("/search"),
+            staticPageMetadata("/enquiry"),
+        ];
+        for (const meta of failing) {
+            expect(meta.robots.index).toBe(false);
+            const path = meta.alternates.canonical.replace(SITE_URL, "");
+            expect(meta.alternates.canonical).toBe(canonicalUrl(path));
+        }
+
+        expect(projectMetadata(badProject).alternates.canonical)
+            .toBe(canonicalUrl(`/projects/${NEW_PROJECT.slug}`));
+        expect(unitMetadata({ ...NEW_UNIT, availability: "Sold" }).alternates.canonical)
+            .toBe(canonicalUrl(`/properties/${NEW_UNIT.token}`));
+        expect(staticPageMetadata("/search").alternates.canonical).toBe(canonicalUrl("/search"));
+
+        // Contrast: a duplicate hub is canonical-only (not noindex) and does
+        // point at another URL.
+        const registry = buildHubRegistry(DEDUPE_INVENTORY);
+        const duplicate = registry.get("flats-for-sale");
+        const meta = hubMetadata(duplicate);
+        expect(meta.robots.index).not.toBe(false);
+        expect(meta.alternates.canonical).not.toBe(canonicalUrl(duplicate.path));
     });
 });

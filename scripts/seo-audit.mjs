@@ -12,6 +12,10 @@
  *   SEO_BASE_URL=... API_BASE=... node scripts/seo-audit.mjs
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parsePreferences, unmatchedPreferences } from "./seo-preferences.mjs";
+
 const SITE = (process.env.SEO_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
 const API = (process.env.API_BASE || "http://localhost:8000/api/v1").replace(/\/+$/, "");
 const STRICT = process.argv.includes("--strict");
@@ -78,6 +82,22 @@ async function main() {
     }
     if (!missingProjects.length && !missingUnits.length) {
         console.log("\nEvery published record is indexable.");
+    }
+
+    // Optional hub preferences: a row naming items that are no longer
+    // published is harmless but should be cleaned up by a human owner.
+    let preferences = [];
+    try {
+        preferences = parsePreferences(
+            JSON.parse(readFileSync(join(process.cwd(), "seo-hub-preferences.json"), "utf8"))
+        );
+    } catch {
+        preferences = [];
+    }
+    const stale = unmatchedPreferences(preferences, { projects, properties: units });
+    console.log(`\nHub preferences: ${preferences.length}, unmatched: ${stale.length}`);
+    for (const row of stale) {
+        console.warn(`WARN  preference for ${row.preferred} matches no current item set (${row.items.join(", ")})`);
     }
 
     if (STRICT && (missingProjects.length || missingUnits.length)) {

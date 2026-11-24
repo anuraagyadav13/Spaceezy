@@ -45,7 +45,7 @@ migrations changed.** A PR should be opened for review before merge/deploy.
   sitewide nav, with `rel="nofollow"` on remaining conversion links. Filter/sort
   URLs are not noindex — they canonicalise to the clean path and stay disallowed
   in robots.txt.
-- Tooling/tests: 28 SEO unit tests plus crawl, audit, redirect-gate and
+- Tooling/tests: 30 SEO unit tests plus crawl, audit, redirect-gate and
   IndexNow scripts; CRM publish-check and media allow-list tests; CI-friendly
   E2E script updates.
 
@@ -53,7 +53,7 @@ migrations changed.** A PR should be opened for review before merge/deploy.
 
 | Check | Result |
 | --- | --- |
-| `npx vitest run` | 5 files, 83 tests passed (28 SEO system tests) |
+| `npx vitest run` | 5 files, 85 tests passed (30 SEO system tests) |
 | backend `npm test -- --runInBand` | 50 suites, 983 tests passed |
 | `npm run lint` | 0 errors (49 pre-existing warnings) |
 | `npm run build` | succeeded, `/[hubSlug]` present |

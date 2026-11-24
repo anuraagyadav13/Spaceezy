@@ -28,6 +28,7 @@ import {
 import { configurationNames, parseBhk } from "./facts";
 import aliasConfig from "../../../seo-aliases.json";
 import preferenceConfig from "../../../seo-hub-preferences.json";
+import { parsePreferences } from "../../../scripts/seo-preferences.mjs";
 
 const int = (value, fallback) => {
     const n = Number(value);
@@ -371,22 +372,7 @@ const PLACE_SPECIFICITY = Object.freeze({ region: 3, district: 2, city: 1 });
  * Optional, human-owned overrides. Empty by default; a row maps an exact item
  * set to the hub path that should win, regardless of the specificity rules.
  */
-export const HUB_PREFERENCES = Object.freeze(
-    (Array.isArray(preferenceConfig?.preferences) ? preferenceConfig.preferences : [])
-        .map((row) => {
-            const items = Array.isArray(row.items)
-                ? row.items
-                    .map((item) => {
-                        const value = String(item).trim();
-                        if (/^[pu]:/.test(value)) return value;
-                        return /^[0-9a-f]{32}$/i.test(value) ? `u:${value}` : `p:${value}`;
-                    })
-                    .sort()
-                : [];
-            return { signature: JSON.stringify(items), preferred: String(row.preferred || "") };
-        })
-        .filter((row) => row.preferred.startsWith("/") && row.signature !== "[]")
-);
+export const HUB_PREFERENCES = Object.freeze(parsePreferences(preferenceConfig));
 
 /**
  * Duplicate hubs keep their pages crawlable and canonicalise to the winner.
@@ -426,7 +412,9 @@ function dedupeIdenticalItems(hubs) {
                 b.blocks.length - a.blocks.length ||
                 a.path.localeCompare(b.path)
         );
-        const preference = HUB_PREFERENCES.find((row) => row.signature === group.signature);
+        const preference = HUB_PREFERENCES.find(
+            (row) => JSON.stringify(row.items) === group.signature
+        );
         const preferred = preference && ranked.find((hub) => hub.path === preference.preferred);
         const winner = preferred || ranked[0];
         winner.duplicateGroupSize = group.length;
