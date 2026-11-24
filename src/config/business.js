@@ -30,7 +30,7 @@ export const BUSINESS = {
     phoneDisplay: env("NEXT_PUBLIC_BUSINESS_PHONE", "+91 76830 20204"),
     phoneTel: env("NEXT_PUBLIC_BUSINESS_PHONE_TEL", "+917683020204"),
     whatsapp: env("NEXT_PUBLIC_BUSINESS_WHATSAPP", "917683020204"),
-    logo: env("NEXT_PUBLIC_BUSINESS_LOGO", "/images/spaceezy-logo.png"),
+    logo: env("NEXT_PUBLIC_BUSINESS_LOGO", "/images/spaceezy-logo.webp"),
     ogImage: env("NEXT_PUBLIC_BUSINESS_OG_IMAGE", "/images/og-default.jpg"),
     address: {
         streetAddress: env(

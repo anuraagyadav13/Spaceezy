@@ -139,7 +139,7 @@ export default function LoginPage() {
                         <div className="flex flex-col items-center text-center mb-5">
                             <div className="relative w-24 h-24 sm:w-28 sm:h-28 drop-shadow-md">
                                 <Image
-                                    src="/images/spaceezy-logo.png"
+                                    src="/images/spaceezy-logo.webp"
                                     alt="Spaceezy logo"
                                     width={112}
                                     height={112}

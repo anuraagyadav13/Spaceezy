@@ -8,9 +8,9 @@ import { formatPrice } from "../../utils/format";
 
 // Rotating landing hero images (local files in public/images).
 const HERO_IMAGES = [
-    { src: "/images/luxury-living-room-city-view.png", alt: "Luxury living room with floor-to-ceiling windows overlooking the city skyline at sunset" },
-    { src: "/images/modern-villa-infinity-pool-sunset.png", alt: "Modern villa with infinity pool and city view at sunset" },
-    { src: "/images/property-site-visit-family.png", alt: "Spaceezy agent showing a luxury apartment to a family during a site visit" },
+    { src: "/images/luxury-living-room-city-view.webp", alt: "Luxury living room with floor-to-ceiling windows overlooking the city skyline at sunset" },
+    { src: "/images/modern-villa-infinity-pool-sunset.webp", alt: "Modern villa with infinity pool and city view at sunset" },
+    { src: "/images/property-site-visit-family.webp", alt: "Spaceezy agent showing a luxury apartment to a family during a site visit" },
 ];
 const HERO_ROTATE_MS = 5000;
 
@@ -345,7 +345,7 @@ export default function HomeClient({ projects, properties, locations, hubs, area
                     </motion.div>
                     <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="flex-1 relative w-full h-[600px] rounded-[40px] overflow-hidden shadow-2xl">
                         <Image
-                            src="/images/luxury-living-room-city-view.png"
+                            src="/images/luxury-living-room-city-view.webp"
                             alt="Living room with floor-to-ceiling windows, illustrating the homes listed on Spaceezy"
                             fill
                             sizes="(max-width: 768px) 100vw, 50vw"
@@ -358,7 +358,7 @@ export default function HomeClient({ projects, properties, locations, hubs, area
 
             {/* CTA SECTION */}
             <section className="py-24 bg-gray-900 text-center relative overflow-hidden">
-                <div className="absolute inset-0 opacity-20 bg-[url('/images/modern-villa-infinity-pool-sunset.png')] bg-cover bg-center"></div>
+                <div className="absolute inset-0 opacity-20 bg-[url('/images/modern-villa-infinity-pool-sunset.webp')] bg-cover bg-center"></div>
                 <div className="absolute inset-0 bg-gray-900/80"></div>
 
                 <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="container mx-auto px-6 relative z-10">

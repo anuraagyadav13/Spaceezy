@@ -223,7 +223,7 @@ export default function ForgotPasswordPage() {
                 <div className="flex flex-col items-center text-center mb-6">
                     <div className="relative w-22 h-22 sm:w-26 sm:h-26 drop-shadow-md">
                         <Image
-                            src="/images/spaceezy-logo.png"
+                            src="/images/spaceezy-logo.webp"
                             alt="Spaceezy logo"
                             width={104}
                             height={104}

@@ -56,7 +56,7 @@ export default function ContactPage() {
                 </div>
                 
                 <div className="bg-gray-900 rounded-[40px] p-12 text-center max-w-4xl mx-auto relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-10 bg-[url('/images/modern-villa-infinity-pool-sunset.png')] bg-cover bg-center"></div>
+                    <div className="absolute inset-0 opacity-10 bg-[url('/images/modern-villa-infinity-pool-sunset.webp')] bg-cover bg-center"></div>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-bold text-white mb-6 tracking-tight">Looking for a specific property?</h2>
                         <p className="text-gray-300 mb-10 max-w-xl mx-auto text-lg">

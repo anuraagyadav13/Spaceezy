@@ -287,7 +287,7 @@ export default function AppSidebar({ isOpen, setIsOpen, collapsed = false, onBra
                     >
                         <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shrink-0">
                             <Image 
-                                src="/images/spaceezy-logo.png" 
+                                src="/images/spaceezy-logo.webp" 
                                 alt="Spaceezy" 
                                 width={40} 
                                 height={40} 
