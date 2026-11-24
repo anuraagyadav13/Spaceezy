@@ -80,8 +80,8 @@ everything else as projects; explicit prefixes are always safest). A row only
 applies when that exact set of items exists and the preferred path is one of the
 duplicate hubs; otherwise the specificity tie-break decides. `npm run seo:audit`
 prints a `WARN` for any row whose named items are no longer published. Do not
-add rows until a human owner has confirmed the target URL — no preference is
-applied in the current rollout.
+confirmed the target URL. The current rollout contains two rows for the
+Wave City / Ghaziabad duplicate set (see `docs/SEO_ROLLOUT_PLAN.md`).
 
 ### Retired URLs
 
@@ -191,7 +191,7 @@ needed.
 ## 7. Commands
 
 ```bash
-npx vitest run                 # all unit tests (incl. 30 SEO system tests)
+npx vitest run                 # all unit tests (incl. 32 SEO system tests)
 npm run lint                   # 0 errors
 npm run build                  # production build
 npm start                      # serve the built site on :3000

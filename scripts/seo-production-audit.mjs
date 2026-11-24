@@ -15,6 +15,7 @@
 import { buildHubRegistry, indexableHubs, resolveHubSlug } from "../src/lib/seo/facets";
 import { projectQuality, unitQuality, QUALITY_RULES } from "../src/lib/seo/quality";
 import { retiredProjectPath } from "../src/lib/seo/retired";
+import { visibleInventory } from "../src/lib/seo/inventory";
 
 const API = (process.env.SEO_AUDIT_API || "https://spaceezy.com/api/v1").replace(/\/+$/, "");
 const SITEMAP = process.env.SEO_AUDIT_SITEMAP || "https://spaceezy.com/sitemap.xml";
@@ -76,7 +77,8 @@ async function main() {
         images: unit.images || (unit.image ? [unit.image] : []),
     }));
 
-    const registry = buildHubRegistry({ projects: fullProjects, properties: fullUnits });
+    const visible = visibleInventory({ projects: fullProjects, properties: fullUnits });
+    const registry = buildHubRegistry(visible);
     const bySlug = new Map(fullProjects.map((project) => [project.slug, project]));
     const byToken = new Map(fullUnits.map((unit) => [unit.token, unit]));
 
@@ -136,7 +138,12 @@ async function main() {
     console.log("\n=== DUPLICATE-ITEM HUBS (canonical-only, no noindex) ===");
     for (const hub of registry.values()) {
         if (!hub.canonicalPath) continue;
+        const items = [
+            ...hub.projects.map((project) => `p:${project.slug}`),
+            ...hub.properties.map((unit) => `u:${unit.token}`),
+        ].sort().join(", ");
         console.log(`${hub.path.padEnd(42)} items=${hub.counts.total} -> ${hub.canonicalPath}`);
+        console.log(`    items: ${items}`);
     }
 
     console.log("\n=== HUB NUMBERS ===");

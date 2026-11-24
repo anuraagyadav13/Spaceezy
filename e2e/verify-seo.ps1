@@ -410,6 +410,17 @@ foreach ($p in $staticExpectations.Keys) {
 $unknown = Get-Page "$WEB/this-route-does-not-exist-12345"
 Assert ($unknown.status -eq 404) "unknown hub slug returns 404" "got $($unknown.status)"
 
+# www -> apex HTTPS must be host-based, not dependent on x-forwarded-proto.
+$wwwHost = "www." + ([uri]$ORIGIN).Host
+foreach ($proto in @("http", "https")) {
+    $line = & curl.exe -s -o NUL -w "%{http_code} %{redirect_url}" -H "Host: $wwwHost" -H "X-Forwarded-Proto: $proto" "$WEB/"
+    $parts = ($line -split '\s+', 2)
+    $code = if ($parts.Length -gt 0) { $parts[0] } else { "" }
+    $dest = if ($parts.Length -gt 1) { $parts[1] } else { "" }
+    Assert ($code -in @("301", "308")) "${proto}://www uses a permanent redirect" "got $code"
+    Assert ($dest -eq "$ORIGIN/") "${proto}://www redirects in one hop to $ORIGIN/" "got $dest"
+}
+
 foreach ($fp in @("/projects?q=test&page=2", "/properties?bhk=2&sort=price")) {
     $pg = Get-Page "$WEB$fp"
     $clean = ($fp -split '\?')[0]

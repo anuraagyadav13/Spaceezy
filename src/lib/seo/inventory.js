@@ -9,6 +9,8 @@
  * projects/units (the previous version cached for the lifetime of the process).
  */
 
+import { projectQuality, unitQuality } from "./quality";
+
 const API_BASE =
     process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -48,6 +50,22 @@ async function getPaged(path, params = {}) {
 
 let cache = { at: 0, data: null };
 
+/**
+ * Only indexable items feed hub counts, copy, schema and links. A project that
+ * fails the quality gate (or a sold unit whose page redirects) must not be
+ * advertised as part of a collection.
+ */
+export function visibleInventory({ projects = [], properties = [] } = {}) {
+    return {
+        projects: projects.filter((project) => projectQuality(project).ok),
+        properties: properties.filter(
+            (unit) =>
+                unitQuality(unit).ok &&
+                String(unit.availability || "").toLowerCase() !== "sold"
+        ),
+    };
+}
+
 /** Test/ISR helper — force the next reader to refetch. */
 export function resetInventoryCache() {
     cache = { at: 0, data: null };
@@ -62,14 +80,15 @@ export async function getInventory({ fresh = false } = {}) {
         getPaged("/public/properties"),
     ]);
 
+    const visible = visibleInventory({ projects: projects.items, properties: properties.items });
     cache = {
         at: Date.now(),
         data: {
             locations: Array.isArray(locations) ? locations : [],
-            projects: projects.items,
-            projectsTotal: projects.total,
-            properties: properties.items,
-            propertiesTotal: properties.total,
+            projects: visible.projects,
+            projectsTotal: visible.projects.length,
+            properties: visible.properties,
+            propertiesTotal: visible.properties.length,
         },
     };
     return cache.data;

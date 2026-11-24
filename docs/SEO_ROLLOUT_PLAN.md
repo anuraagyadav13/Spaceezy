@@ -45,7 +45,7 @@ migrations changed.** A PR should be opened for review before merge/deploy.
   sitewide nav, with `rel="nofollow"` on remaining conversion links. Filter/sort
   URLs are not noindex — they canonicalise to the clean path and stay disallowed
   in robots.txt.
-- Tooling/tests: 30 SEO unit tests plus crawl, audit, redirect-gate and
+- Tooling/tests: 32 SEO unit tests plus crawl, audit, redirect-gate and
   IndexNow scripts; CRM publish-check and media allow-list tests; CI-friendly
   E2E script updates.
 
@@ -53,14 +53,14 @@ migrations changed.** A PR should be opened for review before merge/deploy.
 
 | Check | Result |
 | --- | --- |
-| `npx vitest run` | 5 files, 85 tests passed (30 SEO system tests) |
+| `npx vitest run` | 5 files, 87 tests passed (32 SEO system tests) |
 | backend `npm test -- --runInBand` | 50 suites, 983 tests passed |
 | `npm run lint` | 0 errors (49 pre-existing warnings) |
 | `npm run build` | succeeded, `/[hubSlug]` present |
 | `npm run seo:crawl` against built site | 14 sitemap URLs, 14 pages crawled, 17 link targets, 0 errors/warnings |
 | `npm run seo:redirects` | alias expansions pass, including a canonical-only duplicate hub; injected bad destination fails the gate (exit 1) |
 | `npm run seo:audit` | local fixture project noindex; production report below is the deploy baseline |
-| `e2e\verify-seo.ps1` against built site | 203 passed, 0 failed (static-route precedence, unknown-slug 404, utility noindex/no-follow, filter canonical-only, crawlable noindex utility pages) |
+| `e2e\verify-seo.ps1` against built site | 207 passed, 0 failed (static-route precedence, unknown-slug 404, utility noindex/no-follow, filter canonical-only, http/www→apex HTTPS single-hop redirects, crawlable noindex utility pages) |
 | `npm run seo:indexnow` with no key | safe no-op |
 
 Crawl was run against `http://localhost:3000` after a fresh build; the crawler
@@ -75,29 +75,51 @@ used the **production public API and sitemap over GET only**
 No data was changed.
 
 Source: 3 published projects, 1 published unit, 19 currently indexed URLs.
+Only gate-passing records feed hub counts: at the proposed thresholds that is
+`eligo-wave-city-c28c62`, `dream-homes-e84e51` and unit
+`1c8bb75583bf3d60ee4ef27d02cd13ab`; `grand-carnesia-e215b6` fails the gate and
+is excluded from every hub. This is the deploy baseline.
 With the current default gate (after adding `expectedCompletionDate` as a valid
 possession signal):
 
-| Verdict | Count | URLs / reason |
+| Verdict | Count | Meaning |
 | --- | --- | --- |
-| KEEP | 10 | static pages + 2 hubs + 1 unit + Eligo project |
-| REDIRECT (intended) | 2 | `/flats-for-sale-in-wave-city`, `/property-for-sale-in-wave-city` |
-| CANONICAL (no noindex) | 5 | duplicate-intent hubs, canonicalised to the winner (listed below) |
-| NOINDEX | 2 | `dream-homes-e84e51` (possession, 1 image), `grand-carnesia-e215b6` (0 configurations, 1 image, 0-char description) |
+| KEEP | 11 | self-canonical and self-referencing sitemap entry |
+| REDIRECT (intended) | 2 | retired aliases → canonical hub |
+| CANONICAL | 5 | **of the 19 indexed URLs**, these 5 hubs now point at another URL; the full registry has **10 canonicalised hubs** |
+| NOINDEX | 1 | `grand-carnesia-e215b6` (0 configurations, 0-char description) |
 
-With the duplicate-intent rule, 5 currently ranking hubs canonicalise to the
-winning hub (crawlable and indexable, out of sitemap/nav, **no noindex**):
+`CANONICAL = 5` counts only URLs that were in the old sitemap; `10` counts all
+suppressed/consolidated hubs in the generated registry, including ones that
+were never indexed before. Both are reported by the audit script.
+
+All 10 canonicalised hubs (crawlable and indexable, out of sitemap/nav, **no
+noindex**), with the configured preference applied (first row wins):
 
 | Suppressed hub | Canonical winner |
 | --- | --- |
-| `/properties-in-ghaziabad` | `/flats-in-ghaziabad` |
-| `/flats-for-sale` | `/flats-in-ghaziabad` |
-| `/residential-properties` | `/flats-in-ghaziabad` |
-| `/properties-in-wave-city` | `/3-bhk-flats-in-wave-city` |
-| `/flats-in-wave-city` | `/3-bhk-flats-in-wave-city` |
+| `/properties-in-ghaziabad` | `/flats-in-wave-city` |
+| `/flats-in-ghaziabad` | `/flats-in-wave-city` |
+| `/3-bhk-flats-in-ghaziabad` | `/flats-in-wave-city` |
+| `/properties-in-wave-city` | `/flats-in-wave-city` |
+| `/flats-for-sale` | `/flats-in-wave-city` |
+| `/residential-properties` | `/flats-in-wave-city` |
+| `/3-bhk-flats-in-wave-city` | `/flats-in-wave-city` |
+| `/1-bhk-flats-in-ghaziabad` | `/1-bhk-flats-in-wave-city` |
+| `/2-bhk-flats-in-ghaziabad` | `/1-bhk-flats-in-wave-city` |
+| `/2-bhk-flats-in-wave-city` | `/1-bhk-flats-in-wave-city` |
 
-Surviving hubs have 1–4 items and 2–4 blocks, above the 1/2 thresholds; empty
-hubs have 0/0 and are excluded.
+The two preference rows name the exact same item set —
+`p:dream-homes-e84e51`, `p:eligo-wave-city-c28c62`,
+`u:1c8bb75583bf3d60ee4ef27d02cd13ab` — with preferred hubs
+`/flats-in-wave-city` and `/properties-in-ghaziabad`. Rows are matched in
+order and the **first match wins**, so `/flats-in-wave-city` wins; the second
+row is a documented fallback that is never reached. Both Wave City and
+Ghaziabad are the same physical inventory under two place labels (region vs
+district), so one winner is required.
+
+Surviving self-canonical hubs have 1–3 gate-passing items and 3–4 blocks;
+empty hubs have 0/0 and are noindex.
 
 ### Threshold proposal
 
@@ -112,10 +134,12 @@ hubs have 0/0 and are excluded.
 | `SEO_REQUIRE_POSSESSION` | true | **false** | only Eligo has a date; Dream Homes has none but strong content; Grand Carnesia still fails on description/configurations |
 | code change (already in branch) | `possessionDate` only | accept `expectedCompletionDate` too | Eligo has `expectedCompletionDate` populated and `possessionDate: null` |
 
-Result with the proposal: **11 KEEP, 5 CANONICAL, 2 intended REDIRECT,
-1 NOINDEX** (Grand Carnesia only). Thin/empty pages remain excluded because the
-description, configuration, RERA and amenity gates are unchanged.
-`seo-hub-preferences.json` is empty — no manual preference was applied.
+Result with the proposal and the two configured preferences:
+**11 KEEP, 5 CANONICAL (of 19 indexed; 10 in the full registry), 2 intended
+REDIRECT, 1 NOINDEX** (Grand Carnesia only). Thin/empty pages remain excluded
+because the description, configuration, RERA and amenity gates are unchanged.
+`seo-hub-preferences.json` now contains the two requested rows; both describe
+the same item set and the first row wins.
 
 ### Structured-data validator (before → after)
 
@@ -163,6 +187,8 @@ rich-result preview, so they do not appear in the "Detected" list — no errors.
    - `/flats-for-sale-in-{place}` → `/flats-in-{place}`
    - `/property-for-sale-in-{place}` → `/properties-in-{place}`
    - trailing-slash variants → slashless canonical
+   - `http://www` and `https://www` → apex HTTPS in one hop (host-based, not
+     dependent on `x-forwarded-proto`)
    - http → https (single hop)
 4. When a project is deleted from the CRM, add its slug and destination hub to
    `seo-retired-projects.json` in the same change.

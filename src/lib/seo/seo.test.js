@@ -47,6 +47,7 @@ import { canonicalPath, canonicalUrl, SITE_URL } from "./site";
 import { truncateAtWord, compactPrice } from "./text";
 import { projectQuality } from "./quality";
 import { retiredProjectPath } from "./retired";
+import { visibleInventory } from "./inventory";
 import { parsePreferences, unmatchedPreferences } from "../../../scripts/seo-preferences.mjs";
 
 // ---------------------------------------------------------------------------
@@ -487,7 +488,55 @@ describe("structured data", () => {
     });
 });
 
+describe("visible inventory", () => {
+    it("counts and lists only gate-passing projects and non-sold units", () => {
+        const filtered = visibleInventory({
+            projects: [
+                NEW_PROJECT,
+                { ...NEW_PROJECT, slug: "thin-project", description: "", descriptionLength: 0, configurations: [], images: [] },
+            ],
+            properties: [NEW_UNIT, { ...NEW_UNIT, token: "sold-unit", availability: "Sold" }],
+        });
+        expect(filtered.projects.map((project) => project.slug)).toEqual([NEW_PROJECT.slug]);
+        expect(filtered.properties.map((unit) => unit.token)).toEqual([NEW_UNIT.token]);
+    });
+});
+
 describe("hub preferences", () => {
+    it("overrides the specificity tie-break for the configured item set", () => {
+        const wave = {
+            region: "Wave City",
+            district: "Ghaziabad",
+            state: "Uttar Pradesh",
+            locality: "Wave City",
+            city: "Ghaziabad",
+        };
+        const project = (slug) => ({
+            ...NEW_PROJECT,
+            slug,
+            name: slug,
+            location: wave,
+            locationLabel: "Wave City, Ghaziabad",
+            configurations: ["3 BHK"],
+        });
+        const inventory = {
+            projects: [project("eligo-wave-city-c28c62"), project("dream-homes-e84e51")],
+            properties: [{
+                ...NEW_UNIT,
+                token: "1c8bb75583bf3d60ee4ef27d02cd13ab",
+                configuration: "3 BHK",
+                bhk: 3,
+                location: wave,
+                project: { name: "eligo-wave-city-c28c62", slug: "eligo-wave-city-c28c62" },
+            }],
+        };
+        const registry = buildHubRegistry(inventory);
+        expect(registry.get("flats-in-wave-city").canonicalPath).toBeUndefined();
+        for (const slug of ["properties-in-wave-city", "properties-in-ghaziabad", "3-bhk-flats-in-wave-city"]) {
+            expect(registry.get(slug).canonicalPath).toBe("/flats-in-wave-city");
+        }
+    });
+
     it("warns about a row whose items are no longer published", () => {
         const preferences = parsePreferences({
             preferences: [
@@ -511,8 +560,12 @@ describe("hub preferences", () => {
 // ---------------------------------------------------------------------------
 
 describe("duplicate hub intents", () => {
-    it("uses no manual preferences in the default rollout", () => {
-        expect(HUB_PREFERENCES).toEqual([]);
+    it("keeps the configured rows in first-match order", () => {
+        expect(HUB_PREFERENCES.map((row) => row.preferred)).toEqual([
+            "/flats-in-wave-city",
+            "/properties-in-ghaziabad",
+        ]);
+        for (const row of HUB_PREFERENCES) expect(row.items.length).toBeGreaterThan(0);
     });
 
     it("keeps the most specific hub and canonicalises/removes the rest", () => {

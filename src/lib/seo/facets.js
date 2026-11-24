@@ -396,7 +396,11 @@ function dedupeIdenticalItems(hubs) {
             ...(hub.projects || []).map((project) => `p:${project.slug}`).sort(),
             ...(hub.properties || []).map((unit) => `u:${unit.token}`).sort(),
         ]);
-        if (!groups.has(signature)) groups.set(signature, []);
+        if (!groups.has(signature)) {
+            const group = [];
+            group.signature = signature;
+            groups.set(signature, group);
+        }
         groups.get(signature).push(hub);
     }
 

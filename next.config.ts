@@ -51,6 +51,15 @@ function siteOrigin() {
   }
 }
 
+/** www hostname for the canonical apex (both http and https requests). */
+function wwwHost() {
+  try {
+    return `www.${new URL(siteOrigin()).hostname}`;
+  } catch {
+    return "www.spaceezy.com";
+  }
+}
+
 /**
  * Internal origin that serves `/media/*`.
  *
@@ -90,6 +99,15 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
+      // www -> apex, HTTPS, in ONE hop. Host-based (not x-forwarded-proto),
+      // so it also works for https://www and for origin requests without a
+      // proxy header. Next applies this before the scheme rule.
+      {
+        source: "/:path*",
+        has: [{ type: "host" as const, value: wwwHost() }],
+        destination: `${siteOrigin()}/:path*`,
+        permanent: true,
+      },
       // http -> https for any request a proxy forwards with a plain-http
       // scheme. Single hop: the target is the canonical HTTPS URL directly.
       {

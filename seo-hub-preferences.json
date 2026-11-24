@@ -1,4 +1,21 @@
 {
-  "$comment": "OPTIONAL. Name a preferred hub for an exact item set so it wins over the specificity tie-break. Empty by default: do NOT add rows until a human owner confirms the target URL. items = the project slugs and unit tokens that define the set (p:/u: prefixes optional); preferred = the hub path to keep indexable. Only hubs that actually share that item set are considered.",
-  "preferences": []
+  "$comment": "OPTIONAL. Name a preferred hub for an exact item set so it wins over the specificity tie-break. Rows are matched in order: the first matching row wins. Empty by default: do NOT add rows until a human owner confirms the target URL. items = project slugs and unit tokens that define the set (p:/u: prefixes optional); preferred = the hub path to keep indexable.",
+  "preferences": [
+    {
+      "items": [
+        "p:dream-homes-e84e51",
+        "p:eligo-wave-city-c28c62",
+        "u:1c8bb75583bf3d60ee4ef27d02cd13ab"
+      ],
+      "preferred": "/flats-in-wave-city"
+    },
+    {
+      "items": [
+        "p:dream-homes-e84e51",
+        "p:eligo-wave-city-c28c62",
+        "u:1c8bb75583bf3d60ee4ef27d02cd13ab"
+      ],
+      "preferred": "/properties-in-ghaziabad"
+    }
+  ]
 }
