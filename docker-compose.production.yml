@@ -108,6 +108,10 @@ services:
         # Optional heap cap for the build on 2 GB hosts:
         NODE_OPTIONS: ${BUILD_NODE_OPTIONS:-}
     container_name: spaceezy-next
+    env_file:
+      # Same file as the root compose invocation: carries NEXT_PUBLIC_SITE_URL
+      # and the SEO_* gate settings at runtime for SSR/ISR and the sitemap.
+      - ./.env.production
     environment:
       # Server-side (SSR/ISR) API base URL — container-internal, no hairpin.
       API_URL: ${API_URL:-http://express:8000/api/v1}
