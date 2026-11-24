@@ -361,7 +361,7 @@ export default async function ProjectDetailPage({ params }) {
                 </div>
             </div>
 
-            <JsonLd data={breadcrumbSchema(breadcrumbs)} />
+            <JsonLd data={breadcrumbSchema(breadcrumbs, `/projects/${project.slug}`)} />
             <JsonLd
                 data={projectSchema({
                     facts,

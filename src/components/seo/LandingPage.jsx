@@ -39,14 +39,17 @@ export function LandingPage({ hub }) {
         })),
     ];
 
-    const breadcrumb = breadcrumbSchema(breadcrumbs);
+    const breadcrumb = breadcrumbSchema(breadcrumbs, hub.path);
+    // Duplicate hubs are noindex and canonicalise to the surviving intent, so
+    // their schema @id points at that canonical URL, not at the duplicate path.
+    const canonical = hub.canonicalPath || hub.path;
     const webPage = webPageSchema({
-        url: hub.path,
+        url: canonical,
         name: h1,
         description: hub.description,
         breadcrumbUrl: hub.path,
     });
-    const itemList = itemListSchema({ name: h1, items: itemListItems, url: hub.path });
+    const itemList = itemListSchema({ name: h1, items: itemListItems, url: canonical });
 
     return (
         <div className="bg-white">

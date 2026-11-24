@@ -46,9 +46,11 @@ async function main() {
 
     const aliases = readJson("seo-aliases.json").legacyAliases || [];
     const retired = readJson("seo-retired-projects.json").redirects || [];
-    const places = Array.from(sitemapPaths)
-        .map((path) => /^\/properties-in-([a-z0-9-]+)$/.exec(path)?.[1])
-        .filter(Boolean);
+    const places = Array.from(new Set(
+        Array.from(sitemapPaths)
+            .map((path) => /-in-([a-z0-9-]+)$/.exec(path)?.[1])
+            .filter(Boolean)
+    ));
 
     const pairs = [];
     for (const row of aliases) {
@@ -93,19 +95,39 @@ async function main() {
             fail(`${pair.label}: destination ${pair.destination} answered ${targetResponse.status}`);
             continue;
         }
-        if (!sitemapPaths.has(pair.destination)) {
-            fail(`${pair.label}: destination ${pair.destination} is absent from the sitemap`);
-            continue;
-        }
         const html = await targetResponse.text();
         const canonical = /<link[^>]+rel="canonical"[^>]+href="([^"]+)"/i.exec(html)?.[1]
             || /<link[^>]+href="([^"]+)"[^>]+rel="canonical"/i.exec(html)?.[1]
             || null;
+        const robots = /<meta[^>]+name="robots"[^>]+content="([^"]*)"/i.exec(html)?.[1] || "";
+        const inSitemap = sitemapPaths.has(pair.destination);
+
+        if (robots.includes("noindex")) {
+            // Duplicate-intent hubs are intentionally noindex. They are only a
+            // valid destination when they canonicalise to an indexable winner.
+            if (!canonical || !sitemapPaths.has(pathOf(canonical))) {
+                fail(`${pair.label}: destination is noindex without a canonical to an indexable URL`);
+                continue;
+            }
+            const winnerResponse = await get(`${BASE}${pathOf(canonical)}`);
+            if (winnerResponse.status !== 200) {
+                fail(`${pair.label}: canonical winner ${pathOf(canonical)} answered ${winnerResponse.status}`);
+                continue;
+            }
+            const winnerHtml = await winnerResponse.text();
+            const winnerRobots = /<meta[^>]+name="robots"[^>]+content="([^"]*)"/i.exec(winnerHtml)?.[1] || "";
+            if (winnerRobots.includes("noindex")) fail(`${pair.label}: canonical winner is also noindex`);
+            console.log(`OK  ${pair.source} -> ${pair.destination} (noindex, canonical -> ${pathOf(canonical)})`);
+            continue;
+        }
+
+        if (!inSitemap) {
+            fail(`${pair.label}: destination ${pair.destination} is absent from the sitemap`);
+            continue;
+        }
         if (!canonical || pathOf(canonical) !== pair.destination) {
             fail(`${pair.label}: destination canonical ${canonical || "(missing)"} != ${pair.destination}`);
         }
-        const robots = /<meta[^>]+name="robots"[^>]+content="([^"]*)"/i.exec(html)?.[1] || "";
-        if (robots.includes("noindex")) fail(`${pair.label}: destination is noindex`);
         console.log(`OK  ${pair.source} -> ${pair.destination} (200, canonical, indexable)`);
     }
 

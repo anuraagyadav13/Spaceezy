@@ -281,7 +281,7 @@ export default async function PropertyDetailPage({ params }) {
                 </div>
             </div>
 
-            <JsonLd data={breadcrumbSchema(breadcrumbs)} />
+            <JsonLd data={breadcrumbSchema(breadcrumbs, `/properties/${property.token}`)} />
             <JsonLd data={listingJsonLd} />
         </div>
     );

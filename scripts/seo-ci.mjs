@@ -144,8 +144,8 @@ async function main() {
     const robotsText = robotsResponse.status === 200 ? await robotsResponse.text() : "";
     if (!robotsText.includes("Sitemap:")) fail("robots.txt does not reference a sitemap");
     if (robotsText.includes("http://")) fail("robots.txt contains a plain-http URL");
-    if (!/Disallow:\s*\/(search|enquiry)/i.test(robotsText)) {
-        warn("robots.txt does not disallow /search and /enquiry");
+    if (/Disallow:\s*\/(search|enquiry)/i.test(robotsText)) {
+        fail("robots.txt disallows noindex utility pages; they must stay crawlable");
     }
 
     const targets = sitemapEntries.slice(0, MAX_PAGES);

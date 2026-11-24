@@ -44,6 +44,22 @@ district, city), so a district hub keeps working even when its projects also
 belong to a more specific region. When two levels produce the same slug, the
 more specific level (region > district > city) wins.
 
+### Duplicate hub intents
+
+If two or more hubs resolve to an identical project/unit set, only the most
+specific one stays indexable; the others are `noindex`, removed from nav and
+sitemap, and **canonicalise to the winner** (so no ranking URL is lost without
+a signal). Tie-break, in order:
+
+1. place specificity: region > district > city > global category;
+2. facet specificity: BHK > villa > flat/plot/commercial > type-only > all;
+3. more data-derived content blocks;
+4. lexicographically smaller path (deterministic).
+
+Empty hubs (0 items) are excluded by the inventory gate and are never grouped
+into this rule. The production-data report prints every suppressed hub and its
+canonical target.
+
 ### Retired URLs
 
 `seo-aliases.json` maps old patterns to the surviving hub:
@@ -69,7 +85,9 @@ of becoming a soft 404. The list is empty today.
   redirects slash variants to the canonical form.
 - `/search`, `/enquiry`, private routes and all filter permutations
   (`?sort=`, `?page=`, `?minPrice=`, `?bhk=`, …) are `noindex,follow` with a
-  canonical to the clean path and are disallowed in `robots.txt`.
+  canonical to the clean path. Search/enquiry are deliberately **not**
+  disallowed in robots.txt — a crawler must be able to fetch them to see the
+  noindex directive; only private routes and filter params are disallowed.
 - `http://` requests forwarded with `x-forwarded-proto: http` get one permanent
   redirect to the HTTPS origin (single hop).
 
@@ -175,8 +193,9 @@ titles/descriptions, one H1, crawlable internal links (no `http://`, no
 redirect chains > 1 hop), ≥3 inbound links per project, JSON-LD validity and
 noindex exclusions. `npm run seo:redirects` is the build/release gate: it
 expands every alias pattern against the places that actually exist and fails
-if a source is not a single permanent hop or its destination is not a 200,
-canonical, indexable sitemap URL. `E2E_SITE_ORIGIN` overrides the expected
+if a source is not a single permanent hop, or if its destination is not a 200,
+canonical, indexable sitemap URL (a noindex duplicate hub is accepted only when
+it canonicalises to an indexable winner). `E2E_SITE_ORIGIN` overrides the expected
 canonical domain in the PowerShell E2E script; `E2E_WEB_BASE` / `E2E_API_BASE`
 override the server addresses.
 

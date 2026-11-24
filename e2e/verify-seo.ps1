@@ -145,7 +145,7 @@ foreach ($k in $clusterLinks.Keys) {
 }
 # Hub links are generated from the live registry: at least one location hub and
 # one category hub must be reachable from the home page when they are indexable.
-Assert (([regex]::Matches($homePg.html, 'href="/properties-in-[a-z0-9-]+"')).Count -gt 0) "home links to a location hub"
+Assert (([regex]::Matches($homePg.html, 'href="/(?:properties|flats|plots|villas|commercial-property|[0-9]+-bhk-flats)-in-[a-z0-9-]+"')).Count -gt 0) "home links to a location hub"
 Assert (([regex]::Matches($homePg.html, 'href="/(flats|plots)-for-sale"')).Count -gt 0) "home links to a category hub"
 $hLd = Test-JsonLd $homePg.html "home"
 $joined = ($hLd -join "")
@@ -162,6 +162,8 @@ Assert ($rb.html -match 'Allow: /') "robots allows /"
 Assert ($rb.html -match 'Disallow: /dashboard') "robots disallows /dashboard"
 Assert ($rb.html -match 'Disallow: /login') "robots disallows /login"
 Assert ($rb.html -match 'Disallow: /api') "robots disallows /api"
+Assert ($rb.html -notmatch 'Disallow:\s*/(search|enquiry)') "robots keeps utility pages crawlable for noindex"
+Assert ($rb.html -match '(?i)Disallow:.*(sort=|page=|minPrice=)') "robots still disallows filter params"
 Assert ($rb.html -match ('Sitemap: ' + [regex]::Escape("$ORIGIN/sitemap.xml"))) "robots references absolute sitemap URL"
 
 # ---------- 3. sitemap.xml ----------
@@ -184,7 +186,7 @@ foreach ($loc in $locs) {
     if ($path -match '^(properties|flats|plots|villas|commercial-property)-in-[a-z0-9-]+$' -or
         $path -match '^[0-9]+-bhk-flats-in-[a-z0-9-]+$') {
         if ($landingSlugs -notcontains $path) { $landingSlugs += $path }
-        if (-not $legacyPlace -and $path -match '^properties-in-(.+)$') { $legacyPlace = $matches[1] }
+        if (-not $legacyPlace -and $path -match '^(?:properties|flats|plots|villas|commercial-property|[0-9]+-bhk-flats)-in-(.+)$') { $legacyPlace = $matches[1] }
     }
 }
 if ($legacyPlace) {
@@ -222,15 +224,20 @@ foreach ($p in $corePages) {
     if ($titles.ContainsKey($t)) { Assert $false "$p title unique" "duplicate of $($titles[$t])" }
     else { $titles[$t] = $p; Assert $true "$p title unique" }
     $c = Get-Canonical $pg.html
-    Assert ($c -and ((Norm-Url $c) -eq (Norm-Url "$ORIGIN$p"))) "$p canonical self-references" "got: $c"
-    if ($c) {
-        $cn = Norm-Url $c
-        if ($canonicals.ContainsKey($cn)) { Assert $false "$p no duplicate canonical" "dup with $($canonicals[$cn])" }
-        else { $canonicals[$cn] = $p; Assert $true "$p no duplicate canonical" }
-    }
     $robotsMeta = Get-Meta $pg.html "robots"
     $isNoindex = ($robotsMeta -and $robotsMeta -match 'noindex')
     $landingIndex[$p] = -not $isNoindex
+    if ($isNoindex) {
+        # Duplicate-intent hubs are noindex and point at the surviving hub.
+        Assert ($c -and ((Norm-Url $c) -ne (Norm-Url "$ORIGIN$p"))) "$p noindex hub canonicalises to winner" "got: $c"
+    } else {
+        Assert ($c -and ((Norm-Url $c) -eq (Norm-Url "$ORIGIN$p"))) "$p canonical self-references" "got: $c"
+        if ($c) {
+            $cn = Norm-Url $c
+            if ($canonicals.ContainsKey($cn)) { Assert $false "$p no duplicate canonical" "dup with $($canonicals[$cn])" }
+            else { $canonicals[$cn] = $p; Assert $true "$p no duplicate canonical" }
+        }
+    }
     Assert ((Get-Meta $pg.html "description")) "$p meta description present"
     Assert ($pg.html -match 'og:title') "$p og:title present"
     $h1x = Get-H1s $pg.html
@@ -252,7 +259,7 @@ foreach ($slug in $landingSlugs) {
     } else {
         # Not in sitemap: either noindex (empty) - verify honest empty state.
         Assert ($isNoindex) "$path empty pages are noindex" "not in sitemap but indexable"
-        if ($slug -in @("properties-in-ghaziabad", "properties-in-wave-city")) {
+        if ($slug -match '^(?:properties|flats|plots|villas|commercial-property|[0-9]+-bhk-flats)-in-') {
             # Only assert visible empty-state text when the CRM truly has no matching inventory.
             Assert ($pg.html -match 'No live listings here yet' -or $pg.html -match 'href="/properties/') "$path shows honest empty state or inventory"
         }
@@ -313,9 +320,9 @@ $indexableCategories = @($corePages | Where-Object { $_ -notin @("/", "/projects
 foreach ($c in $indexableCategories) {
     Assert ($navHrefs -contains $c) "nav/footer exposes indexable hub $c"
 }
-$locationHubs = @($navHrefs | Where-Object { $_ -match '^/properties-in-[a-z0-9-]+$' })
+$locationHubs = @($navHrefs | Where-Object { $_ -match '^/(?:properties|flats|plots|villas|commercial-property|[0-9]+-bhk-flats)-in-[a-z0-9-]+$' })
 $categoryHubs = @($navHrefs | Where-Object { $_ -in @("/flats-for-sale", "/plots-for-sale") })
-if (@($locs | Where-Object { $_ -match '/properties-in-[a-z0-9-]+$' }).Count -gt 0) {
+if (@($locs | Where-Object { $_ -match '/(?:properties|flats|plots|villas|commercial-property|[0-9]+-bhk-flats)-in-[a-z0-9-]+$' }).Count -gt 0) {
     Assert ($locationHubs.Count -gt 0) "footer exposes at least one location hub"
 }
 if ($locSet.ContainsKey("$ORIGIN/flats-for-sale")) {
@@ -367,7 +374,7 @@ if ($tok) {
 # ---------- 9. Brand consistency ----------
 Write-Host "[9] Brand consistency" -ForegroundColor Cyan
 $brandPaths = @("/", "/about", "/contact")
-$firstHub = @($landingSlugs | Where-Object { $_ -match '^properties-in-' } | Select-Object -First 1)
+$firstHub = @($landingSlugs | Where-Object { $_ -match '^(?:properties|flats|plots|villas|commercial-property|[0-9]+-bhk-flats)-in-' } | Select-Object -First 1)
 if ($firstHub.Count) { $brandPaths += "/$($firstHub[0])" }
 foreach ($p in $brandPaths) {
     $pg = Get-Page "$WEB$p"

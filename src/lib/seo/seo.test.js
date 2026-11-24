@@ -41,7 +41,7 @@ import {
     DESCRIPTION_MAX,
 } from "./metadata";
 import { staticPageMetadata, STATIC_PAGE_SEO } from "./staticPages";
-import { projectSchema, unitSchema, breadcrumbSchema, itemListSchema } from "./schema";
+import { projectSchema, unitSchema, breadcrumbSchema, itemListSchema, webPageSchema } from "./schema";
 import { canonicalPath, canonicalUrl, SITE_URL } from "./site";
 import { truncateAtWord, compactPrice } from "./text";
 import { projectQuality } from "./quality";
@@ -128,6 +128,28 @@ const INVENTORY = {
     projects: [NEW_PROJECT, EMPTY_PROJECT],
     properties: [NEW_UNIT],
 };
+
+// Deliberately small inventory: every hub resolves to the SAME single item.
+const DEDUPE_LOCATION = {
+    region: "Twinville",
+    district: "Twindistrict",
+    state: "Teststate",
+    locality: "Twinville",
+    city: "Twindistrict",
+};
+const DEDUPE_PROJECT = {
+    ...NEW_PROJECT,
+    slug: "twinville-one",
+    name: "Twinville One",
+    projectType: "Residential",
+    configurations: ["2 BHK"],
+    location: DEDUPE_LOCATION,
+    locationLabel: "Twinville, Twindistrict, Teststate",
+    startingPrice: 5000000,
+    maximumPrice: 5000000,
+    rera: { number: "TEST-DUPE-1", authority: "Test RERA" },
+};
+const DEDUPE_INVENTORY = { projects: [DEDUPE_PROJECT], properties: [] };
 
 // ---------------------------------------------------------------------------
 // Facts: one source of truth for price/config/availability
@@ -332,7 +354,9 @@ describe("sitemap", () => {
 
         expect(urls).toContain(canonicalUrl(`/projects/${NEW_PROJECT.slug}`));
         expect(urls).toContain(canonicalUrl(`/properties/${NEW_UNIT.token}`));
-        expect(urls).toContain(canonicalUrl("/properties-in-testville-enclave"));
+        // The properties/all-types hub has the same item set as the 5 BHK
+        // hub; the BHK hub wins, so that is the indexable sitemap row.
+        expect(urls).toContain(canonicalUrl("/5-bhk-flats-in-testville-enclave"));
 
         const projectEntry = entries.find((entry) => entry.url === canonicalUrl(`/projects/${NEW_PROJECT.slug}`));
         expect(projectEntry.lastModified).toBe(new Date(NEW_PROJECT.updatedAt).toISOString());
@@ -424,7 +448,12 @@ describe("structured data", () => {
             { name: "Home", href: "/" },
             { name: "Projects", href: "/projects" },
             { name: NEW_PROJECT.name, href: `/projects/${NEW_PROJECT.slug}` },
-        ]);
+        ], `/projects/${NEW_PROJECT.slug}`);
+        const webPage = webPageSchema({
+            url: `/projects/${NEW_PROJECT.slug}`,
+            name: NEW_PROJECT.name,
+            breadcrumbUrl: `/projects/${NEW_PROJECT.slug}`,
+        });
         const itemList = itemListSchema({
             name: "Projects in Testville Enclave",
             url: "/properties-in-testville-enclave",
@@ -440,6 +469,9 @@ describe("structured data", () => {
         expect(project.identifier).toBe("UPRERATEST0001");
         expect(unit["@type"]).toBe("RealEstateListing");
         expect(unit.offers.price).toBe(NEW_UNIT.price);
+        // Google resolves the WebPage breadcrumb reference by @id; it must be
+        // the same list emitted on the page, not a global #breadcrumb node.
+        expect(breadcrumb["@id"]).toBe(webPage.breadcrumb["@id"]);
         // Only visible/real values are marked up.
         expect(JSON.stringify(project)).not.toContain("aggregateRating");
     });
@@ -458,6 +490,49 @@ describe("structured data", () => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Duplicate-intent hubs: identical item sets must not compete with each other.
+// ---------------------------------------------------------------------------
+
+describe("duplicate hub intents", () => {
+    it("keeps the most specific hub and canonicalises/removes the rest", () => {
+        const registry = buildHubRegistry(DEDUPE_INVENTORY);
+        const entries = buildSitemapEntries({ inventory: DEDUPE_INVENTORY, registry });
+        const sitemapPaths = entries.map((entry) => new URL(entry.url).pathname);
+        const nav = navHubs(registry);
+        const navHrefs = [...nav.locations, ...nav.categories].map((item) => item.href);
+
+        const group = ["properties-in-twinville", "flats-in-twinville", "2-bhk-flats-in-twinville"];
+        for (const slug of group) expect(registry.has(slug)).toBe(true);
+
+        // Region + BHK is the most specific location+type combination.
+        const winner = registry.get("2-bhk-flats-in-twinville");
+        expect(winner.indexable).toBe(true);
+        expect(winner.canonicalPath).toBeUndefined();
+        expect(sitemapPaths).toContain(winner.path);
+
+        for (const slug of group.filter((value) => value !== winner.slug)) {
+            const loser = registry.get(slug);
+            expect(loser.indexable).toBe(false);
+            expect(loser.canonicalPath).toBe(winner.path);
+            expect(loser.duplicateOf).toBe(winner.path);
+            expect(hubMetadata(loser).robots.index).toBe(false);
+            expect(hubMetadata(loser).alternates.canonical).toBe(canonicalUrl(winner.path));
+            expect(sitemapPaths).not.toContain(loser.path);
+            expect(navHrefs).not.toContain(loser.path);
+        }
+
+        // Global category hubs with the same item set lose to the location+BHK hub too.
+        for (const slug of ["flats-for-sale", "residential-properties"]) {
+            const global = registry.get(slug);
+            expect(global.indexable).toBe(false);
+            expect(global.canonicalPath).toBeTruthy();
+            expect(sitemapPaths).not.toContain(global.path);
+            expect(navHrefs).not.toContain(global.path);
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Full fixture: a never-before-seen location/project/configuration, plus an
 // empty category. No code, template or config change is involved.
 // ---------------------------------------------------------------------------
@@ -468,12 +543,13 @@ describe("full synthetic fixture", () => {
         const entries = buildSitemapEntries({ inventory: INVENTORY, registry });
         const urls = entries.map((entry) => entry.url);
 
-        // 1. New location + new BHK produce indexable hubs.
-        const hub = registry.get("properties-in-testville-enclave");
+        // 1. New location + new BHK produce indexable hubs. The BHK hub is
+        // the most specific intent when several hubs share the item set.
+        const hub = registry.get("5-bhk-flats-in-testville-enclave");
         expect(hub).toBeTruthy();
         expect(hub.indexable).toBe(true);
-        expect(hub.path).toBe("/properties-in-testville-enclave");
-        expect(registry.has("5-bhk-flats-in-testville-enclave")).toBe(true);
+        expect(hub.path).toBe("/5-bhk-flats-in-testville-enclave");
+        expect(registry.has("properties-in-testville-enclave")).toBe(true);
 
         // 2. Project page metadata: canonical + HTTPS + title/description.
         const meta = projectMetadata(NEW_PROJECT);
@@ -511,7 +587,7 @@ describe("full synthetic fixture", () => {
             "/projects",
             "/properties",
             ...containing.map((h) => h.path),
-            ...(registry.get("properties-in-testville-enclave")?.related || []).map((l) => l.href),
+            ...(hub.related || []).map((l) => l.href),
         ]);
         expect(inbound.size).toBeGreaterThanOrEqual(3);
 

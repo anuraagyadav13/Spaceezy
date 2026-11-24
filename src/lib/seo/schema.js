@@ -83,13 +83,16 @@ export function webSiteSchema() {
 }
 
 /** @param {{name: string, href?: string|null}[]} items */
-export function breadcrumbSchema(items) {
+export function breadcrumbSchema(items, url) {
     const list = items.filter(Boolean);
     if (list.length === 0) return null;
+    // The @id must match the WebPage's `breadcrumb` reference on THIS page,
+    // not a global #breadcrumb (Google then sees two unrelated lists).
+    const path = url || list[list.length - 1].href || "/";
     return {
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
-        "@id": `${canonicalUrl(list[list.length - 1].href || "/")}#breadcrumb`,
+        "@id": `${canonicalUrl(path)}#breadcrumb`,
         itemListElement: list.map((item, index) => ({
             "@type": "ListItem",
             position: index + 1,

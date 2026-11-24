@@ -118,7 +118,9 @@ async function main() {
             else if (!resolved.hub) { verdict = "REMOVE"; reason = "hub no longer generated (404)"; }
             else if (!resolved.hub.indexable) {
                 verdict = "NOINDEX";
-                reason = `items=${resolved.hub.counts.total} blocks=${resolved.hub.blocks.length} (need ${process.env.SEO_HUB_MIN_ITEMS || 1}/${process.env.SEO_HUB_MIN_BLOCKS || 2})`;
+                reason = resolved.hub.canonicalPath
+                    ? `duplicate item set -> canonical ${resolved.hub.canonicalPath}`
+                    : `items=${resolved.hub.counts.total} blocks=${resolved.hub.blocks.length} (need ${process.env.SEO_HUB_MIN_ITEMS || 1}/${process.env.SEO_HUB_MIN_BLOCKS || 2})`;
             }
         }
         changes.push({ path, verdict, reason });
@@ -128,6 +130,12 @@ async function main() {
     for (const row of changes) console.log(`${row.verdict.padEnd(8)} ${row.path}${row.verdict === "KEEP" ? "" : `  (${row.reason})`}`);
     const counts = changes.reduce((acc, row) => ({ ...acc, [row.verdict]: (acc[row.verdict] || 0) + 1 }), {});
     console.log(`\nSummary: ${JSON.stringify(counts)}`);
+
+    console.log("\n=== DUPLICATE-ITEM HUBS (noindex, canonicalised to winner) ===");
+    for (const hub of registry.values()) {
+        if (!hub.canonicalPath) continue;
+        console.log(`${hub.path.padEnd(42)} items=${hub.counts.total} -> ${hub.canonicalPath}`);
+    }
 
     console.log("\n=== HUB NUMBERS ===");
     for (const hub of indexableHubs(registry)) {

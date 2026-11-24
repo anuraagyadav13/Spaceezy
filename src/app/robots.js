@@ -3,16 +3,15 @@ import { SITE_URL } from "../lib/seo/site";
 /**
  * robots.txt is generated from this config only — no hand-edited text file.
  *
- * Utility and parameterised URLs are disallowed here AND marked noindex on the
- * pages themselves, so a crawler can never index a filter permutation.
+ * Utility pages (/search, /enquiry) are deliberately crawlable so Google can
+ * see their noindex directive: disallowing them would hide that signal. Only
+ * private routes and parameter/filter permutations are disallowed here.
  */
 const DISALLOW = [
     "/dashboard",
     "/login",
     "/api",
-    "/search",
-    "/enquiry",
-    // Parameterised filter/sort/pagination URLs.
+    // Parameterised filter/sort/pagination URLs — keep these disallowed.
     "/*?*sort=",
     "/*?*page=",
     "/*?*minPrice=",

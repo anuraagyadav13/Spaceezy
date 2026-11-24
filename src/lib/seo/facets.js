@@ -354,6 +354,64 @@ function relatedSlugs(hub, registry) {
     });
 }
 
+const TYPE_SPECIFICITY = Object.freeze({
+    bhk: 5,
+    villas: 4,
+    flats: 3,
+    plots: 3,
+    commercial: 3,
+    category: 2,
+    all: 1,
+});
+
+const PLACE_SPECIFICITY = Object.freeze({ region: 3, district: 2, city: 1 });
+
+/**
+ * Two hubs with the same project/unit set are duplicate search intents. Keep
+ * the most specific one indexable and canonicalise the rest to it.
+ *
+ * Tie-break, in order:
+ *   1. location specificity: region > district > city > global category;
+ *   2. facet specificity: BHK > villa > flat/plot/commercial > type-only > all;
+ *   3. more data-derived blocks;
+ *   4. lexicographically smaller path (deterministic).
+ */
+function dedupeIdenticalItems(hubs) {
+    const groups = new Map();
+    for (const hub of hubs) {
+        // Empty hubs are already noindex via the inventory threshold; grouping
+        // them would give a nonsensical canonical to an unrelated place.
+        if (!hub.counts || hub.counts.total < 1) continue;
+        const signature = JSON.stringify([
+            ...(hub.projects || []).map((project) => `p:${project.slug}`).sort(),
+            ...(hub.properties || []).map((unit) => `u:${unit.token}`).sort(),
+        ]);
+        if (!groups.has(signature)) groups.set(signature, []);
+        groups.get(signature).push(hub);
+    }
+
+    const score = (hub) =>
+        (PLACE_SPECIFICITY[hub.place?.level] || 0) * 10 +
+        (TYPE_SPECIFICITY[hub.kind] || 1);
+
+    for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        const ranked = [...group].sort(
+            (a, b) =>
+                score(b) - score(a) ||
+                b.blocks.length - a.blocks.length ||
+                a.path.localeCompare(b.path)
+        );
+        const [winner, ...duplicates] = ranked;
+        winner.duplicateGroupSize = group.length;
+        for (const hub of duplicates) {
+            hub.indexable = false;
+            hub.duplicateOf = winner.path;
+            hub.canonicalPath = winner.path;
+        }
+    }
+}
+
 /** Build the complete hub registry from live inventory. */
 export function buildHubRegistry(inventory) {
     const projects = inventory.projects || [];
@@ -439,6 +497,8 @@ export function buildHubRegistry(inventory) {
         });
     }
 
+    dedupeIdenticalItems(hubs);
+
     const registry = new Map(hubs.map((hub) => [hub.slug, hub]));
     registry.places = places;
 
@@ -473,9 +533,9 @@ export function navHubs(registry) {
     const hubs = indexableHubs(registry);
     return {
         locations: hubs
-            .filter((hub) => hub.place && hub.kind === "all")
+            .filter((hub) => hub.place)
             .sort((a, b) => b.counts.total - a.counts.total)
-            .slice(0, 6)
+            .slice(0, 8)
             .map((hub) => ({ href: hub.path, label: hub.h1 })),
         categories: GLOBAL_HUBS.map((spec) => registry.get(spec.slug))
             .filter((hub) => hub && hub.indexable)

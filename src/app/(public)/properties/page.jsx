@@ -72,7 +72,7 @@ export default async function PropertiesPage({ searchParams }) {
                 data={breadcrumbSchema([
                     { name: "Home", href: "/" },
                     { name: "Properties" },
-                ])}
+                ], "/properties")}
             />
             <JsonLd
                 data={itemListSchema({

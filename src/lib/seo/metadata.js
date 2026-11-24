@@ -210,7 +210,7 @@ export function hubMetadata(hub) {
     });
 
     return buildMetadata({
-        path: hub.path,
+        path: hub.canonicalPath || hub.path,
         title: h1ToTitle(hub.h1),
         description,
         indexable: hub.indexable,

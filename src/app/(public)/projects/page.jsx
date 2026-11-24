@@ -63,7 +63,7 @@ export default async function ProjectsPage({ searchParams }) {
                 data={breadcrumbSchema([
                     { name: "Home", href: "/" },
                     { name: "Projects" },
-                ])}
+                ], "/projects")}
             />
             <JsonLd
                 data={itemListSchema({
