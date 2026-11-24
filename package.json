@@ -14,6 +14,8 @@
     "seo:audit": "node scripts/seo-audit.mjs",
     "seo:indexnow": "node scripts/indexnow.mjs",
     "seo:redirects": "node scripts/seo-redirect-check.mjs",
+    "seo:llms": "node scripts/llms-validate.mjs",
+    "seo:llms:local": "node scripts/llms-validate.mjs --local",
     "seo:check": "npm run seo:test && npm run seo:crawl && npm run seo:redirects"
   },
   "dependencies": {

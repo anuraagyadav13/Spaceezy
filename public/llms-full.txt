@@ -1,0 +1,59 @@
+# Spaceezy
+
+> Spaceezy is a real estate discovery platform for published projects and properties. The website presents live prices, configurations, availability, location information and direct enquiry paths so buyers can compare options before contacting the team.
+
+This file expands on `llms.txt` with verified, public-facing information only. It does not describe private CRM dashboards, admin pages, APIs or internal documentation.
+
+## About the business
+
+Spaceezy was founded with the stated mission of making the journey of finding a home more transparent. The About page describes curated options, honest advice and end-to-end support for buyers looking at homes in cities or suburbs.
+
+Publicly stated service points:
+
+- Zero brokerage on partner and new developer projects.
+- Dedicated relationship managers for site visits.
+- Legal and documentation assistance.
+- Post-sales support.
+- Listings are described as verified, and project pages show RERA registration details where available.
+
+Leadership listed publicly:
+
+- Gaurav Sharma — Chief Executive Officer.
+- Kamal — Founder.
+
+## How the public website is organised
+
+The site publishes two types of inventory pages: projects (developments) and properties (individual units). Location collections group the published inventory by place and property type. All pages use canonical `https://spaceezy.com` URLs.
+
+## Homepage
+
+- [Spaceezy](https://spaceezy.com/): The main entry point. It highlights featured projects and properties, location collections, the Spaceezy advantage and contact routes. The served area stated on the homepage is Ghaziabad.
+
+## Projects
+
+- [All projects](https://spaceezy.com/projects): A filterable overview of published real estate projects with pricing, configurations and availability.
+- [Eligo Wave City](https://spaceezy.com/projects/eligo-wave-city-c28c62): Residential project in Wave City, Ghaziabad, Uttar Pradesh, developed by Wave Group / Wave Infratech. The page lists configurations, amenities, availability and RERA information.
+- [Dream Homes](https://spaceezy.com/projects/dream-homes-e84e51): Residential project in Wave City, Ghaziabad, Uttar Pradesh, developed by Wave Group. The page lists 1 BHK, 2 BHK and 3 BHK configurations, amenities and RERA information.
+
+## Properties
+
+- [All properties](https://spaceezy.com/properties): Published flats, plots and commercial units with price, area, configuration and availability status.
+- [Eligo Wave City Tower 1 a302](https://spaceezy.com/properties/1c8bb75583bf3d60ee4ef27d02cd13ab): A 3 BHK unit in Eligo Wave City with area, price, amenities and availability information.
+
+## Location collections
+
+- [Flats in Wave City](https://spaceezy.com/flats-in-wave-city): Residential listings published in Wave City.
+- [1 BHK Flats in Wave City](https://spaceezy.com/1-bhk-flats-in-wave-city): 1 BHK residential listings published in Wave City.
+
+## Company and policies
+
+- [About Spaceezy](https://spaceezy.com/about): Company story, leadership and values.
+- [Privacy Policy](https://spaceezy.com/privacy-policy): How personal data submitted on the website and enquiry forms is handled.
+- [Terms of Service](https://spaceezy.com/terms): Terms covering website use, real estate information and transactions.
+
+## Contact and enquiries
+
+- [Contact Spaceezy](https://spaceezy.com/contact): Phone, WhatsApp, email, office address and enquiry options.
+- Phone: +91 76830 20204, Monday to Saturday, 9 am to 6 pm.
+- Email: admin@spaceezy.com.
+- Office: Office No. 04, 1st Floor, Wave Galleria, Sector-3, Wave City, Ghaziabad, Uttar Pradesh 201002.
