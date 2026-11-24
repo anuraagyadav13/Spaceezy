@@ -173,6 +173,27 @@ accepts the page path so both IDs match, and a unit test asserts that equality.
 `ApartmentComplex` and `FAQPage` are valid schema.org types but have no Google
 rich-result preview, so they do not appear in the "Detected" list — no errors.
 
+### Image / cache performance (deployed `fafd5fd`)
+
+The desktop Lighthouse run shared before this change reported LCP **0.8 s**, FCP
+0.3 s, TBT 0 ms, CLS 0, Speed Index 2.5 s, with "Improve image delivery"
+(2,288 KiB) and "Efficient cache lifetimes" (1,484 KiB) warnings. Root causes
+and measured after-state:
+
+| Asset | Before | After |
+| --- | --- | --- |
+| `luxury-living-room-city-view` (hero + CSS background) | 2,330 KB PNG | 182 KB WebP; Next/AVIF at 1920w = **87 KB** |
+| `modern-villa-infinity-pool-sunset` (CSS background) | 2,174 KB PNG | 166 KB WebP; Next/AVIF at 1920w = **84 KB** |
+| `property-site-visit-family` | 2,130 KB PNG | 148 KB WebP |
+| `spaceezy-logo` | 976 KB PNG | 82 KB WebP |
+| `/images/*` cache | `public, max-age=14400` | `public, max-age=31536000, immutable` (nginx reload) |
+
+Total decorative image weight dropped from ~6.6 MB to ~564 KB. Re-running the
+public PageSpeed Insights API immediately after deploy returned HTTP 429, so a
+fresh Lighthouse score could not be captured here; the user should re-run PSI
+in the open tab to confirm the final scores. Mobile LCP measurement is still
+outstanding.
+
 ## Migration / redirect plan (for merge + deploy)
 
 1. Merge the PR to `main`; **no database migration is required**. Deploy the
