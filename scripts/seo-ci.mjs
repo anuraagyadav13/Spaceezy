@@ -100,6 +100,9 @@ function parsePage(html) {
     for (const anchor of anchors) {
         const href = /href="([^"]*)"/i.exec(anchor)[1];
         if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) continue;
+        // Cloudflare email obfuscation injects /cdn-cgi/ links after delivery;
+        // they are not authored links and cannot be checked as site routes.
+        if (href.startsWith("/cdn-cgi/")) continue;
         links.push(decodeEntities(href));
     }
 

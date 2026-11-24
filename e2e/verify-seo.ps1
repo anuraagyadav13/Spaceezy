@@ -317,7 +317,7 @@ foreach ($p in @("/login", "/dashboard")) {
 # ---------- 7. Nav + footer link integrity ----------
 Write-Host "[7] Crawlable navigation" -ForegroundColor Cyan
 $navHrefs = @()
-foreach ($m in [regex]::Matches($homePg.html, '<a[^>]+href="(/[^"#?]*)"')) { $navHrefs += $m.Groups[1].Value }
+foreach ($m in [regex]::Matches($homePg.html, '<a[^>]+href="(/[^"#?]*)"')) { $href = $m.Groups[1].Value; if ($href -notmatch '^/cdn-cgi/') { $navHrefs += $href } }
 $navHrefs = $navHrefs | Sort-Object -Unique
 # Static navigation is always present; hub links come from the data-driven
 # registry and are only rendered when the hub is indexable.
