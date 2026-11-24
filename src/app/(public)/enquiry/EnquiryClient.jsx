@@ -1,6 +1,26 @@
 "use client";
 import { useEffect, useState } from "react";
-import { CheckCircle2, ArrowRight, MapPin } from "lucide-react";
+import {
+    CheckCircle2,
+    ArrowRight,
+    MapPin,
+    UserRound,
+    MessageCircle,
+    Mail,
+    Building2,
+    Pencil,
+    Layers3,
+    MessageSquareText,
+    Headphones,
+    Zap,
+    ShieldCheck,
+    Send,
+    House,
+    CalendarDays,
+    Clock,
+    ChevronDown,
+} from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import {
     fetchPublicProjects,
@@ -10,9 +30,68 @@ import {
     submitPublicEnquiry,
 } from "../../../lib/api/publicSite";
 import { formatPrice } from "../../../utils/format";
+import { BUSINESS } from "../../../config/business";
 
 const placeLabel = (location) =>
     [location?.locality || location?.district, location?.state].filter(Boolean).join(", ");
+
+const inputCls =
+    "w-full rounded-xl border border-gray-200 bg-[#fbfaff] pl-11 pr-4 py-3.5 text-sm text-gray-800 " +
+    "placeholder:text-gray-400 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-100 " +
+    "dark:bg-[#191c25] dark:placeholder:text-gray-500";
+const selectCls =
+    "w-full appearance-none rounded-xl border border-gray-200 bg-[#fbfaff] pl-11 pr-10 py-3.5 text-sm " +
+    "text-gray-800 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-100 " +
+    "disabled:opacity-50 disabled:cursor-not-allowed dark:bg-[#191c25]";
+
+const labelCls = "mb-2 block text-[13px] font-bold text-gray-800";
+const required = <span className="text-rose-500"> *</span>;
+
+function Field({ icon: Icon, label, htmlFor, optional = false, children }) {
+    return (
+        <div>
+            <label className={labelCls} htmlFor={htmlFor}>
+                {label}
+                {optional ? <span className="font-normal text-gray-400"> (Optional)</span> : required}
+            </label>
+            <div className="relative">
+                {Icon && (
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-purple-400">
+                        <Icon size={18} />
+                    </span>
+                )}
+                {children}
+            </div>
+        </div>
+    );
+}
+
+function SelectChevron() {
+    return (
+        <ChevronDown
+            size={16}
+            className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+        />
+    );
+}
+
+const BENEFITS = [
+    {
+        icon: Headphones,
+        title: "Expert Assistance",
+        text: "Get guidance from our property experts",
+    },
+    {
+        icon: Zap,
+        title: "Quick Response",
+        text: "We'll get back to you soon",
+    },
+    {
+        icon: ShieldCheck,
+        title: "Accurate Information",
+        text: "Verified project and unit details",
+    },
+];
 
 export default function EnquiryClient({ type = "enquiry", projectSlug = "", propertyToken = "", configuration = "" }) {
     const isVisit = type === "visit";
@@ -132,15 +211,19 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
 
     if (submitted) {
         return (
-            <div className="bg-white rounded-[32px] p-10 md:p-16 shadow-xl border border-gray-100 text-center">
-                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="mx-auto max-w-2xl rounded-[32px] border border-white bg-white/90 px-8 py-14 text-center shadow-[0_24px_70px_-32px_rgba(76,29,149,0.45)] backdrop-blur">
+                <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50">
                     <CheckCircle2 size={40} className="text-emerald-500" />
                 </div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-4">Request Received!</h2>
-                <p className="text-gray-500 text-lg mb-8 max-w-md mx-auto">
-                    Thank you, {form.name}. Our property experts will get back to you shortly to {isVisit ? "confirm your site visit" : "assist with your enquiry"}.
+                <h2 className="mb-4 text-3xl font-bold text-gray-900">Request Received!</h2>
+                <p className="mx-auto mb-8 max-w-md text-lg text-gray-500">
+                    Thank you, {form.name}. Our property experts will get back to you shortly to{" "}
+                    {isVisit ? "confirm your site visit" : "assist with your enquiry"}.
                 </p>
-                <Link href="/" className="inline-flex items-center gap-2 bg-gray-900 text-white px-8 py-4 rounded-xl font-bold hover:bg-gray-800 transition-colors">
+                <Link
+                    href="/"
+                    className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-8 py-4 font-bold text-white transition-colors hover:bg-purple-700"
+                >
                     Back to Homepage <ArrowRight size={18} />
                 </Link>
             </div>
@@ -148,243 +231,330 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
     }
 
     return (
-        <div className="flex flex-col lg:flex-row gap-12 lg:items-center">
-            <div className="flex-1 lg:pr-12">
-                <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-6">
-                    {isVisit ? "Schedule a Site Visit" : "Enquire Now"}
-                </h1>
-                <p className="text-gray-600 text-lg leading-relaxed mb-8">
-                    {isVisit
-                        ? "Experience our premium properties firsthand. Select your preferred date and time, and our relationship manager will guide you through the property."
-                        : "Have questions about a property or project? Leave your details below and our experts will provide you with all the information you need."}
-                </p>
-                {property && (
-                    <div className="bg-purple-50 rounded-2xl p-6 border border-purple-100 mb-6">
-                        <p className="text-sm font-bold text-purple-800 uppercase tracking-wider mb-1">Enquiring About</p>
-                        <p className="text-xl font-bold text-gray-900">{property.title}</p>
-                        <p className="text-sm text-gray-600">
-                            {[
-                                property.project?.name,
-                                property.configuration,
-                                property.area ? `${property.area} sq.ft` : null,
-                                property.price != null ? formatPrice(property.price) : null,
-                            ].filter(Boolean).join(" · ")}
-                        </p>
-                        {placeLabel(property.location) && (
-                            <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
-                                <MapPin size={14} /> {placeLabel(property.location)}
+        <div className="relative overflow-hidden rounded-[36px] border border-white/70 bg-white/70 shadow-[0_30px_90px_-45px_rgba(76,29,149,0.55)] backdrop-blur-sm lg:grid lg:grid-cols-[0.9fr_1.1fr]">
+            {/* LEFT: brand, copy, benefits and illustration */}
+            <div className="relative overflow-hidden px-6 py-10 sm:px-10 lg:px-12 lg:py-14">
+                <div className="pointer-events-none absolute -left-24 top-24 h-80 w-80 rounded-full bg-purple-200/50 blur-3xl" />
+                <div className="relative">
+                    <div className="mb-14 flex items-center gap-2.5">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+                            <House size={22} />
+                        </span>
+                        <span className="text-xl font-extrabold tracking-tight text-gray-900">{BUSINESS.name}</span>
+                    </div>
+
+                    <h1 className="mb-5 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
+                        {isVisit ? "Schedule a Site Visit" : "Enquire Now"}
+                    </h1>
+                    <p className="mb-10 max-w-lg text-base leading-relaxed text-slate-600 sm:text-lg">
+                        {isVisit
+                            ? "Experience our premium properties firsthand. Select your preferred date and time, and our relationship manager will guide you through the property."
+                            : "Have questions about a property or project? Leave your details below and our experts will provide you with all the information you need."}
+                    </p>
+
+                    {(property || projectSlug) && (
+                        <div className="mb-10 rounded-2xl border border-purple-100 bg-purple-50/80 p-5">
+                            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-purple-700">
+                                {property ? "Enquiring About" : "Selected Project"}
                             </p>
-                        )}
-                    </div>
-                )}
-                {projectSlug && (
-                    <div className="bg-purple-50 rounded-2xl p-6 border border-purple-100 mb-8">
-                        <p className="text-sm font-bold text-purple-800 uppercase tracking-wider mb-1">Selected Project</p>
-                        <p className="text-xl font-bold text-gray-900">{selectedProject?.name || projectSlug}</p>
-                        {selectedProject && (
-                            <p className="text-sm text-gray-600">{placeLabel(selectedProject.location) || "Location coming soon"}</p>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            <div className="flex-1 w-full max-w-xl">
-                <form onSubmit={handleSubmit} className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-200/50 border border-gray-100 flex flex-col gap-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-name">Name *</label>
-                            <input
-                                id="enquiry-name"
-                                required
-                                value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                                placeholder="John Doe"
-                            />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-phone">WhatsApp Number *</label>
-                            <input
-                                id="enquiry-phone"
-                                required
-                                value={form.phone}
-                                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                                placeholder="+91 98765 43210"
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-email">Email</label>
-                        <input
-                            id="enquiry-email"
-                            type="email"
-                            value={form.email}
-                            onChange={(e) => setForm({ ...form, email: e.target.value })}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                            placeholder="john@example.com"
-                        />
-                    </div>
-
-                    {!projectSlug && (
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-project">Interested Project (Optional)</label>
-                            <select
-                                id="enquiry-project"
-                                value={form.projectSlug}
-                                onChange={(e) => setForm({ ...form, projectSlug: e.target.value })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                            >
-                                <option value="">Select a project</option>
-                                {projects.map((project) => (
-                                    <option key={project.slug} value={project.slug}>{project.name}</option>
-                                ))}
-                            </select>
-                            {!form.projectSlug && (
-                                <>
-                                    <p className="text-xs text-gray-400 mt-2">If your project isn&apos;t listed, type it below.</p>
-                                    <input
-                                        id="enquiry-project-other"
-                                        value={form.projectOther}
-                                        onChange={(e) => setForm({ ...form, projectOther: e.target.value })}
-                                        className="mt-2 w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                                        placeholder="Type your project name"
-                                    />
-                                </>
+                            <p className="text-lg font-bold text-gray-900">
+                                {property?.title || selectedProject?.name || projectSlug}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-600">
+                                {property
+                                    ? [
+                                          property.project?.name,
+                                          property.configuration,
+                                          property.area ? `${property.area} sq.ft` : null,
+                                          property.price != null ? formatPrice(property.price) : null,
+                                      ]
+                                          .filter(Boolean)
+                                          .join(" · ")
+                                    : placeLabel(selectedProject?.location) || "Location coming soon"}
+                            </p>
+                            {property && placeLabel(property.location) && (
+                                <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
+                                    <MapPin size={14} /> {placeLabel(property.location)}
+                                </p>
                             )}
                         </div>
                     )}
 
-                    <div>
-                        <span className="text-xs font-bold text-gray-500 uppercase mb-2 block">Location (Optional)</span>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div>
-                                <label className="sr-only" htmlFor="enquiry-state">State</label>
-                                <select
-                                    id="enquiry-state"
-                                    value={form.stateId}
-                                    onChange={(e) => setForm({ ...form, stateId: e.target.value, districtId: "", regionId: "" })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                                >
-                                    <option value="">Select state</option>
-                                    {states.map((state) => (
-                                        <option key={state.id} value={state.id}>{state.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="sr-only" htmlFor="enquiry-district">District</label>
-                                <select
-                                    id="enquiry-district"
-                                    disabled={!form.stateId}
-                                    value={form.districtId}
-                                    onChange={(e) => setForm({ ...form, districtId: e.target.value, regionId: "" })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <option value="">{form.stateId ? "Select district" : "Select state first"}</option>
-                                    {(selectedState?.districts || []).map((district) => (
-                                        <option key={district.id} value={district.id}>{district.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="sr-only" htmlFor="enquiry-region">Region</label>
-                                <select
-                                    id="enquiry-region"
-                                    disabled={!form.districtId}
-                                    value={form.regionId}
-                                    onChange={(e) => setForm({ ...form, regionId: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <option value="">
-                                        {!form.districtId
-                                            ? "Select district first"
-                                            : (selectedDistrict?.regions || []).length
-                                                ? "Select region"
-                                                : "No regions listed"}
-                                    </option>
-                                    {(selectedDistrict?.regions || []).map((region) => (
-                                        <option key={region.id} value={region.id}>{region.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
+                    <ul className="space-y-6">
+                        {BENEFITS.map(({ icon: Icon, title, text }) => (
+                            <li key={title} className="flex items-start gap-4">
+                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+                                    <Icon size={20} />
+                                </span>
+                                <div>
+                                    <p className="font-bold text-gray-900">{title}</p>
+                                    <p className="text-sm text-slate-500">{text}</p>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="relative mt-10 hidden lg:block">
+                    <div className="absolute bottom-0 left-1/2 h-52 w-72 -translate-x-1/2 rounded-full bg-purple-200/70 blur-2xl" />
+                    <div className="relative mx-auto max-w-sm overflow-hidden rounded-t-[120px]">
+                        <Image
+                            src="/images/login-bg.jpg"
+                            alt="Modern residential tower at sunset"
+                            width={900}
+                            height={600}
+                            sizes="(max-width: 1024px) 0px, 420px"
+                            className="h-64 w-full object-cover object-center"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* RIGHT: the form card */}
+            <div className="bg-white/60 p-4 sm:p-6 lg:p-8">
+                <form
+                    onSubmit={handleSubmit}
+                    className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-[0_24px_70px_-40px_rgba(76,29,149,0.45)] sm:p-8"
+                >
+                    <div className="mb-7 flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+                            <UserRound size={20} />
+                        </span>
+                        <h2 className="text-lg font-bold text-gray-900">Your Details</h2>
                     </div>
 
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-unit-type">Interested Unit Type (Optional)</label>
-                        <select
-                            id="enquiry-unit-type"
-                            value={form.unitType}
-                            onChange={(e) => setForm({ ...form, unitType: e.target.value })}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                        >
-                            <option value="">Any unit type</option>
-                            {unitTypes.map((unitType) => (
-                                <option key={unitType} value={unitType}>{unitType}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {isVisit && (
-                        <div className="grid grid-cols-2 gap-5">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-date">Preferred Date *</label>
+                    <div className="flex flex-col gap-5">
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <Field icon={UserRound} label="Name" htmlFor="enquiry-name">
                                 <input
-                                    id="enquiry-date"
+                                    id="enquiry-name"
                                     required
-                                    type="date"
-                                    value={form.date}
-                                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                    value={form.name}
+                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                    className={inputCls}
+                                    placeholder="John Doe"
                                 />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-time">Time</label>
+                            </Field>
+                            <Field icon={MessageCircle} label="WhatsApp Number" htmlFor="enquiry-phone">
+                                <input
+                                    id="enquiry-phone"
+                                    required
+                                    value={form.phone}
+                                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                                    className={inputCls}
+                                    placeholder="+91 98765 43210"
+                                />
+                            </Field>
+                        </div>
+
+                        <Field icon={Mail} label="Email" htmlFor="enquiry-email" optional>
+                            <input
+                                id="enquiry-email"
+                                type="email"
+                                value={form.email}
+                                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                className={inputCls}
+                                placeholder="john@example.com"
+                            />
+                        </Field>
+
+                        {!projectSlug && (
+                            <Field icon={Building2} label="Interested Project" htmlFor="enquiry-project" optional>
                                 <select
-                                    id="enquiry-time"
-                                    value={form.time}
-                                    onChange={(e) => setForm({ ...form, time: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                    id="enquiry-project"
+                                    value={form.projectSlug}
+                                    onChange={(e) => setForm({ ...form, projectSlug: e.target.value })}
+                                    className={selectCls}
                                 >
-                                    <option value="10:00">Morning (10 AM - 12 PM)</option>
-                                    <option value="13:00">Afternoon (12 PM - 4 PM)</option>
-                                    <option value="16:30">Evening (4 PM - 7 PM)</option>
+                                    <option value="">Select a project</option>
+                                    {projects.map((project) => (
+                                        <option key={project.slug} value={project.slug}>
+                                            {project.name}
+                                        </option>
+                                    ))}
                                 </select>
+                                <SelectChevron />
+                                {!form.projectSlug && (
+                                    <>
+                                        <p className="mt-2 text-xs text-gray-400">
+                                            If your project isn&apos;t listed, type it below.
+                                        </p>
+                                        <div className="relative mt-2">
+                                            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-purple-400">
+                                                <Pencil size={18} />
+                                            </span>
+                                            <input
+                                                id="enquiry-project-other"
+                                                value={form.projectOther}
+                                                onChange={(e) => setForm({ ...form, projectOther: e.target.value })}
+                                                className={inputCls}
+                                                placeholder="Type your project name"
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </Field>
+                        )}
+
+                        <div>
+                            <span className={labelCls}>Location (Optional)</span>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <div className="relative">
+                                    <label className="sr-only" htmlFor="enquiry-state">
+                                        State
+                                    </label>
+                                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-purple-400">
+                                        <MapPin size={18} />
+                                    </span>
+                                    <select
+                                        id="enquiry-state"
+                                        value={form.stateId}
+                                        onChange={(e) =>
+                                            setForm({ ...form, stateId: e.target.value, districtId: "", regionId: "" })
+                                        }
+                                        className={selectCls}
+                                    >
+                                        <option value="">Select state</option>
+                                        {states.map((state) => (
+                                            <option key={state.id} value={state.id}>
+                                                {state.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <SelectChevron />
+                                </div>
+                                <div className="relative">
+                                    <label className="sr-only" htmlFor="enquiry-district">
+                                        District
+                                    </label>
+                                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-purple-400">
+                                        <Building2 size={18} />
+                                    </span>
+                                    <select
+                                        id="enquiry-district"
+                                        disabled={!form.stateId}
+                                        value={form.districtId}
+                                        onChange={(e) => setForm({ ...form, districtId: e.target.value, regionId: "" })}
+                                        className={selectCls}
+                                    >
+                                        <option value="">{form.stateId ? "Select district" : "Select state first"}</option>
+                                        {(selectedState?.districts || []).map((district) => (
+                                            <option key={district.id} value={district.id}>
+                                                {district.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <SelectChevron />
+                                </div>
+                                <div className="relative">
+                                    <label className="sr-only" htmlFor="enquiry-region">
+                                        Region
+                                    </label>
+                                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-purple-400">
+                                        <MapPin size={18} />
+                                    </span>
+                                    <select
+                                        id="enquiry-region"
+                                        disabled={!form.districtId}
+                                        value={form.regionId}
+                                        onChange={(e) => setForm({ ...form, regionId: e.target.value })}
+                                        className={selectCls}
+                                    >
+                                        <option value="">
+                                            {!form.districtId
+                                                ? "Select district first"
+                                                : (selectedDistrict?.regions || []).length
+                                                  ? "Select region"
+                                                  : "No regions listed"}
+                                        </option>
+                                        {(selectedDistrict?.regions || []).map((region) => (
+                                            <option key={region.id} value={region.id}>
+                                                {region.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <SelectChevron />
+                                </div>
                             </div>
                         </div>
-                    )}
 
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block" htmlFor="enquiry-message">Message</label>
-                        <textarea
-                            id="enquiry-message"
-                            value={form.message}
-                            onChange={(e) => setForm({ ...form, message: e.target.value })}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                            rows="3"
-                            placeholder="Any specific requirements?"
-                        ></textarea>
+                        <Field icon={Layers3} label="Interested Unit Type" htmlFor="enquiry-unit-type" optional>
+                            <select
+                                id="enquiry-unit-type"
+                                value={form.unitType}
+                                onChange={(e) => setForm({ ...form, unitType: e.target.value })}
+                                className={selectCls}
+                            >
+                                <option value="">Any unit type</option>
+                                {unitTypes.map((unitType) => (
+                                    <option key={unitType} value={unitType}>
+                                        {unitType}
+                                    </option>
+                                ))}
+                            </select>
+                            <SelectChevron />
+                        </Field>
+
+                        {isVisit && (
+                            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                <Field icon={CalendarDays} label="Preferred Date" htmlFor="enquiry-date">
+                                    <input
+                                        id="enquiry-date"
+                                        required
+                                        type="date"
+                                        value={form.date}
+                                        onChange={(e) => setForm({ ...form, date: e.target.value })}
+                                        className={inputCls}
+                                    />
+                                </Field>
+                                <Field icon={Clock} label="Time" htmlFor="enquiry-time" optional>
+                                    <select
+                                        id="enquiry-time"
+                                        value={form.time}
+                                        onChange={(e) => setForm({ ...form, time: e.target.value })}
+                                        className={selectCls}
+                                    >
+                                        <option value="10:00">Morning (10 AM - 12 PM)</option>
+                                        <option value="13:00">Afternoon (12 PM - 4 PM)</option>
+                                        <option value="16:30">Evening (4 PM - 7 PM)</option>
+                                    </select>
+                                    <SelectChevron />
+                                </Field>
+                            </div>
+                        )}
+
+                        <Field icon={MessageSquareText} label="Message" htmlFor="enquiry-message" optional>
+                            <textarea
+                                id="enquiry-message"
+                                value={form.message}
+                                onChange={(e) => setForm({ ...form, message: e.target.value })}
+                                className={`w-full resize-y rounded-xl border border-gray-200 bg-[#fbfaff] px-4 py-3 pl-11 text-sm text-gray-800 placeholder:text-gray-400 outline-none transition focus:border-purple-400 focus:ring-4 focus:ring-purple-100 dark:bg-[#191c25] dark:placeholder:text-gray-500`}
+                                rows="3"
+                                placeholder="Any specific requirements?"
+                            />
+                        </Field>
+
+                        {error && (
+                            <div
+                                className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
+                                role="alert"
+                            >
+                                {error}
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 py-4 text-lg font-bold text-white shadow-lg shadow-purple-200 transition-all hover:-translate-y-0.5 hover:bg-purple-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            <Send size={18} />
+                            {submitting ? "Sending…" : isVisit ? "Confirm Visit Request" : "Submit Enquiry"}
+                        </button>
+                        <p className="text-center text-xs text-gray-400">
+                            By submitting this form, you agree to our privacy policy.
+                        </p>
                     </div>
-
-                    {error && (
-                        <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-xl px-4 py-3" role="alert">
-                            {error}
-                        </div>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={submitting}
-                        className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-gray-800 transition-colors mt-2 text-lg disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {submitting
-                            ? "Sending…"
-                            : isVisit
-                                ? "Confirm Visit Request"
-                                : "Submit Enquiry"}
-                    </button>
-                    <p className="text-xs text-center text-gray-400 mt-2">By submitting this form, you agree to our privacy policy.</p>
                 </form>
             </div>
         </div>

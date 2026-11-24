@@ -9,8 +9,8 @@ export default async function EnquiryPage({ searchParams }) {
     const sp = (await searchParams) || {};
 
     return (
-        <div className="bg-gray-50 min-h-screen pt-32 pb-24">
-            <div className="container mx-auto px-6 md:px-12">
+        <div className="min-h-screen bg-gradient-to-br from-[#f8f6ff] via-[#f5f2ff] to-[#fbfaff] pt-28 pb-16 dark:from-[#0f1117] dark:via-[#12141c] dark:to-[#0f1117]">
+            <div className="container mx-auto px-4 sm:px-6 md:px-12">
                 <EnquiryClient
                     type={first(sp.type) === "visit" ? "visit" : "enquiry"}
                     projectSlug={first(sp.projectSlug)}
