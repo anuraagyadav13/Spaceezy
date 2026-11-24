@@ -25,11 +25,43 @@ function normalizeConfig(label) {
     return String(label || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+// Canonical display label for a free-text configuration. Typos, spacing and
+// casing variants collapse onto the controlled vocabulary so URLs, metadata
+// and filters never fork ("2bhk", "2-BHK" and " 2  bhk " -> "2 BHK").
+const CANONICAL_ALIASES = new Map([
+    ['studio', 'Studio'],
+    ['villa', 'Villa'],
+    ['villas', 'Villa'],
+    ['plot', 'Plot'],
+    ['plots', 'Plot'],
+    ['office', 'Office'],
+    ['shop', 'Retail / Shop'],
+    ['retail', 'Retail / Shop'],
+    ['retail shop', 'Retail / Shop'],
+    ['showroom', 'Showroom'],
+    ['warehouse', 'Warehouse'],
+    ['godown', 'Warehouse'],
+    ['industrial', 'Industrial'],
+    ['commercial plot', 'Commercial Plot'],
+    ['other', 'Other']
+]);
+
+function canonicalConfigurationLabel(label) {
+    const raw = String(label || '').trim().replace(/\s+/g, ' ');
+    if (!raw) return '';
+    const compact = raw.toLowerCase().replace(/[\s-]+/g, '');
+    const bhk = /^(\d+(?:\.\d+)?)bhk$/.exec(compact);
+    if (bhk) return `${parseFloat(bhk[1])} BHK`;
+    const key = raw.toLowerCase().replace(/[\s-]+/g, ' ').trim();
+    return CANONICAL_ALIASES.get(key) || raw;
+}
+
 module.exports = {
     PROPERTY_TYPES,
     CONFIGURATIONS_BY_TYPE,
     configurationsFor,
     isValidConfiguration,
     extractBhk,
-    normalizeConfig
+    normalizeConfig,
+    canonicalConfigurationLabel
 };

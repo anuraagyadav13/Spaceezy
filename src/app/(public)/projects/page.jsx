@@ -1,28 +1,25 @@
 import ProjectsClient from "./ProjectsClient";
 import { JsonLd } from "../../../components/seo/JsonLd";
-import { breadcrumbJsonLd } from "../../../components/seo/Breadcrumbs";
+import { breadcrumbSchema, itemListSchema } from "../../../lib/seo/schema";
+import { canonicalUrl } from "../../../lib/seo/site";
+import { staticPageMetadata } from "../../../lib/seo/staticPages";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
-export const metadata = {
-    title: "Real Estate Projects | New & Under-Construction Homes | Spaceezy",
-    description:
-        "Browse real estate projects with live pricing, configurations and availability. Filter by location, property type and budget.",
-    alternates: { canonical: "/projects" },
-    openGraph: {
-        title: "Real Estate Projects | New & Under-Construction Homes | Spaceezy",
-        description:
-            "Browse real estate projects with live pricing, configurations and availability.",
-        url: "/projects",
-        type: "website",
-        images: [{ url: "/images/og-default.jpg" }],
-    },
-    twitter: {
-        card: "summary_large_image",
-        title: "Real Estate Projects | New & Under-Construction Homes | Spaceezy",
-        description: "Browse real estate projects with live pricing, configurations and availability.",
-    },
-};
+const FILTER_KEYS = ["q", "stateId", "districtId", "regionId", "propertyType", "minPrice", "maxPrice", "page", "sort"];
+
+const first = (value) => (Array.isArray(value) ? value[0] : value) || "";
+
+export async function generateMetadata({ searchParams }) {
+    const base = staticPageMetadata("/projects");
+    const sp = (await searchParams) || {};
+    const filtered = FILTER_KEYS.some((key) => first(sp[key]));
+    if (!filtered) return base;
+    // Filter permutations are the same content as /projects. They keep the
+    // same robots directives (no noindex) and only canonicalise to the clean
+    // URL; the parameter variants stay disallowed in robots.txt.
+    return { ...base, alternates: { canonical: canonicalUrl("/projects") } };
+}
 
 async function getJson(path, params = {}) {
     const query = new URLSearchParams();
@@ -42,8 +39,6 @@ async function getJson(path, params = {}) {
     }
 }
 
-const first = (value) => (Array.isArray(value) ? value[0] : value) || "";
-
 export default async function ProjectsPage({ searchParams }) {
     const sp = (await searchParams) || {};
     const filters = {
@@ -56,6 +51,7 @@ export default async function ProjectsPage({ searchParams }) {
     };
 
     const data = await getJson("/public/projects", { ...filters, limit: 50 });
+    const items = (data && data.items) || [];
 
     return (
         <>
@@ -66,10 +62,22 @@ export default async function ProjectsPage({ searchParams }) {
                 initialFilters={filters}
             />
             <JsonLd
-                data={breadcrumbJsonLd([
+                data={breadcrumbSchema([
                     { name: "Home", href: "/" },
                     { name: "Projects" },
-                ])}
+                ], "/projects")}
+            />
+            <JsonLd
+                data={itemListSchema({
+                    name: "Real estate projects on Spaceezy",
+                    url: "/projects",
+                    items: items.map((project) => ({
+                        name: project.name,
+                        url: `/projects/${project.slug}`,
+                        type: "ApartmentComplex",
+                        price: project.startingPrice,
+                    })),
+                })}
             />
         </>
     );

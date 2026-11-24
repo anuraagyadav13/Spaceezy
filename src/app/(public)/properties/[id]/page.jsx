@@ -1,13 +1,17 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { formatPrice } from "../../../../utils/format";
 import { MapPin, Maximize, Compass, ArrowLeft, Building2, ImageOff } from "lucide-react";
 import { JsonLd } from "../../../../components/seo/JsonLd";
-import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/seo/Breadcrumbs";
+import { Breadcrumbs } from "../../../../components/seo/Breadcrumbs";
 import { PropertyCard } from "../../../../components/seo/Cards";
 import ExpandableText from "../../../../components/public/ExpandableText";
-import { LANDING_BY_PLACE } from "../../../../lib/seo/landingPages";
-import { absoluteUrl } from "../../../../lib/seo/site";
+import { unitMetadata } from "../../../../lib/seo/metadata";
+import { unitFacts } from "../../../../lib/seo/facts";
+import { breadcrumbSchema, unitSchema } from "../../../../lib/seo/schema";
+import { findPlaceHubs } from "../../../../lib/seo/hubs";
+import { isOptimizableImage } from "../../../../lib/seo/images";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -48,43 +52,26 @@ export async function generateMetadata({ params }) {
     const { id } = await params;
     const property = await getPublicProperty(id);
     if (!property) {
-        return { title: "Property not found | Spaceezy" };
+        return {
+            title: "Property not found | Spaceezy",
+            robots: { index: false, follow: true },
+        };
     }
-
-    const locationText = property.locationLabel || [property.location?.city, property.location?.state].filter(Boolean).join(", ");
-    const title = `${property.title}${property.project?.name ? ` | ${property.project.name}` : ""}`;
-    const description = [
-        property.configuration && `${property.configuration} unit`,
-        property.area && `${property.area} sq.ft`,
-        property.price != null && formatPrice(property.price),
-        locationText
-    ].filter(Boolean).join(" · ");
-
-    return {
-        title,
-        description,
-        alternates: { canonical: `/properties/${property.token}` },
-        openGraph: {
-            title,
-            description,
-            url: `/properties/${property.token}`,
-            type: "website",
-            ...(property.images && property.images[0]
-                ? { images: [{ url: property.images[0] }] }
-                : (property.project?.image ? { images: [{ url: property.project.image }] } : {}))
-        },
-        twitter: {
-            card: "summary_large_image",
-            title,
-            description
-        }
-    };
+    return unitMetadata(property);
 }
 
 export default async function PropertyDetailPage({ params }) {
     const { id } = await params;
     const property = await getPublicProperty(id);
     if (!property) notFound();
+
+    const facts = unitFacts(property);
+
+    // Lifecycle rule: a sold unit has no value of its own any more — send its
+    // link to the parent project instead of leaving a soft-404.
+    if (facts.isSold) {
+        permanentRedirect(property.project?.slug ? `/projects/${property.project.slug}` : "/properties");
+    }
 
     const project = property.project || {};
     const gallery = property.images || [];
@@ -100,13 +87,7 @@ export default async function PropertyDetailPage({ params }) {
         siblings = ((data && data.items) || []).filter((p) => p.token !== property.token).slice(0, 3);
     }
 
-    const placeLinks = [];
-    const addPlace = (name) => {
-        const s = name && LANDING_BY_PLACE[name];
-        if (s && !placeLinks.some((l) => l.slug === s)) placeLinks.push({ slug: s, name });
-    };
-    addPlace(property.location?.region);
-    addPlace(property.location?.district);
+    const placeLinks = await findPlaceHubs([property.location?.region, property.location?.district]);
 
     const breadcrumbs = [
         { name: "Home", href: "/" },
@@ -115,48 +96,12 @@ export default async function PropertyDetailPage({ params }) {
         { name: property.title, href: null },
     ];
 
-    const residenceJsonLd = {
-        "@context": "https://schema.org",
-        "@type": "Residence",
-        name: property.title,
-        url: absoluteUrl(`/properties/${property.token}`),
-        ...(property.images && property.images[0] ? { image: property.images[0] } : {}),
-        description:
-            property.description ||
-            `${property.title}${property.configuration ? ` — ${property.configuration}` : ""}${project.name ? ` at ${project.name}` : ""}.`,
-        ...(property.locationLabel || property.address
-            ? {
-                  address: {
-                      "@type": "PostalAddress",
-                      ...(property.address ? { streetAddress: property.address } : {}),
-                      ...(property.location?.district ? { addressLocality: property.location.district } : {}),
-                      ...(property.location?.state ? { addressRegion: property.location.state } : {}),
-                      addressCountry: "IN",
-                  },
-              }
-            : {}),
-        ...(property.area
-            ? { floorSize: { "@type": "QuantitativeValue", value: Number(property.area) || property.area, unitCode: "FTK" } }
-            : {}),
-        ...(property.price != null
-            ? {
-                  offers: {
-                      "@type": "Offer",
-                      price: property.price,
-                      priceCurrency: "INR",
-                      availability:
-                          property.availability === "Available"
-                              ? "https://schema.org/InStock"
-                              : property.availability === "Limited Availability"
-                                  ? "https://schema.org/PreOrder"
-                                  : "https://schema.org/SoldOut",
-                  },
-              }
-            : {}),
-        ...(project.slug
-            ? { isPartOf: { "@type": "Thing", name: project.name, url: absoluteUrl(`/projects/${project.slug}`) } }
-            : {}),
-    };
+    const listingJsonLd = unitSchema({
+        facts,
+        images: gallery,
+        url: `/properties/${property.token}`,
+        description: property.description,
+    });
 
     return (
         <div className="bg-gray-50 min-h-screen pt-32 pb-32">
@@ -171,14 +116,36 @@ export default async function PropertyDetailPage({ params }) {
                     {gallery.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-2">
                             <div className="relative h-64 md:h-[500px] rounded-[32px] overflow-hidden bg-gray-100">
-                                <img src={gallery[0]} alt={property.title} className="w-full h-full object-cover" loading="eager" />
+                                <Image
+                                    src={gallery[0]}
+                                    alt={`${property.title}${property.locationLabel ? ` in ${property.locationLabel}` : ""} — main photo`}
+                                    fill
+                                    priority
+                                    sizes="(max-width: 768px) 100vw, 50vw"
+                                    unoptimized={!isOptimizableImage(gallery[0])}
+                                    className="object-cover"
+                                />
                             </div>
                             <div className="grid grid-rows-2 gap-2 h-64 md:h-[500px]">
                                 <div className="relative rounded-[32px] overflow-hidden bg-gray-100">
-                                    <img src={gallery[1] || project.image || gallery[0]} alt={project.name || "Property"} className="w-full h-full object-cover" loading="lazy" />
+                                    <Image
+                                        src={gallery[1] || project.image || gallery[0]}
+                                        alt={`${property.title} — photo 2`}
+                                        fill
+                                        sizes="(max-width: 768px) 100vw, 25vw"
+                                        unoptimized={!isOptimizableImage(gallery[1] || project.image || gallery[0])}
+                                        className="object-cover"
+                                    />
                                 </div>
                                 <div className="relative rounded-[32px] overflow-hidden bg-gray-100">
-                                    <img src={gallery[2] || project.image || gallery[0]} alt={project.name || "Property"} className="w-full h-full object-cover" loading="lazy" />
+                                    <Image
+                                        src={gallery[2] || project.image || gallery[0]}
+                                        alt={`${property.title} — photo 3`}
+                                        fill
+                                        sizes="(max-width: 768px) 100vw, 25vw"
+                                        unoptimized={!isOptimizableImage(gallery[2] || project.image || gallery[0])}
+                                        className="object-cover"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -204,11 +171,11 @@ export default async function PropertyDetailPage({ params }) {
                                     <div className="flex flex-wrap gap-2 mt-3">
                                         {placeLinks.map((l) => (
                                             <Link
-                                                key={l.slug}
-                                                href={`/${l.slug}`}
+                                                key={l.href}
+                                                href={l.href}
                                                 className="bg-purple-50 text-purple-700 border border-purple-100 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-purple-100 transition-colors"
                                             >
-                                                Properties in {l.name}
+                                                {l.label}
                                             </Link>
                                         ))}
                                     </div>
@@ -239,7 +206,7 @@ export default async function PropertyDetailPage({ params }) {
                                 className="mb-8"
                                 text={
                                     property.description ||
-                                    `${property.title} is a ${property.configuration || "premium"} residence in ${project.name || "this project"}. Contact us for full details, pricing and a site visit.`
+                                    `${property.title}${property.configuration ? ` — ${property.configuration}` : ""}${project.name ? ` in ${project.name}` : ""}${property.area ? `, ${property.area} sq.ft` : ""}. Contact us for full details, pricing and a site visit.`
                                 }
                             />
 
@@ -293,12 +260,14 @@ export default async function PropertyDetailPage({ params }) {
 
                                 <div className="flex flex-col gap-3">
                                     <Link
+                                        rel="nofollow"
                                         href={`/enquiry?propertyToken=${encodeURIComponent(property.token)}${property.enquiry?.projectSlug ? `&projectSlug=${encodeURIComponent(property.enquiry.projectSlug)}` : ""}`}
                                         className="w-full text-center bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-gray-800 transition-colors"
                                     >
                                         Enquire Now
                                     </Link>
                                     <Link
+                                        rel="nofollow"
                                         href={`/enquiry?propertyToken=${encodeURIComponent(property.token)}${property.enquiry?.projectSlug ? `&projectSlug=${encodeURIComponent(property.enquiry.projectSlug)}` : ""}&type=visit`}
                                         className="w-full text-center bg-purple-50 text-purple-700 py-4 rounded-xl font-bold hover:bg-purple-100 transition-colors border border-purple-100"
                                     >
@@ -312,8 +281,8 @@ export default async function PropertyDetailPage({ params }) {
                 </div>
             </div>
 
-            <JsonLd data={breadcrumbJsonLd(breadcrumbs)} />
-            <JsonLd data={residenceJsonLd} />
+            <JsonLd data={breadcrumbSchema(breadcrumbs, `/properties/${property.token}`)} />
+            <JsonLd data={listingJsonLd} />
         </div>
     );
 }

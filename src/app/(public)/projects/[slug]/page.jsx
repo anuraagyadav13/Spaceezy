@@ -1,15 +1,21 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { formatPrice } from "../../../../utils/format";
 import {
     MapPin, Building, FileText, Calendar, Home, LayoutGrid, ImageOff
 } from "lucide-react";
 import { JsonLd } from "../../../../components/seo/JsonLd";
-import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/seo/Breadcrumbs";
+import { Breadcrumbs } from "../../../../components/seo/Breadcrumbs";
 import { PropertyCard, ProjectCard } from "../../../../components/seo/Cards";
 import ExpandableText from "../../../../components/public/ExpandableText";
 import AmenitiesGrid from "../../../../components/public/AmenitiesGrid";
-import { LANDING_BY_PLACE } from "../../../../lib/seo/landingPages";
+import { projectMetadata } from "../../../../lib/seo/metadata";
+import { projectFacts } from "../../../../lib/seo/facts";
+import { breadcrumbSchema, faqSchema, projectSchema } from "../../../../lib/seo/schema";
+import { findPlaceHubs } from "../../../../lib/seo/hubs";
+import { isOptimizableImage } from "../../../../lib/seo/images";
+import { retiredProjectPath } from "../../../../lib/seo/retired";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -56,44 +62,29 @@ function formatDate(value) {
 
 export async function generateMetadata({ params }) {
     const { slug } = await params;
+    if (retiredProjectPath(slug)) {
+        return { title: "Page moved | Spaceezy", robots: { index: false, follow: true } };
+    }
     const project = await getPublicProject(slug);
     if (!project) {
-        return { title: "Project not found | Spaceezy" };
+        return {
+            title: "Project not found | Spaceezy",
+            robots: { index: false, follow: true },
+        };
     }
-
-    const locationText = project.locationLabel || [project.location?.city, project.location?.state].filter(Boolean).join(", ");
-    const title = `${project.name}${project.projectType ? ` | ${project.projectType}` : ""}`;
-    const description = project.shortDescription
-        || [project.shortDescription, locationText, project.startingPrice != null && `Starting ${formatPrice(project.startingPrice)}`]
-            .filter(Boolean).join(" · ")
-        || `Explore ${project.name} — configurations, pricing, amenities and availability.`;
-
-    return {
-        title,
-        description,
-        alternates: { canonical: `/projects/${project.slug}` },
-        openGraph: {
-            title,
-            description,
-            url: `/projects/${project.slug}`,
-            type: "website",
-            ...(project.heroImage ? { images: [{ url: project.heroImage }] } : {})
-        },
-        twitter: {
-            card: "summary_large_image",
-            title,
-            description
-        }
-    };
+    return projectMetadata(project);
 }
 
 export default async function ProjectDetailPage({ params }) {
     const { slug } = await params;
+    const retiredTo = retiredProjectPath(slug);
+    if (retiredTo) permanentRedirect(retiredTo);
     const project = await getPublicProject(slug);
     if (!project) notFound();
 
-    const priceRange = project.startingPrice != null
-        ? `${formatPrice(project.startingPrice)}${project.maximumPrice != null && project.maximumPrice !== project.startingPrice ? ` – ${formatPrice(project.maximumPrice)}` : ""}`
+    const facts = projectFacts(project);
+    const priceRange = facts.priceMin
+        ? `${formatPrice(facts.priceMin)}${facts.priceMax && facts.priceMax !== facts.priceMin ? ` – ${formatPrice(facts.priceMax)}` : ""}`
         : "On request";
 
     const [unitsData, allProjectsData] = await Promise.all([
@@ -105,13 +96,7 @@ export default async function ProjectDetailPage({ params }) {
         .filter((p) => p.slug !== project.slug && project.location?.district && p.location?.district === project.location.district)
         .slice(0, 3);
 
-    const placeLinks = [];
-    const addPlace = (name) => {
-        const s = name && LANDING_BY_PLACE[name];
-        if (s && !placeLinks.some((l) => l.slug === s)) placeLinks.push({ slug: s, name });
-    };
-    addPlace(project.location?.region);
-    addPlace(project.location?.district);
+    const placeLinks = await findPlaceHubs([project.location?.region, project.location?.district]);
 
     const faqs = [];
     if (project.configurations && project.configurations.length) {
@@ -150,7 +135,15 @@ export default async function ProjectDetailPage({ params }) {
             {/* HERO */}
             <div className="relative h-[60vh] md:h-[80vh] w-full bg-gray-900">
                 {project.heroImage ? (
-                    <img src={project.heroImage} alt={project.name} className="w-full h-full object-cover" />
+                    <Image
+                        src={project.heroImage}
+                        alt={`${project.name}${project.locationLabel ? ` in ${project.locationLabel}` : ""} — project cover`}
+                        fill
+                        priority
+                        sizes="100vw"
+                        unoptimized={!isOptimizableImage(project.heroImage)}
+                        className="object-cover"
+                    />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-600">
                         <ImageOff size={48} />
@@ -169,11 +162,11 @@ export default async function ProjectDetailPage({ params }) {
                         <div className="flex flex-wrap gap-2 mt-4">
                             {placeLinks.map((l) => (
                                 <Link
-                                    key={l.slug}
-                                    href={`/${l.slug}`}
+                                    key={l.href}
+                                    href={l.href}
                                     className="bg-white/15 hover:bg-white/30 backdrop-blur-md text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/25 transition-colors"
                                 >
-                                    Properties in {l.name}
+                                    {l.label}
                                 </Link>
                             ))}
                         </div>
@@ -261,7 +254,14 @@ export default async function ProjectDetailPage({ params }) {
                         <div className="grid grid-cols-2 gap-4">
                             {(project.images || []).slice(1).map((img, i) => (
                                 <div key={i} className="relative h-48 md:h-64 rounded-3xl overflow-hidden group bg-gray-100">
-                                    <img src={img} alt={`${project.name} Gallery ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                                    <Image
+                                        src={img}
+                                        alt={`${project.name}${project.locationLabel ? `, ${project.locationLabel}` : ""} — photo ${i + 2}`}
+                                        fill
+                                        sizes="(max-width: 768px) 50vw, 33vw"
+                                        unoptimized={!isOptimizableImage(img)}
+                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                    />
                                 </div>
                             ))}
                             {(project.images || []).length <= 1 && (
@@ -348,10 +348,10 @@ export default async function ProjectDetailPage({ params }) {
                             </div>
                         </div>
 
-                        <Link href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}`} className="w-full flex justify-center items-center py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors mb-3">
+                        <Link rel="nofollow" href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}`} className="w-full flex justify-center items-center py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors mb-3">
                             Enquire Now
                         </Link>
-                        <Link href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}&type=visit`} className="w-full flex justify-center items-center py-4 bg-purple-50 text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-colors border border-purple-100">
+                        <Link rel="nofollow" href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}&type=visit`} className="w-full flex justify-center items-center py-4 bg-purple-50 text-purple-700 rounded-xl font-bold hover:bg-purple-100 transition-colors border border-purple-100">
                             Schedule a Site Visit
                         </Link>
                         <p className="text-xs text-gray-400 text-center mt-4 flex items-center justify-center gap-1">
@@ -361,20 +361,17 @@ export default async function ProjectDetailPage({ params }) {
                 </div>
             </div>
 
-            <JsonLd data={breadcrumbJsonLd(breadcrumbs)} />
-            {faqs.length > 0 && (
-                <JsonLd
-                    data={{
-                        "@context": "https://schema.org",
-                        "@type": "FAQPage",
-                        mainEntity: faqs.map((f) => ({
-                            "@type": "Question",
-                            name: f.q,
-                            acceptedAnswer: { "@type": "Answer", text: f.a },
-                        })),
-                    }}
-                />
-            )}
+            <JsonLd data={breadcrumbSchema(breadcrumbs, `/projects/${project.slug}`)} />
+            <JsonLd
+                data={projectSchema({
+                    facts,
+                    images: project.images || [],
+                    url: `/projects/${project.slug}`,
+                    description: project.description || project.shortDescription,
+                    amenities: project.amenities || [],
+                })}
+            />
+            <JsonLd data={faqSchema(faqs)} />
         </div>
     );
 }

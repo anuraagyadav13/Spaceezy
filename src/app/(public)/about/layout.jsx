@@ -1,21 +1,6 @@
-export const metadata = {
-    title: "About Spaceezy | Our Story, Vision & Team",
-    description:
-        "Meet Spaceezy — the team redefining real estate discovery in Ghaziabad with transparent pricing, live inventory and zero-brokerage property listings.",
-    alternates: { canonical: "/about" },
-    openGraph: {
-        title: "About Spaceezy | Our Story, Vision & Team",
-        description: "The team redefining real estate discovery in Ghaziabad with transparent, zero-brokerage listings.",
-        url: "/about",
-        type: "website",
-        images: [{ url: "/images/og-default.jpg" }],
-    },
-    twitter: {
-        card: "summary_large_image",
-        title: "About Spaceezy | Our Story, Vision & Team",
-        description: "The team redefining real estate discovery in Ghaziabad.",
-    },
-};
+import { staticPageMetadata } from "../../../lib/seo/staticPages";
+
+export const metadata = staticPageMetadata("/about");
 
 export default function AboutLayout({ children }) {
     return children;

@@ -1,5 +1,6 @@
 const prisma = require('../db/prisma');
 const { AppError } = require('../utils/errors');
+const { canonicalConfigurationLabel } = require('../utils/propertyRequirement');
 
 // Inventory counter keys. These are NEVER writable through the generic
 // create/update payload — counters change only via create (initial bulk
@@ -12,6 +13,9 @@ class ConfigurationService {
         const payload = {};
         for (const key of allowed) {
             if (data[key] !== undefined) payload[key] = data[key];
+        }
+        if (typeof payload.name === 'string') {
+            payload.name = canonicalConfigurationLabel(payload.name);
         }
         return payload;
     }

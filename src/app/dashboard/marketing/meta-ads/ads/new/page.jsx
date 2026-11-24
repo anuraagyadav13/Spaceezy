@@ -346,7 +346,7 @@ export default function NewAdPage() {
                                                 maxLength={200}
                                                 value={name}
                                                 onChange={(e) => { setName(e.target.value); setValidatedJson(null); }}
-                                                placeholder="e.g. Wave City — Weekend visit push"
+                                                placeholder="e.g. Weekend visit push"
                                                 className={inputClass}
                                             />
                                         </dd>

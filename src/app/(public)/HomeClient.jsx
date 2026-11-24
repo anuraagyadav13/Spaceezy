@@ -7,11 +7,10 @@ import { ArrowRight, MapPin, Search, CheckCircle2, ImageOff, Home } from "lucide
 import { formatPrice } from "../../utils/format";
 
 // Rotating landing hero images (local files in public/images).
-// Filenames and alt text carry target keywords for image SEO.
 const HERO_IMAGES = [
-    { src: "/images/luxury-living-room-city-view-ghaziabad.png", alt: "Luxury living room with floor-to-ceiling windows overlooking the Ghaziabad skyline at sunset" },
+    { src: "/images/luxury-living-room-city-view.png", alt: "Luxury living room with floor-to-ceiling windows overlooking the city skyline at sunset" },
     { src: "/images/modern-villa-infinity-pool-sunset.png", alt: "Modern villa with infinity pool and city view at sunset" },
-    { src: "/images/property-site-visit-family-ghaziabad.png", alt: "Spaceezy agent showing a luxury apartment to a family during a site visit" },
+    { src: "/images/property-site-visit-family.png", alt: "Spaceezy agent showing a luxury apartment to a family during a site visit" },
 ];
 const HERO_ROTATE_MS = 5000;
 
@@ -25,7 +24,11 @@ const availabilityClasses = (availability) =>
             ? "bg-amber-500/80 text-white border-amber-300"
             : "bg-gray-700/80 text-white border-gray-500";
 
-export default function HomeClient({ projects, properties, locations }) {
+export default function HomeClient({ projects, properties, locations, hubs, areaLabel }) {
+    const clusterLinks = [
+        ...(hubs?.locations || []),
+        ...(hubs?.categories || []),
+    ].slice(0, 8);
     const { scrollYProgress } = useScroll();
     const heroY = useTransform(scrollYProgress, [0, 0.5], [0, 200]);
     const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
@@ -69,7 +72,7 @@ export default function HomeClient({ projects, properties, locations }) {
                         transition={{ duration: 1, delay: 0.2 }}
                         className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-6 drop-shadow-lg"
                     >
-                        Real Estate Properties in Ghaziabad
+                        Real Estate Properties{areaLabel ? ` in ${areaLabel}` : ""}
                     </motion.h1>
 
                     <motion.p
@@ -78,7 +81,7 @@ export default function HomeClient({ projects, properties, locations }) {
                         transition={{ duration: 1, delay: 0.4 }}
                         className="text-lg md:text-2xl text-gray-200 mb-10 max-w-2xl mx-auto font-light drop-shadow"
                     >
-                        Browse flats, plots, homes and commercial properties across Wave City and top localities — live inventory, transparent prices, zero brokerage.
+                        Browse published projects and units with live prices, current availability and direct enquiries.
                     </motion.p>
 
                     <motion.div
@@ -90,7 +93,7 @@ export default function HomeClient({ projects, properties, locations }) {
                         <Link href="/projects" className="w-full sm:w-auto bg-white text-gray-900 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-100 hover:scale-105 transition-all flex items-center justify-center gap-2">
                             Explore Projects <ArrowRight size={20} />
                         </Link>
-                        <Link href="/search" className="w-full sm:w-auto bg-black/30 backdrop-blur-md text-white border border-white/30 px-8 py-4 rounded-full font-medium text-lg hover:bg-black/50 transition-all flex items-center justify-center gap-2">
+                        <Link href="/properties" className="w-full sm:w-auto bg-black/30 backdrop-blur-md text-white border border-white/30 px-8 py-4 rounded-full font-medium text-lg hover:bg-black/50 transition-all flex items-center justify-center gap-2">
                             Search Properties <Search size={20} />
                         </Link>
                     </motion.div>
@@ -121,7 +124,7 @@ export default function HomeClient({ projects, properties, locations }) {
                     <form className="flex-1 flex w-full md:w-auto gap-4" action="/search">
                         <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-200 flex items-center gap-3 focus-within:ring-2 focus-within:ring-purple-500 transition-all">
                             <MapPin className="text-purple-500" />
-                            <select name="stateId" className="bg-transparent w-full focus:outline-none text-gray-700 font-medium cursor-pointer appearance-none">
+                            <select name="stateId" aria-label="Location" className="bg-transparent w-full focus:outline-none text-gray-700 font-medium cursor-pointer appearance-none">
                                 <option value="">All Locations</option>
                                 {locations.map((state) => (
                                     <option key={state.id} value={state.id}>{state.name}</option>
@@ -135,24 +138,16 @@ export default function HomeClient({ projects, properties, locations }) {
                 </motion.div>
             </section>
 
-            {/* SEO LINK CLUSTER — crawlable paths to the main landing pages */}
+            {/* SEO LINK CLUSTER — links to hubs that currently have inventory */}
             <section className="container mx-auto px-6 md:px-12 pb-10">
                 <div className="max-w-4xl">
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Explore real estate in Ghaziabad with Spaceezy</h2>
+                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Explore listings on Spaceezy</h2>
                     <p className="text-gray-600 leading-relaxed mb-5">
-                        Spaceezy is a real estate marketplace for Ghaziabad and the NCR region. Compare live inventory
-                        of flats, plots and commercial properties, or jump straight to a focused listing page:
+                        Compare the inventory Spaceezy has published right now — every collection below is generated
+                        from live projects and units, or jump straight to a focused listing page:
                     </p>
                     <ul className="flex flex-wrap gap-3">
-                        {[
-                            ["/properties-in-ghaziabad", "Properties in Ghaziabad"],
-                            ["/properties-in-wave-city", "Properties in Wave City"],
-                            ["/flats-for-sale", "Flats for Sale"],
-                            ["/plots-for-sale", "Plots for Sale"],
-                            ["/commercial-properties", "Commercial Properties"],
-                            ["/residential-properties", "Residential Properties"],
-                            ["/projects", "Projects"],
-                        ].map(([href, label]) => (
+                        {[...clusterLinks, { href: "/projects", label: "Projects" }].map(({ href, label }) => (
                             <li key={href}>
                                 <Link
                                     href={href}
@@ -349,14 +344,21 @@ export default function HomeClient({ projects, properties, locations }) {
                         </div>
                     </motion.div>
                     <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="flex-1 relative w-full h-[600px] rounded-[40px] overflow-hidden shadow-2xl">
-                        <Image src="https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80" alt="Premium Living" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
+                        <Image
+                            src="/images/luxury-living-room-city-view.png"
+                            alt="Living room with floor-to-ceiling windows, illustrating the homes listed on Spaceezy"
+                            fill
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                            className="object-cover"
+                            loading="lazy"
+                        />
                     </motion.div>
                 </div>
             </section>
 
             {/* CTA SECTION */}
             <section className="py-24 bg-gray-900 text-center relative overflow-hidden">
-                <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=2800&q=80')] bg-cover bg-center"></div>
+                <div className="absolute inset-0 opacity-20 bg-[url('/images/modern-villa-infinity-pool-sunset.png')] bg-cover bg-center"></div>
                 <div className="absolute inset-0 bg-gray-900/80"></div>
 
                 <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} className="container mx-auto px-6 relative z-10">
@@ -364,7 +366,7 @@ export default function HomeClient({ projects, properties, locations }) {
                     <p className="text-xl text-gray-300 mb-10 max-w-2xl mx-auto font-light">
                         Leave your details and our property experts will get in touch with you shortly to understand your requirements.
                     </p>
-                    <Link href="/enquiry" className="inline-block bg-white text-gray-900 px-10 py-4 rounded-full font-bold text-lg hover:bg-purple-50 hover:scale-105 transition-all shadow-xl">
+                    <Link href="/enquiry" rel="nofollow" className="inline-block bg-white text-gray-900 px-10 py-4 rounded-full font-bold text-lg hover:bg-purple-50 hover:scale-105 transition-all shadow-xl">
                         Enquire Now
                     </Link>
                 </motion.div>

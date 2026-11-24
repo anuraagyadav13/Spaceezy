@@ -173,13 +173,25 @@ class PublicService {
             projectType: project.projectType,
             status: project.status,
             description: project.shortDescription || project.description || null,
+            // Quality-gate inputs (SEO): length and counters instead of full
+            // prose so list payloads stay small.
+            descriptionLength: (project.description || '').length,
+            imageCount: images.length,
+            amenitiesCount: Array.isArray(project.amenities) ? project.amenities.length : 0,
             image: images[0] || coverImage || null,
             address: project.address,
             location: locationNames(project),
+            locationLabel: locationLabel(project),
             startingPrice: start !== undefined ? start : null,
             maximumPrice: max !== undefined ? max : null,
             totalUnits: (stats && stats.totalUnits) || project.totalUnits || null,
             availableUnits: stats ? stats.availableUnits : (project.availableUnits || null),
+            possessionDate: project.possessionDate ? project.possessionDate.toISOString() : null,
+            rera: project.reraRegistered
+                ? { number: project.reraNumber || null, authority: project.reraAuthority || null }
+                : null,
+            // Real sitemap <lastmod> source.
+            updatedAt: project.updatedAt ? project.updatedAt.toISOString() : null,
             configurations: Array.isArray(project.configurations)
                 ? project.configurations.map((c) => c.name)
                 : [],
@@ -285,6 +297,7 @@ class PublicService {
             developer: project.developer || null,
             description: project.description || null,
             shortDescription: project.shortDescription || null,
+            descriptionLength: (project.description || '').length,
             images,
             heroImage: cover,
             address: project.address,
@@ -313,6 +326,7 @@ class PublicService {
                 soldUnits: stats.soldUnits
             },
             unitTypes: Array.from(unitTypes.values()),
+            updatedAt: project.updatedAt ? project.updatedAt.toISOString() : null,
             // Safe aggregates only: names, representative values, and
             // bulk-mode counters/ranges. No internal IDs, versions, unit
             // numbers, or owner fields ever leave this DTO.
@@ -377,6 +391,7 @@ class PublicService {
                 address: true,
                 locality: true,
                 city: true,
+                description: true,
                 state: true,
                 locationState: { select: { name: true } },
                 locationDistrict: { select: { name: true } },
@@ -410,8 +425,12 @@ class PublicService {
                     price: money(p.price),
                     availability: publicAvailability(p.status),
                     image: publicImages(p.images)[0] || projectImages[0] || null,
+                    imageCount: publicImages(p.images).length,
                     project: { name: p.project.name, slug: p.project.publicSlug },
-                    location: locationNames(p.project)
+                    location: locationNames(p.project),
+                    locationLabel: locationLabel(p.project),
+                    descriptionLength: (p.project.description || '').length,
+                    updatedAt: p.updatedAt ? p.updatedAt.toISOString() : null
                 };
             }),
             page,
@@ -475,11 +494,14 @@ class PublicService {
             price: money(property.price),
             availability: publicAvailability(property.status),
             images: publicImages(property.images),
+            imageCount: publicImages(property.images).length,
             amenities: Array.from(new Set([
                 ...(Array.isArray(property.amenities) ? property.amenities : []),
                 ...(Array.isArray(property.project.amenities) ? property.project.amenities : [])
             ])),
             description: property.project.description || property.project.shortDescription || null,
+            descriptionLength: (property.project.description || '').length,
+            updatedAt: property.updatedAt ? property.updatedAt.toISOString() : null,
             project: {
                 name: property.project.name,
                 slug: property.project.publicSlug,

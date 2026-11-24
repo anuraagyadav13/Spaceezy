@@ -410,7 +410,7 @@ export default function MetaCampaignsPage() {
                             value={form.name}
                             onChange={(e) => set("name")(e.target.value)}
                             maxLength={400}
-                            placeholder="e.g. Wave City — Leads Q4"
+                            placeholder="e.g. Q4 lead-gen campaign"
                             className={inputClass}
                         />
                     </Field>

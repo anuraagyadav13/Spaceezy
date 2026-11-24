@@ -9,6 +9,7 @@
 const express = require('express');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getConfig } = require('../services/storageService');
+const { isPublishedMediaKey } = require('../utils/publicMedia');
 
 const router = express.Router();
 
@@ -63,6 +64,14 @@ const handleImage = async (req, res) => {
         key.includes('\0') ||
         !IMAGE_EXT.test(key)
     ) {
+        return sendJson(res, 404, 'NOT_FOUND', 'Image not found.');
+    }
+
+    // A valid-looking key is still private unless it is referenced by a
+    // published project or unit. Everything else (CRM-only drafts, archived
+    // listings, orphan uploads) answers exactly like a missing object.
+    if (!(await isPublishedMediaKey(key))) {
+        res.set('Cache-Control', 'public, max-age=60');
         return sendJson(res, 404, 'NOT_FOUND', 'Image not found.');
     }
 

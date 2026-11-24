@@ -4,6 +4,7 @@ const LocationService = require('./locationService');
 const ConfigurationService = require('./configurationService');
 const BookingService = require('./bookingService');
 const { generatePublicSlug } = require('../utils/publicLink');
+const { projectPublishIssues } = require('../utils/seoPublishCheck');
 
 class ProjectService {
     // Writable Project scalar fields (mass-assignment protection: arbitrary
@@ -410,13 +411,14 @@ class ProjectService {
         // the unlikely collision instead of failing the create.
         for (let attempt = 0; attempt < 4; attempt++) {
             try {
-                return await prisma.project.create({
+                const created = await prisma.project.create({
                     data: {
                         ...payload,
                         organizationId,
                         publicSlug: payload.publicSlug || generatePublicSlug(payload.name)
                     }
                 });
+                return ProjectService.withPublishWarnings(created, organizationId);
             } catch (err) {
                 const target = err.code === 'P2002' ? String((err.meta && err.meta.target) || '') : '';
                 if (err.code === 'P2002' && target.includes('publicSlug')) continue;
@@ -443,10 +445,28 @@ class ProjectService {
         const payload = ProjectService.normalizePayload(data);
         await ProjectService.applyCanonicalLocation(payload);
 
-        return await prisma.project.update({
+        const updated = await prisma.project.update({
             where: { id },
             data: payload
         });
+        return ProjectService.withPublishWarnings(updated, organizationId);
+    }
+
+    /**
+     * Attach non-blocking publish warnings to a project response. Additive
+     * field: existing clients keep working; the admin UI can render the list.
+     */
+    static async withPublishWarnings(project, organizationId) {
+        if (!project || project.isPublic !== true) return project;
+        try {
+            const configurationCount = await prisma.configuration.count({
+                where: { projectId: project.id, organizationId, active: true }
+            });
+            const publishWarnings = projectPublishIssues(project, { configurationCount });
+            return publishWarnings.length ? { ...project, publishWarnings } : project;
+        } catch {
+            return project;
+        }
     }
 
     static async deleteProject(id, organizationId) {

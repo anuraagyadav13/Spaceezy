@@ -1,0 +1,13 @@
+{
+  "$comment": "Retired URL patterns -> canonical hub. One source of truth: next.config.ts turns these into permanent (301/308) redirects and src/lib/seo/facets.js uses the same rows to resolve old URLs at runtime. Add a row here, never a per-URL handler.",
+  "legacyAliases": [
+    {
+      "source": "/flats-for-sale-in-:location",
+      "destination": "/flats-in-:location"
+    },
+    {
+      "source": "/property-for-sale-in-:location",
+      "destination": "/properties-in-:location"
+    }
+  ]
+}
