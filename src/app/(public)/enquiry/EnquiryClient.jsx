@@ -15,7 +15,6 @@ import {
     Zap,
     ShieldCheck,
     Send,
-    House,
     CalendarDays,
     Clock,
     ChevronDown,
@@ -30,7 +29,6 @@ import {
     submitPublicEnquiry,
 } from "../../../lib/api/publicSite";
 import { formatPrice } from "../../../utils/format";
-import { BUSINESS } from "../../../config/business";
 
 const placeLabel = (location) =>
     [location?.locality || location?.district, location?.state].filter(Boolean).join(", ");
@@ -231,18 +229,11 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
     }
 
     return (
-        <div className="relative overflow-hidden rounded-[36px] border border-white/70 bg-white/70 shadow-[0_30px_90px_-45px_rgba(76,29,149,0.55)] backdrop-blur-sm lg:grid lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="relative rounded-[36px] border border-white/70 bg-white/70 shadow-[0_30px_90px_-45px_rgba(76,29,149,0.55)] backdrop-blur-sm lg:grid lg:grid-cols-[0.9fr_1.1fr]">
             {/* LEFT: brand, copy, benefits and illustration */}
             <div className="relative overflow-hidden px-6 py-10 sm:px-10 lg:px-12 lg:py-14">
                 <div className="pointer-events-none absolute -left-24 top-24 h-80 w-80 rounded-full bg-purple-200/50 blur-3xl" />
                 <div className="relative">
-                    <div className="mb-14 flex items-center gap-2.5">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
-                            <House size={22} />
-                        </span>
-                        <span className="text-xl font-extrabold tracking-tight text-gray-900">{BUSINESS.name}</span>
-                    </div>
-
                     <h1 className="mb-5 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
                         {isVisit ? "Schedule a Site Visit" : "Enquire Now"}
                     </h1>
@@ -543,17 +534,21 @@ export default function EnquiryClient({ type = "enquiry", projectSlug = "", prop
                             </div>
                         )}
 
-                        <button
-                            type="submit"
-                            disabled={submitting}
-                            className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 py-4 text-lg font-bold text-white shadow-lg shadow-purple-200 transition-all hover:-translate-y-0.5 hover:bg-purple-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            <Send size={18} />
-                            {submitting ? "Sending…" : isVisit ? "Confirm Visit Request" : "Submit Enquiry"}
-                        </button>
-                        <p className="text-center text-xs text-gray-400">
-                            By submitting this form, you agree to our privacy policy.
-                        </p>
+                        {/* Sticky action bar: the form is tall, so keep the
+                            primary action reachable without scrolling away. */}
+                        <div className="sticky bottom-0 z-10 -mx-6 mt-2 border-t border-gray-100 bg-white/95 px-6 pb-1 pt-4 backdrop-blur sm:-mx-8 sm:px-8 dark:bg-[#14161d]/95">
+                            <button
+                                type="submit"
+                                disabled={submitting}
+                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 py-4 text-lg font-bold text-white shadow-lg shadow-purple-200 transition-all hover:-translate-y-0.5 hover:bg-purple-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <Send size={18} />
+                                {submitting ? "Sending…" : isVisit ? "Confirm Visit Request" : "Submit Enquiry"}
+                            </button>
+                            <p className="mt-2 text-center text-xs text-gray-400">
+                                By submitting this form, you agree to our privacy policy.
+                            </p>
+                        </div>
                     </div>
                 </form>
             </div>
