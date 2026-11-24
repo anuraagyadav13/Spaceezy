@@ -59,7 +59,6 @@ const NAVIGATION_GROUPS = [
             { label: "All Projects", href: "/dashboard/inventory" },
             { label: "Add Project", href: "/dashboard/inventory/projects/new" },
             { label: "Quick Add Unit", href: "/dashboard/inventory/units/quick-add" },
-            { label: "Inventory Grid", href: "/dashboard/inventory/grid" },
             { label: "Availability & Holds", href: "/dashboard/inventory/availability" },
             { label: "Pricing", href: "/dashboard/inventory/pricing" }
         ]

@@ -93,6 +93,8 @@ export default function ProjectDetailPage() {
     const [bookForm, setBookForm] = useState({ name: "", phone: "", amount: "" });
     const [locationSel, setLocationSel] = useState({ stateId: "", districtId: "", regionId: "" });
     const [editImages, setEditImages] = useState([]);
+    // In-app confirmation for project deletion (no browser confirm/alert).
+    const [deleteOpen, setDeleteOpen] = useState(false);
 
     const {
         data: project,
@@ -461,14 +463,7 @@ export default function ProjectDetailPage() {
                         </PermissionGate>
                         <PermissionGate permission="project:delete">
                             <button
-                                onClick={() => {
-                                    const ok = window.confirm(
-                                        `Delete "${project.name}"?\n\n`
-                                        + "Projects with units, leads, bookings or quotations are archived (status INACTIVE) "
-                                        + "instead of permanently deleted, so CRM records are preserved."
-                                    );
-                                    if (ok) archiveProject.mutate();
-                                }}
+                                onClick={() => setDeleteOpen(true)}
                                 className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-sm font-bold inline-flex items-center gap-1.5"
                             >
                                 <Trash2 size={14} /> Delete Project
@@ -1030,6 +1025,58 @@ export default function ProjectDetailPage() {
                     </div>
                 )}
             </div>
+
+            {deleteOpen && project && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm"
+                        onClick={() => { if (!archiveProject.isPending) setDeleteOpen(false); }}
+                    />
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="delete-project-title"
+                        className="relative w-full max-w-md bg-white rounded-3xl border border-gray-200 shadow-xl p-6"
+                    >
+                        <div className="flex items-start gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                                <AlertCircle size={20} />
+                            </div>
+                            <div>
+                                <h2 id="delete-project-title" className="text-lg font-bold text-gray-900">
+                                    Delete &quot;{project.name}&quot;?
+                                </h2>
+                                <p className="text-sm text-gray-600 mt-2">
+                                    This project will be removed from the inventory list.
+                                </p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Projects with units, leads, bookings or quotations are archived (status Inactive)
+                                    instead of permanently deleted, so CRM records are preserved.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteOpen(false)}
+                                disabled={archiveProject.isPending}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => archiveProject.mutate()}
+                                disabled={archiveProject.isPending}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                                {archiveProject.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                Delete project
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
