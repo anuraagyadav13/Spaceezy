@@ -66,37 +66,22 @@ export default function HomeClient({ projects, properties, locations, hubs, area
                 </motion.div>
 
                 <div className="container mx-auto px-6 md:px-12 relative z-10 text-center text-white mt-16">
-                    <motion.h1
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 1, delay: 0.2 }}
-                        className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-6 drop-shadow-lg"
-                    >
+                    <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-6 drop-shadow-lg">
                         Real Estate Properties{areaLabel ? ` in ${areaLabel}` : ""}
-                    </motion.h1>
+                    </h1>
 
-                    <motion.p
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 1, delay: 0.4 }}
-                        className="text-lg md:text-2xl text-gray-200 mb-10 max-w-2xl mx-auto font-light drop-shadow"
-                    >
+                    <p className="text-lg md:text-2xl text-gray-200 mb-10 max-w-2xl mx-auto font-light drop-shadow">
                         Browse published projects and units with live prices, current availability and direct enquiries.
-                    </motion.p>
+                    </p>
 
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 1, delay: 0.6 }}
-                        className="flex flex-col sm:flex-row items-center justify-center gap-4"
-                    >
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                         <Link href="/projects" className="w-full sm:w-auto bg-white text-gray-900 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-100 hover:scale-105 transition-all flex items-center justify-center gap-2">
                             Explore Projects <ArrowRight size={20} />
                         </Link>
                         <Link href="/properties" className="w-full sm:w-auto bg-black/30 backdrop-blur-md text-white border border-white/30 px-8 py-4 rounded-full font-medium text-lg hover:bg-black/50 transition-all flex items-center justify-center gap-2">
                             Search Properties <Search size={20} />
                         </Link>
-                    </motion.div>
+                    </div>
                 </div>
 
                 <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">

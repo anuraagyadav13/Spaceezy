@@ -327,7 +327,7 @@ export default function SearchClient({ initialProjects, initialProperties, initi
                         </section>
 
                         {projectCount === 0 && propertyCount === 0 && !loading && (
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl p-12 text-center border border-gray-100 mt-6">
+                            <motion.div initial={false} className="bg-white rounded-3xl p-12 text-center border border-gray-100 mt-6">
                                 <h4 className="text-lg font-bold text-gray-900 mb-2">No results found</h4>
                                 <p className="text-gray-500 text-sm">Try adjusting your filters or search for something else.</p>
                             </motion.div>

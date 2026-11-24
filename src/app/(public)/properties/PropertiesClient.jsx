@@ -86,7 +86,7 @@ export default function PropertiesClient({ initialData, initialFilters }) {
     return (
         <div className="bg-gray-50 min-h-screen pt-32 pb-24">
             <div className="container mx-auto px-6 md:px-12">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+                <motion.div initial={false} className="mb-10">
                     <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-4">Available Properties</h1>
                     <p className="text-gray-500 text-lg max-w-2xl">
                         Discover your perfect home from our curated selection of premium units.
