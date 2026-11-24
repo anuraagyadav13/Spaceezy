@@ -325,6 +325,7 @@ export default async function ProjectDetailPage({ params }) {
                                         return (
                                             <Link
                                                 key={conf.name}
+                                                rel="nofollow"
                                                 href={`/enquiry?projectSlug=${encodeURIComponent(project.slug)}&configuration=${encodeURIComponent(conf.name)}`}
                                                 className="bg-gray-100 hover:bg-purple-50 text-gray-700 hover:text-purple-700 px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                                                 title={`Enquire about ${conf.name}`}
