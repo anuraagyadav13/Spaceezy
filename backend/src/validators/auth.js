@@ -37,9 +37,24 @@ const resetPasswordSchema = {
     })
 };
 
+// Self-service profile update (/auth/me). Only the fields a user may change
+// on their own record: display name, phone and avatar. Role, status, email
+// and permissions stay admin-controlled.
+const updateProfileSchema = {
+    body: z.object({
+        name: z.string().trim().min(1, 'Name is required').max(120, 'Name is too long').optional(),
+        phone: z.string().trim().max(32, 'Phone number is too long').nullable().optional(),
+        avatar: z.string().trim().max(2048, 'Avatar URL is too long').nullable().optional()
+    }).refine(
+        (data) => data.name !== undefined || data.phone !== undefined || data.avatar !== undefined,
+        { message: 'Nothing to update' }
+    )
+};
+
 module.exports = {
     loginSchema,
     forgotPasswordSchema,
     verifyResetOtpSchema,
-    resetPasswordSchema
+    resetPasswordSchema,
+    updateProfileSchema
 };

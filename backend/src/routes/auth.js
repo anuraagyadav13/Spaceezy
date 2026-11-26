@@ -1,6 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { login, logout, getMe, getPermissions } = require('../controllers/auth');
+const { login, logout, getMe, updateMe, getPermissions } = require('../controllers/auth');
 const { forgotPassword, verifyResetOtp, resetPassword } = require('../controllers/passwordReset');
 const { requireAuth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -8,7 +8,8 @@ const {
     loginSchema,
     forgotPasswordSchema,
     verifyResetOtpSchema,
-    resetPasswordSchema
+    resetPasswordSchema,
+    updateProfileSchema
 } = require('../validators/auth');
 
 const router = express.Router();
@@ -84,6 +85,8 @@ const accountLimiter = rateLimit({
 router.post('/login', loginLimiter, validate(loginSchema), login);
 router.post('/logout', requireAuth(), logout);
 router.get('/me', requireAuth(), getMe);
+// Self-service profile: own name/phone/avatar only.
+router.patch('/me', requireAuth(), validate(updateProfileSchema), updateMe);
 // Server-authoritative permissions for mobile navigation gating. The server
 // remains the security boundary; this response only mirrors it for UI.
 router.get('/permissions', requireAuth(), getPermissions);

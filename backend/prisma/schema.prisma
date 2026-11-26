@@ -65,6 +65,10 @@ model User {
   name         String
   email        String
   phone        String?
+  // Optional profile photo. Stores either a site-relative media path
+  // (/media/...) or an absolute https URL. The user manages it from
+  // /dashboard/profile; no other user's photo is editable from there.
+  avatar       String?
   passwordHash String
   role         UserRole   @default(SALES_EXECUTIVE)
   status       UserStatus @default(ACTIVE)

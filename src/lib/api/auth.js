@@ -23,6 +23,13 @@ export const logoutAPI = async () => {
     return unwrapAuthPayload(response);
 };
 
+// Self-service profile update: own display name, phone and avatar only.
+// Returns the same user shape as /auth/me so the header can update instantly.
+export const updateProfileAPI = async (data) => {
+    const response = await apiClient.patch('/auth/me', data);
+    return unwrapAuthPayload(response);
+};
+
 // --- Password reset -------------------------------------------------------
 // The backend answers /forgot-password with the SAME generic 200 whether or
 // not the account exists (anti-enumeration), so callers must never branch on
