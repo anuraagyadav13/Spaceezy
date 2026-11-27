@@ -37,9 +37,36 @@ const resetPasswordSchema = {
     })
 };
 
+// Self-service profile update (/auth/me). Only the fields a user may change
+// on their own record: display name, phone, avatar, and - for employee roles
+// only - the employee profile details. Role, status, email and permissions
+// stay admin-controlled.
+const employeeDateOnly = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+    .nullable()
+    .optional();
+
+const updateProfileSchema = {
+    body: z.object({
+        name: z.string().trim().min(1, 'Name is required').max(120, 'Name is too long').optional(),
+        phone: z.string().trim().max(32, 'Phone number is too long').nullable().optional(),
+        avatar: z.string().trim().max(2048, 'Avatar URL is too long').nullable().optional(),
+        dateOfBirth: employeeDateOnly,
+        dateOfJoining: employeeDateOnly,
+        designation: z.string().trim().max(120, 'Designation is too long').nullable().optional(),
+        address: z.string().trim().max(500, 'Address is too long').nullable().optional(),
+        emergencyContactPhone: z.string().trim().max(32, 'Contact phone is too long').nullable().optional()
+    }).refine(
+        (data) => Object.values(data).some((value) => value !== undefined),
+        { message: 'Nothing to update' }
+    )
+};
+
 module.exports = {
     loginSchema,
     forgotPasswordSchema,
     verifyResetOtpSchema,
-    resetPasswordSchema
+    resetPasswordSchema,
+    updateProfileSchema
 };

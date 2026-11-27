@@ -82,16 +82,11 @@ const toMediaPath = (url) => {
     return url;
 };
 
-// Uploads one image buffer. Throws AppError-compatible failures upstream.
+// Uploads one image buffer. Uses S3 when configured; otherwise (local dev)
+// stores the file on disk under backend/uploads/images and serves it through
+// the public /media route, so the upload flow is fully testable without AWS.
+// Throws AppError-compatible failures upstream.
 const uploadImage = async ({ buffer, organizationId }) => {
-    const config = getConfig();
-    if (!config) {
-        const err = new Error('Image storage is not configured. Set AWS_S3_BUCKET to enable uploads.');
-        err.statusCode = 501;
-        err.code = 'S3_NOT_CONFIGURED';
-        throw err;
-    }
-
     if (!buffer || !buffer.length) {
         const err = new Error('Empty upload.');
         err.statusCode = 400;
@@ -118,18 +113,29 @@ const uploadImage = async ({ buffer, organizationId }) => {
     const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
     const rand = require('crypto').randomBytes(8).toString('hex');
     const scope = organizationId || 'global';
-    const key = `${config.prefix}/${scope}/${yyyy}/${mm}/${Date.now()}-${rand}.${sniffed.ext}`;
 
-    const client = getS3Client(config.region);
-    await client.send(new PutObjectCommand({
-        Bucket: config.bucket,
-        Key: key,
-        Body: buffer,
-        ContentType: sniffed.contentType,
-        CacheControl: 'public, max-age=31536000, immutable',
-    }));
+    const config = getConfig();
+    if (config) {
+        const key = `${config.prefix}/${scope}/${yyyy}/${mm}/${Date.now()}-${rand}.${sniffed.ext}`;
+        const client = getS3Client(config.region);
+        await client.send(new PutObjectCommand({
+            Bucket: config.bucket,
+            Key: key,
+            Body: buffer,
+            ContentType: sniffed.contentType,
+            CacheControl: 'public, max-age=31536000, immutable',
+        }));
+        return { url: publicUrlFor(config, key), key, storage: 's3' };
+    }
 
-    return { url: publicUrlFor(config, key), key };
+    // Local dev without S3 — disk under backend/uploads. The "images/" prefix
+    // keeps these keys distinct from uploaded PDF documents and lets /media
+    // recognise them as locally stored images.
+    const key = `images/${scope}/${yyyy}/${mm}/${Date.now()}-${rand}.${sniffed.ext}`;
+    const full = path.resolve(diskRoot(), key);
+    await fs.promises.mkdir(path.dirname(full), { recursive: true });
+    await fs.promises.writeFile(full, buffer);
+    return { url: `/media/${key}`, key, storage: 'disk' };
 };
 
 // ---------------------------------------------------------------------------
@@ -247,6 +253,7 @@ module.exports = {
     getConfig,
     publicUrlFor,
     toMediaPath,
+    diskRoot,
     MAX_IMAGE_BYTES,
     MAX_PDF_BYTES,
     isPdf,

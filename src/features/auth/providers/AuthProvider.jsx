@@ -8,6 +8,7 @@ const AuthContext = createContext({
     isLoading: true,
     login: async () => {},
     logout: async () => {},
+    updateUser: () => {},
 });
 
 export const AuthProvider = ({ children }) => {
@@ -55,8 +56,15 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Merge a partial update (e.g. the profile page's PATCH /auth/me reply)
+    // into the cached user so the header reflects changes without a reload.
+    const updateUser = (patch) => {
+        if (!patch) return;
+        setUser((prev) => ({ ...(prev || {}), ...patch }));
+    };
+
     return (
-        <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+        <AuthContext.Provider value={{ user, isLoading, login, logout, updateUser }}>
             {children}
         </AuthContext.Provider>
     );

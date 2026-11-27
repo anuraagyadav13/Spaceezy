@@ -38,6 +38,23 @@ const getUsersQuerySchema = {
     })
 };
 
+// Optional employee profile details, edited by an admin on the team page.
+// <input type="date"> sends YYYY-MM-DD (or null when cleared); userService
+// converts those strings to Date objects before writing to Prisma.
+const dateOnly = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+    .nullable()
+    .optional();
+
+const employeeDetailFields = {
+    dateOfBirth: dateOnly,
+    dateOfJoining: dateOnly,
+    designation: z.string().trim().max(120, 'Designation is too long').nullable().optional(),
+    address: z.string().trim().max(500, 'Address is too long').nullable().optional(),
+    emergencyContactPhone: z.string().trim().max(32, 'Contact phone is too long').nullable().optional()
+};
+
 const createUserSchema = {
     body: z.object({
         name: z.string().min(1, 'Name is required'),
@@ -45,7 +62,8 @@ const createUserSchema = {
         phone: z.string().optional(),
         password: z.string().min(10, 'Password must be at least 10 characters'),
         role: assignableRoles.optional(),
-        status: z.enum(['ACTIVE', 'INACTIVE']).optional()
+        status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+        ...employeeDetailFields
     })
 };
 
@@ -57,7 +75,8 @@ const updateUserSchema = {
         role: assignableRoles.optional(),
         status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
         selfClaimLimit: z.number().int().min(0, 'selfClaimLimit must be 0 or greater').max(1000, 'selfClaimLimit cannot exceed 1000').nullable().optional(),
-        extraPermissions: grantablePermissions.optional()
+        extraPermissions: grantablePermissions.optional(),
+        ...employeeDetailFields
     })
 };
 

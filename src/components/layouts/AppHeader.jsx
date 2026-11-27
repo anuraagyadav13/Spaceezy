@@ -6,6 +6,7 @@ import { useAuth } from "../../features/auth/hooks/useAuth";
 import { useNotifications } from "../../features/notifications/hooks/useNotifications";
 import { useMarkNotificationRead, useMarkAllNotificationsRead } from "../../features/notifications/hooks/useMarkNotificationsRead";
 import Image from "next/image";
+import Link from "next/link";
 import ThemeToggle from "../shared/ThemeToggle";
 
 const timeAgo = (iso) => {
@@ -32,6 +33,13 @@ export default function AppHeader({ onOpenSidebar }) {
 
     const notifications = data?.notifications ?? [];
     const unreadCount = data?.unreadCount ?? 0;
+    const initials = (user?.name || "User")
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase();
 
     // Close the dropdown on any outside click.
     useEffect(() => {
@@ -122,8 +130,12 @@ export default function AppHeader({ onOpenSidebar }) {
                     )}
                 </div>
 
-                {/* User info */}
-                <div className="flex items-center gap-2 sm:gap-3">
+                {/* User info — opens the profile page */}
+                <Link
+                    href="/dashboard/profile"
+                    title="My profile"
+                    className="flex items-center gap-2 sm:gap-3 rounded-2xl px-1.5 py-1 hover:bg-gray-50 transition-colors"
+                >
                     <div className="hidden sm:block text-right">
                         <p className="text-sm font-bold text-gray-900 leading-tight">{user?.name || "Admin User"}</p>
                         <div className="flex items-center justify-end gap-1.5 mt-0.5">
@@ -134,16 +146,20 @@ export default function AppHeader({ onOpenSidebar }) {
                         </div>
                     </div>
                     <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-purple-100 flex items-center justify-center">
-                        <Image
-                            src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces"}
-                            alt="Profile"
-                            className="w-full h-full object-cover"
-                            width={40}
-                            height={40}
-                        />
+                        {user?.avatar ? (
+                            <Image
+                                src={user.avatar}
+                                alt="Profile"
+                                className="w-full h-full object-cover"
+                                width={40}
+                                height={40}
+                            />
+                        ) : (
+                            <span className="text-sm font-black text-purple-700">{initials || "U"}</span>
+                        )}
                     </div>
-                    <ThemeToggle />
-                </div>
+                </Link>
+                <ThemeToggle />
             </div>
         </header>
     );

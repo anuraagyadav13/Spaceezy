@@ -1,14 +1,15 @@
 const express = require('express');
 const { asyncHandler } = require('../utils/errors');
 const { requireAuth } = require('../middleware/auth');
-const { uploadImage } = require('../services/storageService');
+const { uploadImage, toMediaPath } = require('../services/storageService');
 
 const router = express.Router();
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
-// Authenticated image upload for CRM media (project/property images).
-// Body is raw bytes — the app-level JSON parser ignores this content type.
+// Authenticated image upload for CRM media (project/property images and
+// profile photos). Body is raw bytes — the app-level JSON parser ignores this
+// content type.
 router.post(
     '/images',
     requireAuth(),
@@ -19,6 +20,12 @@ router.post(
             return next400(res);
         }
 
+        // Profile photos are displayed on every CRM page, not on a public
+        // listing, so they must be reachable through /media. S3 URLs are
+        // rewritten to the private-bucket proxy path; local disk uploads are
+        // already /media/... and pass through unchanged.
+        const isAvatar = req.query.purpose === 'avatar';
+
         try {
             const { url, key } = await uploadImage({
                 buffer,
@@ -26,7 +33,7 @@ router.post(
             });
             return res.status(201).json({
                 success: true,
-                data: { url, key },
+                data: { url: isAvatar ? toMediaPath(url) : url, key },
                 message: 'Image uploaded',
             });
         } catch (err) {

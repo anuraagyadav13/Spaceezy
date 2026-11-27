@@ -1098,25 +1098,7 @@ function MetaAdsSettingsContent() {
                             ))}
                         </div>
 
-                        {oauthDiagQuery.data.oauthFlowNote && (
-                            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                                <p className="text-[11px] font-black uppercase text-gray-400 mb-1">
-                                    Authorization mode ({oauthDiagQuery.data.oauthMode === "config_id" ? "Facebook Login for Business" : "legacy scopes"})
-                                </p>
-                                <p className="text-sm text-gray-600">{oauthDiagQuery.data.oauthFlowNote}</p>
-                            </div>
-                        )}
-
-                        {oauthDiagQuery.data.consistent ? (
-                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 flex items-start gap-2">
-                                <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 shrink-0" />
-                                <p className="text-sm text-emerald-800">
-                                    Backend, frontend and redirect URI are internally consistent. If Meta still shows
-                                    &quot;Can&apos;t load URL&quot;, the missing entry is on Meta&apos;s side — see the
-                                    note below.
-                                </p>
-                            </div>
-                        ) : (
+                        {!oauthDiagQuery.data.consistent && (
                             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
                                 <p className="text-sm font-bold text-amber-800 mb-1 flex items-center gap-2">
                                     <AlertTriangle size={15} className="shrink-0" /> Configuration issues
@@ -1132,13 +1114,6 @@ function MetaAdsSettingsContent() {
                                 </p>
                             </div>
                         )}
-
-                        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                            <p className="text-[11px] font-black uppercase text-gray-400 mb-1">
-                                Still seeing &quot;Can&apos;t load URL&quot;?
-                            </p>
-                            <p className="text-sm text-gray-600">{oauthDiagQuery.data.troubleshooting}</p>
-                        </div>
                     </div>
                 ) : null}
             </SectionCard>
