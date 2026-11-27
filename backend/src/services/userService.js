@@ -3,6 +3,49 @@ const { AppError } = require('../utils/errors');
 const argon2 = require('argon2');
 const LeadService = require('./leadService');
 
+// Employee profile fields added to the team page. Dates arrive from
+// <input type="date"> as YYYY-MM-DD; Prisma needs a Date or null. Empty strings
+// become null so an admin can clear a field from the edit form.
+const EMPLOYEE_DATE_FIELDS = ['dateOfBirth', 'dateOfJoining'];
+const EMPLOYEE_TEXT_FIELDS = [
+    'designation',
+    'address',
+    'emergencyContactPhone'
+];
+
+const normalizeEmployeeDetails = (data = {}) => {
+    const out = { ...data };
+    for (const field of EMPLOYEE_DATE_FIELDS) {
+        if (out[field] === '' || out[field] === null) {
+            out[field] = null;
+        } else if (typeof out[field] === 'string') {
+            out[field] = new Date(`${out[field]}T00:00:00.000Z`);
+        }
+    }
+    for (const field of EMPLOYEE_TEXT_FIELDS) {
+        if (out[field] === '') out[field] = null;
+    }
+    return out;
+};
+
+// Shared select so every user response carries the same editable fields.
+const USER_DETAIL_SELECT = {
+    id: true,
+    name: true,
+    email: true,
+    phone: true,
+    avatar: true,
+    dateOfBirth: true,
+    dateOfJoining: true,
+    designation: true,
+    address: true,
+    emergencyContactPhone: true,
+    role: true,
+    status: true,
+    selfClaimLimit: true,
+    extraPermissions: true
+};
+
 class UserService {
     static async getUsers(organizationId, query) {
         const { page = 1, limit = 10, search, role, status, sort = 'desc' } = query;
@@ -27,15 +70,7 @@ class UserService {
                 take: parseInt(limit),
                 orderBy: { createdAt: sort === 'asc' ? 'asc' : 'desc' },
                 select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    phone: true,
-                    avatar: true,
-                    role: true,
-                    status: true,
-                    selfClaimLimit: true,
-                    extraPermissions: true,
+                    ...USER_DETAIL_SELECT,
                     createdAt: true
                 }
             }),
@@ -49,15 +84,7 @@ class UserService {
         const user = await prisma.user.findFirst({
             where: { id, organizationId },
             select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true,
-                avatar: true,
-                role: true,
-                status: true,
-                selfClaimLimit: true,
-                extraPermissions: true,
+                ...USER_DETAIL_SELECT,
                 createdAt: true
             }
         });
@@ -81,24 +108,25 @@ class UserService {
         }
 
         const passwordHash = await argon2.hash(data.password);
-        
+        const details = normalizeEmployeeDetails(data);
+
         const user = await prisma.user.create({
             data: {
                 organizationId,
                 name: data.name,
                 email: data.email,
                 phone: data.phone,
+                dateOfBirth: details.dateOfBirth ?? null,
+                dateOfJoining: details.dateOfJoining ?? null,
+                designation: details.designation ?? null,
+                address: details.address ?? null,
+                emergencyContactPhone: details.emergencyContactPhone ?? null,
                 passwordHash,
                 role: data.role || 'SALES_EXECUTIVE',
                 status: data.status || 'ACTIVE'
             },
             select: {
-                id: true,
-                name: true,
-                email: true,
-                avatar: true,
-                role: true,
-                status: true
+                ...USER_DETAIL_SELECT
             }
         });
 
@@ -114,19 +142,13 @@ class UserService {
             throw new AppError('Cannot elevate role to SUPER_ADMIN', 403, 'FORBIDDEN');
         }
 
+        const normalized = normalizeEmployeeDetails(data);
+
         const user = await prisma.user.update({
             where: { id },
-            data,
+            data: normalized,
             select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true,
-                avatar: true,
-                role: true,
-                status: true,
-                selfClaimLimit: true,
-                extraPermissions: true
+                ...USER_DETAIL_SELECT
             }
         });
 
@@ -151,15 +173,7 @@ class UserService {
         const user = await prisma.user.findFirst({
             where: { id, organizationId },
             select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true,
-                avatar: true,
-                role: true,
-                status: true,
-                selfClaimLimit: true,
-                extraPermissions: true,
+                ...USER_DETAIL_SELECT,
                 createdAt: true
             }
         });

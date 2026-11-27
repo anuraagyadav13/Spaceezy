@@ -22,6 +22,13 @@ const initialsOf = (name) => (name || "User")
     .join("")
     .toUpperCase();
 
+// <input type="date"> needs YYYY-MM-DD; the API returns a full ISO timestamp.
+const toDateInput = (value) => (value ? String(value).slice(0, 10) : "");
+
+// The owner/admin keeps the original profile form (name, phone, photo).
+// Staff roles additionally maintain their own employment details.
+const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN"];
+
 export default function ProfilePage() {
     const { user, updateUser } = useAuth();
     const fileRef = useRef(null);
@@ -33,12 +40,29 @@ export default function ProfilePage() {
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
 
-    const form = draft ?? { name: user?.name || "", phone: user?.phone || "" };
+    const form = draft ?? {
+        name: user?.name || "",
+        phone: user?.phone || "",
+        dateOfBirth: toDateInput(user?.dateOfBirth),
+        dateOfJoining: toDateInput(user?.dateOfJoining),
+        designation: user?.designation || "",
+        address: user?.address || "",
+        emergencyContactPhone: user?.emergencyContactPhone || "",
+    };
     const avatar = avatarDraft ?? user?.avatar ?? "";
+    const isEmployee = !!user && !ADMIN_ROLES.includes(user.role);
 
     const setField = (key, value) => {
         setDraft((current) => ({
-            ...(current ?? { name: user?.name || "", phone: user?.phone || "" }),
+            ...(current ?? {
+                name: user?.name || "",
+                phone: user?.phone || "",
+                dateOfBirth: toDateInput(user?.dateOfBirth),
+                dateOfJoining: toDateInput(user?.dateOfJoining),
+                designation: user?.designation || "",
+                address: user?.address || "",
+                emergencyContactPhone: user?.emergencyContactPhone || "",
+            }),
             [key]: value,
         }));
     };
@@ -85,11 +109,19 @@ export default function ProfilePage() {
 
         setSaving(true);
         try {
-            const updated = await updateProfileAPI({
+            const payload = {
                 name,
                 phone: form.phone.trim() || null,
                 avatar: avatar || null,
-            });
+            };
+            if (isEmployee) {
+                payload.dateOfBirth = form.dateOfBirth || null;
+                payload.dateOfJoining = form.dateOfJoining || null;
+                payload.designation = form.designation.trim() || null;
+                payload.address = form.address.trim() || null;
+                payload.emergencyContactPhone = form.emergencyContactPhone.trim() || null;
+            }
+            const updated = await updateProfileAPI(payload);
             updateUser(updated);
             setDraft(null);
             setAvatarDraft(null);
@@ -115,7 +147,9 @@ export default function ProfilePage() {
                     </Link>
                     <h1 className="text-2xl font-bold text-gray-900 mt-2">My profile</h1>
                     <p className="text-sm text-gray-500 mt-1">
-                        Update your photo, name and phone number. Changes appear across the CRM immediately.
+                        {isEmployee
+                            ? "Update your photo, contact details and employment information. Changes appear across the CRM immediately."
+                            : "Update your photo, name and phone number. Changes appear across the CRM immediately."}
                     </p>
                 </div>
             </div>
@@ -232,6 +266,73 @@ export default function ProfilePage() {
                         <p className="text-[11px] text-gray-400 mt-1">Role and permissions are managed by your administrator.</p>
                     </div>
                 </div>
+
+                {isEmployee && (
+                    <div className="mt-6 pt-5 border-t border-gray-100">
+                        <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3">Employment details</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className={labelClass} htmlFor="profile-dob">Date of birth</label>
+                                <input
+                                    id="profile-dob"
+                                    type="date"
+                                    value={form.dateOfBirth}
+                                    onChange={(e) => setField("dateOfBirth", e.target.value)}
+                                    disabled={busy}
+                                    className={inputClass}
+                                />
+                            </div>
+                            <div>
+                                <label className={labelClass} htmlFor="profile-doj">Date of joining</label>
+                                <input
+                                    id="profile-doj"
+                                    type="date"
+                                    value={form.dateOfJoining}
+                                    onChange={(e) => setField("dateOfJoining", e.target.value)}
+                                    disabled={busy}
+                                    className={inputClass}
+                                />
+                            </div>
+                            <div>
+                                <label className={labelClass} htmlFor="profile-designation">Designation</label>
+                                <input
+                                    id="profile-designation"
+                                    value={form.designation}
+                                    onChange={(e) => setField("designation", e.target.value)}
+                                    disabled={busy}
+                                    maxLength={120}
+                                    placeholder="e.g. Sales Executive"
+                                    className={inputClass}
+                                />
+                            </div>
+                            <div>
+                                <label className={labelClass} htmlFor="profile-emergency-phone">Emergency contact phone</label>
+                                <input
+                                    id="profile-emergency-phone"
+                                    type="tel"
+                                    value={form.emergencyContactPhone}
+                                    onChange={(e) => setField("emergencyContactPhone", e.target.value)}
+                                    disabled={busy}
+                                    maxLength={32}
+                                    placeholder="+91 98765 43210"
+                                    className={inputClass}
+                                />
+                            </div>
+                            <div className="sm:col-span-2">
+                                <label className={labelClass} htmlFor="profile-address">Address</label>
+                                <input
+                                    id="profile-address"
+                                    value={form.address}
+                                    onChange={(e) => setField("address", e.target.value)}
+                                    disabled={busy}
+                                    maxLength={500}
+                                    placeholder="Residential address"
+                                    className={inputClass}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex justify-end gap-2 mt-6 pt-5 border-t border-gray-100">
                     <button

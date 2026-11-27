@@ -1564,7 +1564,7 @@ class LeadService {
         const skip = (page - 1) * limit;
         const where = { organizationId, junkedAt: { not: null }, restoredAt: null };
         if (blocked === 'true' || blocked === true) where.purgeBlockedReason = { not: null };
-        LeadService.buildLeadScope(userRole, userId, where);
+        Object.assign(where, LeadService.buildLeadScope(userRole, userId, {}));
 
         const [leads, total] = await Promise.all([
             prisma.lead.findMany({
